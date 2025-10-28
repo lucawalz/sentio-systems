@@ -1,0 +1,118 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: sentio-postgres
+    environment:
+      POSTGRES_DB: sentio
+      POSTGRES_USER: ${POSTGRES_USER:-sentio}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sentio123}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - sentio-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sentio}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: sentio-mosquitto
+    ports:
+      - "${MQTT_PORT:-1883}:1883"
+      - "9001:9001"
+    volumes:
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_logs:/mosquitto/logs
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+    networks:
+      - sentio-network
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -t '$$SYS/#' -C 1 -i healthcheck -W 3"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  sentio-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sentio-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mosquitto:
+        condition: service_healthy
+    environment:
+      # Database Configuration
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/sentio
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-sentio}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-sentio123}
+
+      # JPA Configuration
+      JPA_HIBERNATE_DDL: ${JPA_HIBERNATE_DDL:-update}
+      JPA_SHOW_SQL: ${JPA_SHOW_SQL:-false}
+      JPA_FORMAT_SQL: ${JPA_FORMAT_SQL:-false}
+
+      # Server Configuration
+      SERVER_PORT: 8080
+
+      # MQTT Configuration
+      MQTT_ENABLED: ${MQTT_ENABLED:-true}
+      MQTT_BROKER: tcp://mosquitto:1883
+      MQTT_CLIENT_ID: sentioBackend
+      MQTT_TOPICS: weather,camera,birds/detected
+      MQTT_USERNAME: ${MQTT_USERNAME:-}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
+      MQTT_CONNECTION_TIMEOUT: 30
+      MQTT_KEEP_ALIVE_INTERVAL: 60
+
+      # Open-Meteo API Configuration
+      OPENMETEO_API_BASE_URL: https://api.open-meteo.com/v1
+      OPENMETEO_FORECAST_CRON: "0 0 6 * * ?"
+      OPENMETEO_FORECAST_ENABLED: ${OPENMETEO_FORECAST_ENABLED:-true}
+      OPENMETEO_ARCHIVE_BASE_URL: https://historical-forecast-api.open-meteo.com/v1
+
+      # IP Location Service
+      IP_LOCATION_API_URL: http://ip-api.com/json/
+
+      # BrightSky API Configuration
+      BRIGHTSKY_API_BASE_URL: https://api.brightsky.dev
+      BRIGHTSKY_ALERTS_CRON: "0 */30 * * * ?"
+      BRIGHTSKY_ALERTS_ENABLED: ${BRIGHTSKY_ALERTS_ENABLED:-true}
+      BRIGHTSKY_CLEANUP_CRON: "0 0 2 * * ?"
+
+      # Swagger Configuration
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
+      SWAGGER_UI_ENABLED: ${SWAGGER_UI_ENABLED:-true}
+
+      # Preprocessing Service Configuration
+      PREPROCESSING_SERVICE_URL: ${PREPROCESSING_SERVICE_URL:-http://localhost:8082/preprocess-and-classify}
+      PREPROCESSING_SERVICE_ENABLED: ${PREPROCESSING_SERVICE_ENABLED:-false}
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    networks:
+      - sentio-network
+    volumes:
+      - ./images:/app/images
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+
+networks:
+  sentio-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  mosquitto_data:
+  mosquitto_logs:
