@@ -10,7 +10,7 @@ RUN pip install --no-cache-dir -r requirements.txt && \
     rm -rf /root/.cache/pip
 
 # Copy only necessary files
-COPY speciesnet_ai.py speciesnet_ai.env ./
+COPY speciesnet_ai.py ./
 
 # Expose the API port
 EXPOSE 8081
