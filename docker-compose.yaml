@@ -1,0 +1,184 @@
+version: '3.8'
+
+services:
+  # Database
+  postgres:
+    image: postgres:17-alpine
+    container_name: sentio-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-sentio}
+      POSTGRES_USER: ${POSTGRES_USER:-sentio}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sentio123}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - sentio-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sentio}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # MQTT Broker
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: sentio-mosquitto
+    ports:
+      - "${MQTT_PORT:-1883}:1883"
+      - "9001:9001"
+    volumes:
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_logs:/mosquitto/logs
+      - ./sentio-backend/mosquitto.conf:/mosquitto/config/mosquitto.conf
+    networks:
+      - sentio-network
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -t '$$SYS/#' -C 1 -i healthcheck -W 3"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Backend Service (Spring Boot)
+  backend:
+    build:
+      context: ./sentio-backend
+      dockerfile: Dockerfile
+    container_name: sentio-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mosquitto:
+        condition: service_healthy
+    environment:
+      # Database Configuration
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-sentio}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-sentio}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-sentio123}
+
+      # JPA Configuration
+      JPA_HIBERNATE_DDL: ${JPA_HIBERNATE_DDL:-update}
+      JPA_SHOW_SQL: ${JPA_SHOW_SQL:-false}
+      JPA_FORMAT_SQL: ${JPA_FORMAT_SQL:-false}
+
+      # Server Configuration
+      SERVER_PORT: 8080
+
+      # MQTT Configuration
+      MQTT_ENABLED: ${MQTT_ENABLED:-true}
+      MQTT_BROKER: tcp://mosquitto:1883
+      MQTT_CLIENT_ID: sentioBackend
+      MQTT_TOPICS: ${MQTT_TOPICS:-weather,camera,birds/detected}
+      MQTT_USERNAME: ${MQTT_USERNAME:-}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
+
+      # External APIs
+      OPENMETEO_API_BASE_URL: https://api.open-meteo.com/v1
+      OPENMETEO_ARCHIVE_BASE_URL: https://historical-forecast-api.open-meteo.com/v1
+      IP_LOCATION_API_URL: http://ip-api.com/json/
+      BRIGHTSKY_API_BASE_URL: https://api.brightsky.dev
+
+      # Feature Flags
+      OPENMETEO_FORECAST_ENABLED: ${OPENMETEO_FORECAST_ENABLED:-true}
+      BRIGHTSKY_ALERTS_ENABLED: ${BRIGHTSKY_ALERTS_ENABLED:-true}
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
+      SWAGGER_UI_ENABLED: ${SWAGGER_UI_ENABLED:-true}
+
+      # AI Services
+      PREPROCESSING_SERVICE_URL: http://preprocessing:8082/preprocess-and-classify
+      PREPROCESSING_SERVICE_ENABLED: ${PREPROCESSING_SERVICE_ENABLED:-true}
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    networks:
+      - sentio-network
+    volumes:
+      - ./sentio-backend/images:/app/images
+      - shared_images:/app/shared_images
+    restart: unless-stopped
+
+  # Frontend Service (React + Vite + Nginx)
+  frontend:
+    build:
+      context: ./sentio-web
+      dockerfile: Dockerfile
+    container_name: sentio-frontend
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    networks:
+      - sentio-network
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8080}
+    restart: unless-stopped
+
+  # Image Preprocessing Service
+  preprocessing:
+    build:
+      context: ./sentio-ai/preprocessing
+      dockerfile: Dockerfile
+    container_name: sentio-preprocessing
+    depends_on:
+      - birder
+      - speciesnet
+    environment:
+      PREPROCESSING_PORT: ${PREPROCESSING_PORT:-8082}
+      BIRDER_SERVICE_URL: ${BIRDER_SERVICE_URL:-http://birder:8000}
+      SPECIESNET_SERVICE_URL: ${SPECIESNET_SERVICE_URL:-http://speciesnet:8081}
+    ports:
+      - "${PREPROCESSING_PORT:-8082}:8082"
+    networks:
+      - sentio-network
+    volumes:
+      - shared_images:/app/enhanced_images
+    restart: unless-stopped
+
+  # Birder AI Service
+  birder:
+    build:
+      context: ./sentio-ai/birder
+      dockerfile: Dockerfile
+    container_name: sentio-birder
+    environment:
+      BIRDER_PORT: ${BIRDER_PORT:-8000}
+    ports:
+      - "${BIRDER_PORT:-8000}:8000"
+    networks:
+      - sentio-network
+    volumes:
+      - ai_models:/app/models
+    restart: unless-stopped
+
+  # SpeciesNet AI Service
+  speciesnet:
+    build:
+      context: ./sentio-ai/speciesnet
+      dockerfile: Dockerfile
+    container_name: sentio-speciesnet
+    environment:
+      SPECIESNET_PORT: ${SPECIESNET_PORT:-8081}
+    ports:
+      - "${SPECIESNET_PORT:-8081}:8081"
+    networks:
+      - sentio-network
+    restart: unless-stopped
+
+networks:
+  sentio-network:
+    driver: bridge
+    name: sentio-network
+
+volumes:
+  postgres_data:
+    name: sentio_postgres_data
+  mosquitto_data:
+    name: sentio_mosquitto_data
+  mosquitto_logs:
+    name: sentio_mosquitto_logs
+  shared_images:
+    name: sentio_shared_images
+  ai_models:
+    name: sentio_ai_models

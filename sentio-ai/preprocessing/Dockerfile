@@ -6,7 +6,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libsm6 \
     libxext6 \
     libxrender-dev \
-    libgl1-mesa-glx \
+    libgomp1 \
+    libgthread-2.0-0 \
+    libgl1 \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -18,7 +20,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY preprocessing_service.py .
-COPY .env .env
 
 # Create directory for enhanced images
 RUN mkdir -p /app/enhanced_images
