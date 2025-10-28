@@ -1,0 +1,39 @@
+
+# Python virtual environment
+.venv/
+
+# Enhanced images
+enhanced_images/
+
+# PyCharm
+.idea/
+*.iml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Docker files (we need to include the Dockerfile)
+docker-compose.yml
+
+# Environment files (use .env.example instead, actual .env is copied in Dockerfile)
+# .env
+*.env.local
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Misc
+*.swp
+*.swo

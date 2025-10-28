@@ -1,0 +1,96 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+conda-env/
+.conda/
+
+# Environment Variables - CRITICAL
+*.env
+.env.*
+config.json
+credentials.json
+secrets.yaml
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+*.ipynb
+
+# Machine Learning
+models/
+*.model
+*.pkl
+*.h5
+*.pb
+*.onnx
+*.tflite
+checkpoints/
+logs/
+tensorboard_logs/
+wandb/
+
+# Datasets - Usually too large for Git
+datasets/
+data/
+*.csv
+*.json
+*.parquet
+*.hdf5
+*.arrow
+
+# Model Outputs
+predictions/
+outputs/
+results/
+experiments/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# PyTorch
+lightning_logs/
+*.pth
+*.pt
+
+# TensorFlow
+*.tfrecord
+saved_model/
+
+# MLflow
+mlruns/
+mlartifacts/

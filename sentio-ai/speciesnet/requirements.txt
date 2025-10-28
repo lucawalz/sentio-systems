@@ -1,0 +1,12 @@
+# Core dependencies
+fastapi
+uvicorn
+python-multipart
+
+# Utilities
+python-dotenv
+certifi
+
+# Image processing
+Pillow
+numpy

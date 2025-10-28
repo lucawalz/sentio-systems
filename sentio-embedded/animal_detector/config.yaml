@@ -1,0 +1,33 @@
+# Camera settings
+camera:
+  width: 1280
+  height: 720
+  framerate: 30
+  rotation: 0
+
+# Detection settings
+detection:
+  confidence_threshold: 0.6
+  target_animals:
+    - cat
+    - dog
+    - bird
+    - squirrel
+    - rabbit
+    - fox
+    - deer
+    - person
+
+# MQTT settings
+mqtt:
+  broker_host: "localhost"  # Change to backend server IP
+  broker_port: 1883
+  topic: "animal_detection/events"
+  username: null  # Set if authentication required
+  password: null  # Set if authentication required
+
+# Device information
+device:
+  device_id: "pi_detector_001"
+  location: "Garden Camera"
+  camera_resolution: "1280x720"

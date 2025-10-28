@@ -1,0 +1,30 @@
+FROM python:3.11-slim
+
+# Install OpenCV dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgl1-mesa-glx \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy requirements first for better caching
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY preprocessing_service.py .
+COPY .env .env
+
+# Create directory for enhanced images
+RUN mkdir -p /app/enhanced_images
+
+# Expose the service port (default: 8082)
+EXPOSE 8082
+
+# Run the service
+CMD ["python", "preprocessing_service.py"]

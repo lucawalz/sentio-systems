@@ -1,0 +1,39 @@
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+dist/
+
+# Java/Maven
+target/
+.mvn/wrapper/maven-wrapper.jar
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+logs/

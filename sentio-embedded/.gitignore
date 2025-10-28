@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+
+# Virtual Environments
+.env
+.venv/
+env/
+venv/
+ENV/
+
+# Environment Variables - CRITICAL FOR IOT
+*.env
+.env.*
+config.json
+credentials.json
+secrets.yaml
+device_config.json
+mqtt_credentials.json
+wifi_config.json
+
+# Sensor Data & Logs
+sensor_logs/
+*.log
+data/
+measurements/
+*.csv
+readings.json
+
+# IDE & OS
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Raspberry Pi specific
+*.img
+*.iso
+*.deb
+
+# Hardware calibration files
+calibration/
+*.cal
