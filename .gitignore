@@ -1,9 +1,9 @@
-
 # IntelliJ IDEA
 .idea/
 *.iml
 *.iws
 *.ipr
+out/
 
 # Environment variables
 .env
@@ -19,6 +19,8 @@ __pycache__/
 venv/
 ENV/
 env/
+*.egg-info/
+.pytest_cache/
 
 # Node.js
 node_modules/
@@ -26,14 +28,62 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 dist/
+.next/
+build/
+.cache/
+.turbo/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
 
 # Java/Maven
 target/
 .mvn/wrapper/maven-wrapper.jar
+*.class
+.classpath
+.project
+.settings/
+bin/
+
+# Build outputs
+*.jar
+*.war
+*.ear
+*.class
 
 # macOS
 .DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
 
 # Logs
 *.log
 logs/
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# Docker
+.dockerignore
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Test coverage
+coverage/
+.nyc_output/
+*.lcov
