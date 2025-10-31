@@ -49,7 +49,7 @@ bin/
 *.jar
 *.war
 *.ear
-*.class
+
 
 # macOS
 .DS_Store
@@ -73,7 +73,6 @@ logs/
 *.temp
 *.swp
 *.swo
-*~
 
 # Docker
 .dockerignore
