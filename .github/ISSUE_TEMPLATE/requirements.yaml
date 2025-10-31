@@ -1,92 +1,127 @@
 name: Requirement
-description: File a new requirement (REQ) extracted from "Requirements — Orbis + Sentio".
+description: Create a new requirement (REQ) for the Sentio Systems project
 title: "REQ-[NUMBER]: "
-labels: ["req", "triage"]
+labels: ["requirement"]
 projects: []
 assignees: []
 body:
   - type: markdown
     attributes:
       value: |
-        Please fill out this requirement issue. Replace `[NUMBER]` in the issue title above with the next incremental identifier (e.g., REQ-001, REQ-002) and add a descriptive title after the colon.
+        ## Requirement Issue Template
+        
+        Replace `[NUMBER]` in the title with the next incremental ID (e.g., REQ-001, REQ-002, REQ-003).
+        Add a clear, descriptive title after the colon.
+        
+        **Commit reference example:**
+        ```
+        git commit -m "REQ-012: Implement telemetry POST endpoint (Closes #12)"
+        ```
+        
+        **Branch naming conventions:**
+        - Feature: `feature/REQ-XXX-description` (from develop)
+        - Bugfix: `bugfix/issue-YYY` (from develop)
+        - Hotfix: `hotfix/critical-fix` (from main)
+
   - type: dropdown
     id: req_type
     attributes:
-      label: Type
-      description: Choose requirement type.
+      label: Requirement Type
+      description: Select the category of this requirement
       options:
         - Functional
+        - Non-Functional (NFR)
         - Technical
-        - NFR
-        - Infra
-        - Doc
-        - Test
-        - Security
+        - Security/Compliance
       default: 0
     validations:
       required: true
+
   - type: dropdown
     id: priority
     attributes:
       label: Priority
-      description: Select priority level.
+      description: Set the priority level for implementation
       options:
         - High
         - Medium
         - Low
-      default: 0
+      default: 1
     validations:
       required: true
-  - type: textarea
-    id: description
-    attributes:
-      label: Description
-      description: >
-        Concise description — what, why, how. Reference the Requirements — Orbis + Sentio.
-      placeholder: >
-        Concise description — what, why, how. Example: "Orbis Hub must publish telemetry via MQTT to backend using topic pattern orbis/{deviceId}/telemetry..."
-    validations:
-      required: true
-  - type: textarea
-    id: acceptance_criteria
-    attributes:
-      label: Acceptance criteria
-      description: Provide clear, testable acceptance criteria (one per line). Use `- [ ]` checklist markdown if desired.
-      placeholder: |
-        - [ ] Criterion 1
-        - [ ] Criterion 2
-        - [ ] Criterion 3
-    validations:
-      required: true
+
   - type: dropdown
     id: milestone
     attributes:
       label: Milestone
-      description: Target milestone for this requirement.
+      description: Target milestone for completion
       options:
         - MVP
         - Alpha
         - Beta
+        - Future
       default: 0
     validations:
       required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Provide a concise description of what, why, and how
+      placeholder: |
+        **What:** What needs to be implemented/changed
+        **Why:** Business/technical justification
+        **How:** Technical approach or implementation notes
+        
+        Example: "The backend must expose a REST endpoint to receive telemetry data from Orbis Hub via MQTT. Data should be validated and persisted to the database for analytics."
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Define clear, testable criteria for completion (use checkboxes)
+      placeholder: |
+        - [ ] Endpoint accepts POST requests at /api/v1/telemetry
+        - [ ] Request payload is validated against schema
+        - [ ] Data is persisted to database
+        - [ ] Unit tests cover happy path and error cases
+        - [ ] API documentation is updated
+      value: |
+        - [ ]
+    validations:
+      required: true
+
+  - type: input
+    id: affected_components
+    attributes:
+      label: Affected Components
+      description: Which parts of the system are affected?
+      placeholder: "e.g., sentio-backend, sentio-ai/birder, sentio-web"
+    validations:
+      required: false
+
   - type: textarea
     id: depends_on
     attributes:
-      label: Depends on
-      description: List other REQs/TECH items this depends on (one per line).
+      label: Dependencies
+      description: List requirements or issues this depends on
       placeholder: |
-        - REQ-YYY
-        - TECH-ZZZ
+        - REQ-005: Database schema setup
+        - REQ-010: MQTT broker configuration
     validations:
       required: false
+
   - type: textarea
     id: notes_references
     attributes:
-      label: Notes / references
-      description: Relevant notes, references or file pointers (e.g. `Requirements — Orbis + Sentio`, doc paths). Include any content references required.
+      label: Notes & References
+      description: Additional context, links to documentation, design documents, or related resources
       placeholder: |
-        - Source: Requirements — Orbis + Sentio (sentio-docs).
-        - Additional notes:
+        - Architecture documentation: /docs/architecture.md
+        - Related discussion: #42
+        - External API reference: https://...
     validations:
       required: false
