@@ -19,7 +19,7 @@ The Sentio Systems team takes security vulnerabilities seriously. We appreciate 
 
 Instead, please report them via email to:
 
-**security@sentio-systems.com** (or your preferred contact email)
+**security@sentio-systems.com**
 
 Please include the following information in your report:
 
