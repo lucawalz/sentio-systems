@@ -1,0 +1,92 @@
+name: Requirement
+description: File a new requirement (REQ) extracted from "Requirements — Orbis + Sentio".
+title: "REQ-[NUMBER]: "
+labels: ["req", "triage"]
+projects: []
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please fill out this requirement issue. Replace `[NUMBER]` in the issue title above with the next incremental identifier (e.g., REQ-001, REQ-002) and add a descriptive title after the colon.
+  - type: dropdown
+    id: req_type
+    attributes:
+      label: Type
+      description: Choose requirement type.
+      options:
+        - Functional
+        - Technical
+        - NFR
+        - Infra
+        - Doc
+        - Test
+        - Security
+      default: 0
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: Select priority level.
+      options:
+        - High
+        - Medium
+        - Low
+      default: 0
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: >
+        Concise description — what, why, how. Reference the Requirements — Orbis + Sentio.
+      placeholder: >
+        Concise description — what, why, how. Example: "Orbis Hub must publish telemetry via MQTT to backend using topic pattern orbis/{deviceId}/telemetry..."
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance criteria
+      description: Provide clear, testable acceptance criteria (one per line). Use `- [ ]` checklist markdown if desired.
+      placeholder: |
+        - [ ] Criterion 1
+        - [ ] Criterion 2
+        - [ ] Criterion 3
+    validations:
+      required: true
+  - type: dropdown
+    id: milestone
+    attributes:
+      label: Milestone
+      description: Target milestone for this requirement.
+      options:
+        - MVP
+        - Alpha
+        - Beta
+      default: 0
+    validations:
+      required: true
+  - type: textarea
+    id: depends_on
+    attributes:
+      label: Depends on
+      description: List other REQs/TECH items this depends on (one per line).
+      placeholder: |
+        - REQ-YYY
+        - TECH-ZZZ
+    validations:
+      required: false
+  - type: textarea
+    id: notes_references
+    attributes:
+      label: Notes / references
+      description: Relevant notes, references or file pointers (e.g. `Requirements — Orbis + Sentio`, doc paths). Include any content references required.
+      placeholder: |
+        - Source: Requirements — Orbis + Sentio (sentio-docs).
+        - Additional notes:
+    validations:
+      required: false
