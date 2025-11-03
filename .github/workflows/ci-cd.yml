@@ -53,6 +53,7 @@ jobs:
       - name: Upload Trivy results to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
         if: always()
+        continue-on-error: true
         with:
           sarif_file: 'trivy-results.sarif'
 
@@ -161,6 +162,7 @@ jobs:
       - name: Upload Trivy image scan results
         uses: github/codeql-action/upload-sarif@v3
         if: always()
+        continue-on-error: true
         with:
           sarif_file: 'trivy-backend-image.sarif'
           category: 'backend-image'
@@ -274,6 +276,7 @@ jobs:
       - name: Upload Trivy image scan results
         uses: github/codeql-action/upload-sarif@v3
         if: always()
+        continue-on-error: true
         with:
           sarif_file: 'trivy-frontend-image.sarif'
           category: 'frontend-image'
@@ -401,6 +404,7 @@ jobs:
       - name: Upload Trivy image scan results
         uses: github/codeql-action/upload-sarif@v3
         if: always()
+        continue-on-error: true
         with:
           sarif_file: 'trivy-birder-image.sarif'
           category: 'birder-image'
@@ -527,6 +531,7 @@ jobs:
       - name: Upload Trivy image scan results
         uses: github/codeql-action/upload-sarif@v3
         if: always()
+        continue-on-error: true
         with:
           sarif_file: 'trivy-speciesnet-image.sarif'
           category: 'speciesnet-image'
@@ -654,6 +659,7 @@ jobs:
       - name: Upload Trivy image scan results
         uses: github/codeql-action/upload-sarif@v3
         if: always()
+        continue-on-error: true
         with:
           sarif_file: 'trivy-preprocessing-image.sarif'
           category: 'preprocessing-image'
