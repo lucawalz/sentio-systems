@@ -1,6 +1,17 @@
 import {Link} from "react-router-dom";
+import { useState } from "react"
 
 export function LoginBox() {
+    const [email, setEmail] = useState("")
+    const [isValidEmail, setIsValidEmail] = useState(false)
+
+    function validateEmail(value: string) {
+        setEmail(value)
+
+        // simple email regex
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+        setIsValidEmail(emailRegex.test(value))
+    }
 
 
     return (
@@ -15,14 +26,28 @@ export function LoginBox() {
 
                 <input
                     type="text"
-                    placeholder="e-mail"
+                    placeholder="email"
                     className="w-full p-3 mb-4 rounded-lg text-black bg-white"
+                    value={email}
+                    onChange={(e) => validateEmail(e.target.value)}
                 />
+
                 <input
                     type="text"
                     placeholder="passwort"
                     className="w-full p-3 mb-4 rounded-lg text-black bg-white"
                 />
+                {/* forgot password LINK */}
+                {isValidEmail && (
+                    <>
+                <a
+                    href="/forgot-password"
+                    className="block text-sm text-gray-300 underline hover:text-white"
+                >
+                    Forgot password?
+                </a>
+                    </>
+                )}
 
                 <button className="w-full mt-4 px-6 py-3 bg-white text-black rounded-lg font-semibold">
                     Login
@@ -32,9 +57,9 @@ export function LoginBox() {
                     <p>Create your own account</p>
                 </Link>
 
+
             </div>
         </div>
-
 
 
     )
