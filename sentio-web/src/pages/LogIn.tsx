@@ -15,3 +15,7 @@ export default function LogIn({mode}: { mode: "login" | "register" }) {
 
     );
 }
+<<<<<<< HEAD
+=======
+
+>>>>>>> cd0af38 (#REQ-004:)
