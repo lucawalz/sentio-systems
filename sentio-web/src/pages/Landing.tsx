@@ -10,6 +10,8 @@ import { Features } from "../components/landing/features"
 import { ExperienceCTA } from "../components/landing/experience-cta"
 import { Navigation } from "../components/layout/navigation"
 import { SmoothScroll } from "../components/shared/smooth-scroll"
+import { Link } from "react-router-dom";
+
 
 if (typeof window !== "undefined") {
   gsap.registerPlugin(ScrollTrigger, SplitText, MotionPathPlugin)
@@ -55,18 +57,32 @@ export default function LandingPage() {
         <div className="bg-black text-white overflow-x-hidden relative">
           {/* Ambient background effects */}
           <div className="fixed inset-0 pointer-events-none">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_80%,rgba(176,214,255,0.03),transparent_70%)]" />
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(168,213,186,0.03),transparent_70%)]" />
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,216,168,0.02),transparent_70%)]" />
+            <div
+                className="absolute inset-0 bg-[radial-gradient(circle_at_20%_80%,rgba(176,214,255,0.03),transparent_70%)]"/>
+            <div
+                className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(168,213,186,0.03),transparent_70%)]"/>
+            <div
+                className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,216,168,0.02),transparent_70%)]"/>
+
           </div>
 
-          <Navigation />
-          <Hero />
-          <OurStory />
-          <ProductOverview />
-          <Features />
-          <ExperienceCTA />
+
+          <Navigation/>
+          <Hero/>
+          <OurStory/>
+          <ProductOverview/>
+          <Features/>
+          <ExperienceCTA/>
+
+          <div className="p-10 text-center">
+            <Link to="/login">
+              <button className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition">
+                Login
+              </button>
+            </Link>
+          </div>
         </div>
       </SmoothScroll>
-  )
+
+)
 }
