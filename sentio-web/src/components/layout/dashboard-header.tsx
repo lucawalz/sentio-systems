@@ -1,10 +1,11 @@
 import { useEffect, useRef } from "react"
 import { gsap } from "gsap"
 import { Button } from "../ui/button"
-import { ArrowLeft, Settings, Bell, Wifi, Battery, Sun, Moon, Zap } from "lucide-react"
+import { ArrowLeft, Bell, Wifi, Battery, Sun, Moon, Zap } from "lucide-react"
 import { useTheme } from "../theme-context"
 import { Link } from "react-router-dom"
 import { useWeatherData } from "../../hooks/useWeatherData"
+import { ProfileDropdown } from "../ui/profile-dropdown"
 
 export function DashboardHeader() {
   const headerRef = useRef<HTMLElement>(null)
@@ -168,13 +169,7 @@ export function DashboardHeader() {
               <Bell className="w-4 h-4" />
             </Button>
 
-            <Button
-                variant="ghost"
-                size="sm"
-                className="text-muted-foreground hover:text-foreground hover:bg-accent/60 transition-all duration-300"
-            >
-              <Settings className="w-4 h-4" />
-            </Button>
+            <ProfileDropdown />
           </div>
         </div>
       </header>
