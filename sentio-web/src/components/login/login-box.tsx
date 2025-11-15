@@ -54,7 +54,7 @@ export function LoginBox() {
                 </button>
 
                 <Link className="w-full mt-4 px6 py-3 text-white" to="/create-account">
-                    <p className=" mb-6">Create account</p>
+                    <p className="mt-6 mb-6 underline">Create account</p>
                 </Link>
 
 
