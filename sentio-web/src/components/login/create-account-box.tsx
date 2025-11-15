@@ -1,4 +1,5 @@
 import {useState} from "react";
+import {Link} from "react-router-dom";
 
 //external error handling for password requirements + error messages
 function getPasswordErrors(password: string): string[] {
@@ -149,6 +150,10 @@ export function CreateAccountBox() {
                         disabled={!canSubmit}>
                     Create Account
                 </button>
+
+                <Link className="w-full mt-10 mb-6 px6 py-3 text-white underline hover-grey" to="/login">
+                    <p className="mt-6 mb-6">Login into your Account</p>
+                </Link>
             </div>
         </>
     )
