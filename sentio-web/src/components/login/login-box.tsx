@@ -22,7 +22,7 @@ export function LoginBox() {
             {/* Login-Box */}
             <div
                 className="relative w-full max-w-md p-10 bg-gray-900/40 border border-gray-700 rounded-xl backdrop-blur text-center">
-                <h2 className="text-3xl font-bold mb-6">Login to your account</h2>
+                <h2 className="text-3xl font-bold mb-6">Login</h2>
 
                 <input
                     type="text"
@@ -33,8 +33,8 @@ export function LoginBox() {
                 />
 
                 <input
-                    type="text"
-                    placeholder="passwort"
+                    type="password"
+                    placeholder="password"
                     className="w-full p-3 mb-4 rounded-lg text-black bg-white"
                 />
                 {/* forgot password LINK */}
@@ -53,8 +53,8 @@ export function LoginBox() {
                     Login
                 </button>
 
-                <Link classname="w-full mt-4 px6 py-3 text-white" to="/createAccount">
-                    <p className=" mb-6">Create your own account</p>
+                <Link className="w-full mt-4 px6 py-3 text-white" to="/create-account">
+                    <p className=" mb-6">Create account</p>
                 </Link>
 
 
