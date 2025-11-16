@@ -149,7 +149,7 @@ for pkg in "${PACKAGES[@]}"; do
     pip_name=${pip_name:-$import_name}
 
     if python3 -c "import $import_name" 2>/dev/null; then
-        VERSION=$(pip show $pip_name 2>/dev/null | grep Version | awk '{print $2}')
+        VERSION=$(pip show $pip_name 2>/dev/null | grep "^Version:" | awk '{print $2}' | head -n 1)
         print_success "$pip_name ($VERSION)"
     else
         print_error "$pip_name not installed correctly"
@@ -161,6 +161,12 @@ if [ "$MISSING_PACKAGES" = true ]; then
     print_warning "Some packages were not installed correctly"
     echo "  You may need to install them manually"
 fi
+
+# Fix numpy compatibility for Hailo/picamera2
+print_info "Fixing numpy compatibility for Hailo SDK..."
+pip uninstall numpy -y > /dev/null 2>&1 || true
+print_success "Using system numpy (required for Hailo/picamera2 compatibility)"
+
 
 # Interactive configuration
 echo ""

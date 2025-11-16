@@ -145,7 +145,7 @@ for pkg in "${PACKAGES[@]}"; do
     pip_name=${pip_name:-$import_name}
 
     if python3 -c "import $import_name" 2>/dev/null; then
-        VERSION=$(pip show $pip_name 2>/dev/null | grep Version | awk '{print $2}')
+        VERSION=$(pip show $pip_name 2>/dev/null | grep "^Version:" | awk '{print $2}' | head -n 1)
         print_success "$pip_name ($VERSION)"
     else
         print_error "$pip_name not installed correctly"
