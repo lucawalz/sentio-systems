@@ -108,20 +108,18 @@ public class MqttConfig {
 
             try {
                 // Route messages based on topic
-                switch (topic) {
-                    case "weather":
-                        raspiWeatherDataHandler.processWeatherData(payload);
-                        break;
-                    case "animal_detection/events":  // New unified animal detection topic
-                        animalDetectionHandler.processAnimalDetection(payload);
-                        break;
-                    case "camera":
-                        // Handle other camera data if needed
-                        System.out.println("Camera data received: " + payload.substring(0, Math.min(100, payload.length())) + "...");
-                        break;
-                    default:
-                        System.out.println("Unknown topic: " + topic);
-                        break;
+                if (topic.equals("weather/data") || topic.equals("weather")) {
+                    raspiWeatherDataHandler.processWeatherData(payload);
+                } else if (topic.equals("weather/status")) {
+                    System.out.println("Weather status: " + payload);
+                } else if (topic.equals("animal_detection/events")) {
+                    animalDetectionHandler.processAnimalDetection(payload);
+                } else if (topic.equals("animal_detection/status")) {
+                    System.out.println("Animal detector status: " + payload);
+                } else if (topic.equals("camera")) {
+                    System.out.println("Camera data received: " + payload.substring(0, Math.min(100, payload.length())) + "...");
+                } else {
+                    System.out.println("Unknown topic: " + topic);
                 }
             } catch (Exception e) {
                 System.err.println("Error processing MQTT message from topic " + topic + ": " + e.getMessage());
