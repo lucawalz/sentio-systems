@@ -37,9 +37,9 @@ print_info() {
 # Main installation
 print_header "Weather Station Installation"
 
-# Check if running on Raspberry Pi
+# Check if running on Raspberry Pi (fixed null byte warning)
 if [ -f /proc/device-tree/model ]; then
-    PI_MODEL=$(cat /proc/device-tree/model)
+    PI_MODEL=$(tr -d '\0' < /proc/device-tree/model 2>/dev/null || echo "Unknown")
     if [[ $PI_MODEL == *"Raspberry Pi"* ]]; then
         print_success "Detected Raspberry Pi: $PI_MODEL"
         IS_RASPBERRY_PI=true
@@ -165,7 +165,7 @@ print_header "Configuration Setup"
 # Generate device ID
 HOSTNAME=$(hostname)
 TIMESTAMP=$(date +%s)
-DEFAULT_DEVICE_ID="weather_${HOSTNAME}_${TIMESTAMP: -6}"
+DEFAULT_DEVICE_ID="weather_station_${HOSTNAME}_${TIMESTAMP: -6}"
 
 echo ""
 print_info "Device Configuration"
@@ -176,26 +176,6 @@ print_success "Device ID: $DEVICE_ID"
 read -p "Enter location (e.g., garden, backyard, balcony) [garden]: " LOCATION
 LOCATION=${LOCATION:-garden}
 print_success "Location: $LOCATION"
-
-# MQTT configuration
-echo ""
-print_info "MQTT Broker Configuration"
-read -p "Enter MQTT broker host [localhost]: " MQTT_HOST
-MQTT_HOST=${MQTT_HOST:-localhost}
-
-read -p "Enter MQTT broker port [1883]: " MQTT_PORT
-MQTT_PORT=${MQTT_PORT:-1883}
-
-read -p "Enable MQTT authentication? (y/N): " -n 1 -r
-echo
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    read -p "Enter MQTT username: " MQTT_USER
-    read -s -p "Enter MQTT password: " MQTT_PASS
-    echo
-    MQTT_AUTH_ENABLED=true
-else
-    MQTT_AUTH_ENABLED=false
-fi
 
 # Data collection interval
 echo ""
@@ -243,25 +223,12 @@ collection:
 
 # MQTT Configuration
 mqtt:
-  broker_host: "${MQTT_HOST}"
-  broker_port: ${MQTT_PORT}
+  broker_host: "localhost"
+  broker_port: 1883
   topic: "weather/data"
   status_topic: "weather/status"
-EOF
-
-if [ "$MQTT_AUTH_ENABLED" = true ]; then
-    cat >> config.yaml << EOF
-  username: "${MQTT_USER}"
-  password: "${MQTT_PASS}"
-EOF
-else
-    cat >> config.yaml << EOF
   username: null
   password: null
-EOF
-fi
-
-cat >> config.yaml << EOF
   qos: 1
   keepalive: 60
 
@@ -287,6 +254,7 @@ sensors:
 EOF
 
 print_success "Configuration file created: config.yaml"
+print_info "Edit config.yaml to customize MQTT settings"
 
 # Create setup_env.sh
 echo ""
@@ -437,8 +405,9 @@ echo "System test completed!"
 echo "=========================================="
 echo ""
 echo "Next steps:"
-echo "  1. Review config.yaml and adjust settings if needed"
-echo "  2. Start the system: ./start_weather_station.sh"
+echo "  1. Review and edit config.yaml for MQTT settings"
+echo "  2. Reboot if this is first install: sudo reboot"
+echo "  3. Start the system: ./start_weather_station.sh"
 echo ""
 EOF
 
@@ -453,19 +422,21 @@ echo ""
 print_info "Summary:"
 echo "  Device ID: $DEVICE_ID"
 echo "  Location: $LOCATION"
-echo "  MQTT Broker: $MQTT_HOST:$MQTT_PORT"
 echo "  Collection Interval: ${COLLECTION_INTERVAL}s"
+echo "  Sensors: BME280=$BME280_ENABLED, VEML6030=$VEML6030_ENABLED, LTR390=$LTR390_ENABLED"
 echo ""
 
 print_info "Next steps:"
+echo -e "  1. Edit config.yaml to configure MQTT settings"
 if [ "$IS_RASPBERRY_PI" = true ]; then
-    echo "  1. Reboot your Raspberry Pi: ${BLUE}sudo reboot${NC}"
-    echo "  2. After reboot, test the system: ${BLUE}./test_system.sh${NC}"
+    echo -e "  2. Reboot your Raspberry Pi: ${BLUE}sudo reboot${NC}"
+    echo -e "  3. After reboot, test the system: ${BLUE}./test_system.sh${NC}"
+    echo -e "  4. Start the weather station: ${BLUE}./start_weather_station.sh${NC}"
 else
-    echo "  1. Test the system: ${BLUE}./test_system.sh${NC}"
+    echo -e "  2. Test the system: ${BLUE}./test_system.sh${NC}"
+    echo -e "  3. Start the weather station: ${BLUE}./start_weather_station.sh${NC}"
 fi
-echo "  2. Start the weather station: ${BLUE}./start_weather_station.sh${NC}"
-echo "  3. View logs: ${BLUE}tail -f logs/weather_station.log${NC}"
+echo -e "  5. View logs: ${BLUE}tail -f logs/weather_station.log${NC}"
 echo ""
 
 print_success "Happy weather monitoring!"

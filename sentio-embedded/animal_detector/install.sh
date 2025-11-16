@@ -1,7 +1,6 @@
 #!/bin/bash
 
 # Animal Detector Installation Script
-# Unified installation and configuration for Raspberry Pi with Hailo AI
 
 set -e  # Exit on error
 
@@ -38,9 +37,9 @@ print_info() {
 # Main installation
 print_header "Animal Detector Installation"
 
-# Check if running on Raspberry Pi
+# Check if running on Raspberry Pi (fixed null byte warning)
 if [ -f /proc/device-tree/model ]; then
-    PI_MODEL=$(cat /proc/device-tree/model)
+    PI_MODEL=$(tr -d '\0' < /proc/device-tree/model 2>/dev/null || echo "Unknown")
     if [[ $PI_MODEL == *"Raspberry Pi"* ]]; then
         print_success "Detected Raspberry Pi: $PI_MODEL"
         IS_RASPBERRY_PI=true
@@ -170,7 +169,7 @@ print_header "Configuration Setup"
 # Generate device ID
 HOSTNAME=$(hostname)
 TIMESTAMP=$(date +%s)
-DEFAULT_DEVICE_ID="detector_${HOSTNAME}_${TIMESTAMP: -6}"
+DEFAULT_DEVICE_ID="animal_detector_${HOSTNAME}_${TIMESTAMP: -6}"
 
 echo ""
 print_info "Device Configuration"
@@ -181,18 +180,6 @@ print_success "Device ID: $DEVICE_ID"
 read -p "Enter location (e.g., Garden Camera, Front Yard, Backyard) [Garden Camera]: " LOCATION
 LOCATION=${LOCATION:-"Garden Camera"}
 print_success "Location: $LOCATION"
-
-# Camera configuration
-echo ""
-print_info "Camera Configuration"
-read -p "Enter camera width [1280]: " CAM_WIDTH
-CAM_WIDTH=${CAM_WIDTH:-1280}
-
-read -p "Enter camera height [720]: " CAM_HEIGHT
-CAM_HEIGHT=${CAM_HEIGHT:-720}
-
-read -p "Enter camera framerate [30]: " CAM_FPS
-CAM_FPS=${CAM_FPS:-30}
 
 # Detection configuration
 echo ""
@@ -231,26 +218,6 @@ else
     ANIMALS_YAML=${ANIMALS_YAML%$'\n'}  # Remove trailing newline
 fi
 
-# MQTT configuration
-echo ""
-print_info "MQTT Broker Configuration"
-read -p "Enter MQTT broker host [localhost]: " MQTT_HOST
-MQTT_HOST=${MQTT_HOST:-localhost}
-
-read -p "Enter MQTT broker port [1883]: " MQTT_PORT
-MQTT_PORT=${MQTT_PORT:-1883}
-
-read -p "Enable MQTT authentication? (y/N): " -n 1 -r
-echo
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    read -p "Enter MQTT username: " MQTT_USER
-    read -s -p "Enter MQTT password: " MQTT_PASS
-    echo
-    MQTT_AUTH_ENABLED=true
-else
-    MQTT_AUTH_ENABLED=false
-fi
-
 # Create configuration file
 echo ""
 print_info "Creating configuration file..."
@@ -271,9 +238,9 @@ logging:
 
 # Camera settings
 camera:
-  width: ${CAM_WIDTH}
-  height: ${CAM_HEIGHT}
-  framerate: ${CAM_FPS}
+  width: 1280
+  height: 720
+  framerate: 30
   rotation: 0
 
 # Detection settings
@@ -285,30 +252,18 @@ ${ANIMALS_YAML}
 
 # MQTT settings
 mqtt:
-  broker_host: "${MQTT_HOST}"
-  broker_port: ${MQTT_PORT}
+  broker_host: "localhost"
+  broker_port: 1883
   topic: "animal_detection/events"
   status_topic: "animal_detection/status"
-EOF
-
-if [ "$MQTT_AUTH_ENABLED" = true ]; then
-    cat >> config.yaml << EOF
-  username: "${MQTT_USER}"
-  password: "${MQTT_PASS}"
-EOF
-else
-    cat >> config.yaml << EOF
   username: null
   password: null
-EOF
-fi
-
-cat >> config.yaml << EOF
   qos: 1
   keepalive: 60
 EOF
 
 print_success "Configuration file created: config.yaml"
+print_info "Edit config.yaml to customize camera and MQTT settings"
 
 # Create setup_env.sh
 echo ""
@@ -497,7 +452,7 @@ echo "System test completed!"
 echo "=========================================="
 echo ""
 echo "Next steps:"
-echo "  1. Review config.yaml and adjust settings if needed"
+echo "  1. Review and edit config.yaml for camera and MQTT settings"
 echo "  2. Start the system: ./start_animal_detector.sh"
 echo ""
 EOF
@@ -513,16 +468,16 @@ echo ""
 print_info "Summary:"
 echo "  Device ID: $DEVICE_ID"
 echo "  Location: $LOCATION"
-echo "  Camera Resolution: ${CAM_WIDTH}x${CAM_HEIGHT} @ ${CAM_FPS}fps"
 echo "  Confidence Threshold: $CONFIDENCE"
+echo "  Cooldown Period: ${COOLDOWN}s"
 echo "  Target Animals: $(echo $TARGET_ANIMALS | tr ' ' ', ')"
-echo "  MQTT Broker: $MQTT_HOST:$MQTT_PORT"
 echo ""
 
 print_info "Next steps:"
-echo "  1. Test the system: ${BLUE}./test_system.sh${NC}"
-echo "  2. Start the animal detector: ${BLUE}./start_animal_detector.sh${NC}"
-echo "  3. View logs: ${BLUE}tail -f logs/animal_detector.log${NC}"
+echo -e "  1. Edit config.yaml to configure camera and MQTT settings"
+echo -e "  2. Test the system: ${BLUE}./test_system.sh${NC}"
+echo -e "  3. Start the animal detector: ${BLUE}./start_animal_detector.sh${NC}"
+echo -e "  4. View logs: ${BLUE}tail -f logs/animal_detector.log${NC}"
 echo ""
 
 print_success "Happy animal detecting!"
