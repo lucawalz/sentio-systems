@@ -1,20 +1,21 @@
 #!/usr/bin/env python3
+"""
+Unified MQTT Publisher Module for Weather Station
+Based on Animal Detector's cleaner queue/worker pattern
+"""
+
 import json
-import base64
 import logging
 import threading
 import queue
+import time
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import paho.mqtt.client as mqtt
-import cv2
-import numpy as np
-
-logger = logging.getLogger("mqtt_publisher")
 
 
-class MQTTPublisher:
-    """MQTT publisher for animal detection events"""
+class WeatherMQTTPublisher:
+    """MQTT publisher for weather station data using queue/worker pattern"""
 
     def __init__(self, config: Dict[str, Any]):
         self.config = config
@@ -24,11 +25,18 @@ class MQTTPublisher:
         # MQTT settings
         self.broker_host = self.mqtt_config.get("broker_host", "localhost")
         self.broker_port = self.mqtt_config.get("broker_port", 1883)
-        self.topic = self.mqtt_config.get("topic", "animal_detection/events")
-        self.device_id = self.device_config.get("device_id", "pi_detector_001")
+        self.data_topic = self.mqtt_config.get("topic", "weather/data")
+        self.status_topic = self.mqtt_config.get("status_topic", "weather/status")
+        self.username = self.mqtt_config.get("username")
+        self.password = self.mqtt_config.get("password")
+        self.qos = self.mqtt_config.get("qos", 1)
+        self.keepalive = self.mqtt_config.get("keepalive", 60)
+
+        # Device info
+        self.device_id = self.device_config.get("id", "weather_station")
         self.location = self.device_config.get("location", "Unknown")
 
-        # Queue for detection events
+        # Queue for data events
         self.event_queue = queue.Queue(maxsize=100)
 
         # MQTT client
@@ -39,16 +47,23 @@ class MQTTPublisher:
         self.worker_thread = None
         self.running = False
 
+        # Statistics
+        self.publish_count = 0
+        self.error_count = 0
+        self.failed_messages = 0
+
         self.logger = logging.getLogger("mqtt_publisher")
 
     def start(self):
         """Start the MQTT publisher in a separate thread"""
         if self.running:
+            self.logger.warning("MQTT Publisher already running")
             return
 
         self.running = True
         self._setup_mqtt_client()
 
+        # Start worker thread
         self.worker_thread = threading.Thread(target=self._worker_loop, daemon=True)
         self.worker_thread.start()
 
@@ -56,84 +71,151 @@ class MQTTPublisher:
 
     def stop(self):
         """Stop the MQTT publisher"""
+        self.logger.info("Stopping MQTT Publisher...")
         self.running = False
 
+        # Publish offline status
+        if self.connected:
+            try:
+                self._publish_status("offline")
+            except Exception as e:
+                self.logger.error(f"Error publishing offline status: {e}")
+
+        # Wait for worker thread
         if self.worker_thread:
             self.worker_thread.join(timeout=5)
 
+        # Disconnect client
         if self.client:
-            self.client.disconnect()
+            try:
+                self.client.loop_stop()
+                self.client.disconnect()
+            except Exception as e:
+                self.logger.error(f"Error disconnecting MQTT client: {e}")
 
         self.logger.info("MQTT Publisher stopped")
 
     def _setup_mqtt_client(self):
         """Setup MQTT client with callbacks"""
-        self.client = mqtt.Client()
-
-        self.client.on_connect = self._on_connect
-        self.client.on_disconnect = self._on_disconnect
-        self.client.on_publish = self._on_publish
-
-        # Connect to broker
         try:
-            self.client.connect(self.broker_host, self.broker_port, 60)
-            self.client.loop_start()
-        except Exception as e:
-            self.logger.error(f"Failed to connect to MQTT broker: {e}")
+            # Create client
+            client_id = f"{self.device_id}_{int(time.time())}"
 
-    def _on_connect(self, client, userdata, flags, rc):
+            try:
+                # Try MQTT v5 first
+                self.client = mqtt.Client(
+                    client_id=client_id,
+                    callback_api_version=mqtt.CallbackAPIVersion.VERSION2
+                )
+            except Exception:
+                # Fallback to older version
+                self.client = mqtt.Client(client_id=client_id)
+
+            # Set authentication if provided
+            if self.username and self.password:
+                self.client.username_pw_set(self.username, self.password)
+
+            # Set callbacks
+            self.client.on_connect = self._on_connect
+            self.client.on_disconnect = self._on_disconnect
+            self.client.on_publish = self._on_publish
+
+            # Connect to broker
+            self.client.connect(self.broker_host, self.broker_port, self.keepalive)
+            self.client.loop_start()
+
+        except Exception as e:
+            self.logger.error(f"Failed to setup MQTT client: {e}")
+
+    def _on_connect(self, client, userdata, flags, rc, *args):
         """MQTT connection callback"""
         if rc == 0:
             self.connected = True
             self.logger.info(f"Connected to MQTT broker at {self.broker_host}:{self.broker_port}")
+            # Publish online status
+            self._publish_status("online")
         else:
             self.logger.error(f"Failed to connect to MQTT broker: {rc}")
 
-    def _on_disconnect(self, client, userdata, rc):
+    def _on_disconnect(self, client, userdata, *args):
         """MQTT disconnection callback"""
         self.connected = False
         self.logger.warning("Disconnected from MQTT broker")
 
-    def _on_publish(self, client, userdata, mid):
+    def _on_publish(self, client, userdata, mid, *args):
         """MQTT publish callback"""
+        self.publish_count += 1
         self.logger.debug(f"Message {mid} published successfully")
 
-    def publish_detection(self, animal_type: str, confidence: float,
-                          bbox: tuple, frame: np.ndarray, trigger_reason: str = "motion"):
+    def publish_weather_data(self, data: Dict[str, Any]) -> bool:
         """
-        Queue a detection event for publishing (non-blocking)
+        Queue weather data for publishing (non-blocking)
+
+        Args:
+            data: Weather sensor data dictionary
+
+        Returns:
+            True if queued successfully, False otherwise
         """
         if not self.running:
-            return
+            self.logger.warning("MQTT Publisher not running")
+            return False
 
         try:
-            # Validate bbox
-            x1, y1, x2, y2 = bbox
-            if x1 == x2 or y1 == y2:
-                self.logger.warning(f"Invalid bbox detected: {bbox}, skipping")
-                return
-
-            # Create detection event
+            # Create event
             event = {
-                "animal_type": animal_type,
-                "confidence": confidence,
-                "bbox": bbox,
-                "frame": frame.copy(),
-                "trigger_reason": trigger_reason,
+                "type": "weather_data",
+                "data": data,
                 "timestamp": datetime.now()
             }
 
             # Add to queue
             self.event_queue.put_nowait(event)
-            self.logger.debug(f"Queued detection: {animal_type} ({confidence:.2f}) bbox: {bbox}")
+            self.logger.debug(f"Queued weather data")
+            return True
 
         except queue.Full:
-            self.logger.warning("Detection queue full, dropping event")
+            self.logger.warning("Event queue full, dropping weather data")
+            self.failed_messages += 1
+            return False
         except Exception as e:
-            self.logger.error(f"Error queuing detection: {e}")
+            self.logger.error(f"Error queuing weather data: {e}")
+            self.failed_messages += 1
+            return False
+
+    def _publish_status(self, status: str, additional_data: Optional[Dict] = None):
+        """Publish system status"""
+        if not self.connected:
+            return
+
+        try:
+            status_data = {
+                "status": status,
+                "timestamp": datetime.now().isoformat(),
+                "device_id": self.device_id,
+                "location": self.location,
+                "publish_count": self.publish_count,
+                "error_count": self.error_count
+            }
+
+            if additional_data:
+                status_data.update(additional_data)
+
+            payload = json.dumps(status_data, separators=(',', ':'))
+            result = self.client.publish(self.status_topic, payload, qos=self.qos, retain=True)
+
+            if result.rc == mqtt.MQTT_ERR_SUCCESS:
+                self.logger.info(f"Status '{status}' published to '{self.status_topic}'")
+            else:
+                self.logger.error(f"Failed to publish status: {result.rc}")
+
+        except Exception as e:
+            self.logger.error(f"Error publishing status: {e}")
 
     def _worker_loop(self):
-        """Worker thread that processes queued detection events"""
+        """Worker thread that processes queued events"""
+        self.logger.info("MQTT worker thread started")
+
         while self.running:
             try:
                 # Get event from queue with timeout
@@ -143,82 +225,80 @@ class MQTTPublisher:
                     self._process_and_send_event(event)
                 else:
                     self.logger.warning("Not connected to MQTT broker, dropping event")
+                    self.failed_messages += 1
 
             except queue.Empty:
                 continue
             except Exception as e:
                 self.logger.error(f"Error in worker loop: {e}")
 
+        self.logger.info("MQTT worker thread stopped")
+
     def _process_and_send_event(self, event: Dict[str, Any]):
-        """Process and send detection event via MQTT"""
+        """Process and send event via MQTT"""
         try:
-            # Extract frame and crop detection area
-            frame = event["frame"]
-            bbox = event["bbox"]
-            x1, y1, x2, y2 = bbox
+            event_type = event.get("type")
 
-            if frame is None or frame.size == 0:
-                self.logger.error("Invalid frame for MQTT publishing")
-                return
-
-            h, w = frame.shape[:2]
-            self.logger.debug(f"Frame size: {w}x{h}, bbox: {bbox}")
-
-            x1 = max(0, min(x1, w - 1))
-            y1 = max(0, min(y1, h - 1))
-            x2 = max(x1 + 1, min(x2, w))
-            y2 = max(y1 + 1, min(y2, h))
-
-            padding = 50
-            x1_crop = max(0, x1 - padding)
-            y1_crop = max(0, y1 - padding)
-            x2_crop = min(w, x2 + padding)
-            y2_crop = min(h, y2 + padding)
-
-            cropped_frame = frame[y1_crop:y2_crop, x1_crop:x2_crop]
-
-            if cropped_frame.size == 0:
-                self.logger.error(f"Empty crop result for bbox {bbox}")
-                cropped_frame = frame
-
-            self.logger.debug(f"Cropped frame size: {cropped_frame.shape}")
-
-            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 95]
-            success, encoded_img = cv2.imencode('.jpg', cropped_frame, encode_param)
-
-            if not success:
-                self.logger.error("Failed to encode image")
-                return
-
-            # Convert to base64
-            img_base64 = base64.b64encode(encoded_img.tobytes()).decode('utf-8')
-
-            # Create MQTT payload
-            payload = {
-                "timestamp": event["timestamp"].isoformat(),
-                "device_id": self.device_id,
-                "location": self.location,
-                "trigger_reason": event["trigger_reason"],
-                "detection_count": 1,
-                "image_data": img_base64,
-                "image_format": "jpg",
-                "detections": [{
-                    "bbox": [x1, y1, x2, y2],
-                    "confidence": event["confidence"],
-                    "class_id": 0,
-                    "species": event["animal_type"]
-                }]
-            }
-
-            json_payload = json.dumps(payload)
-
-            result = self.client.publish(self.topic, json_payload)
-
-            if result.rc == mqtt.MQTT_ERR_SUCCESS:
-                self.logger.info(
-                    f"Published detection: {event['animal_type']} ({event['confidence']:.2f}) - Image size: {len(encoded_img)} bytes")
+            if event_type == "weather_data":
+                self._send_weather_data(event["data"], event["timestamp"])
             else:
-                self.logger.error(f"Failed to publish detection: {result.rc}")
+                self.logger.warning(f"Unknown event type: {event_type}")
 
         except Exception as e:
-            self.logger.error(f"Error processing detection event: {e}")
+            self.logger.error(f"Error processing event: {e}")
+            self.error_count += 1
+
+    def _send_weather_data(self, data: Dict[str, Any], timestamp: datetime):
+        """Send weather data via MQTT"""
+        try:
+            # Create payload with device info
+            payload = {
+                "device_id": self.device_id,
+                "location": self.location,
+                "timestamp": timestamp.isoformat(),
+                "temperature": data.get("temperature"),
+                "humidity": data.get("humidity"),
+                "pressure": data.get("pressure"),
+                "lux": data.get("lux"),
+                "uvi": data.get("uvi")
+            }
+
+            # Remove None values
+            payload = {k: v for k, v in payload.items() if v is not None}
+
+            # Convert to JSON
+            json_payload = json.dumps(payload, separators=(',', ':'))
+
+            # Publish
+            result = self.client.publish(self.data_topic, json_payload, qos=self.qos)
+
+            if result.rc == mqtt.MQTT_ERR_SUCCESS:
+                self.logger.info(f"Weather data published to '{self.data_topic}'")
+                self.logger.debug(f"Payload: {json_payload}")
+            else:
+                self.logger.error(f"Failed to publish weather data: {result.rc}")
+                self.error_count += 1
+                self.failed_messages += 1
+
+        except Exception as e:
+            self.logger.error(f"Error sending weather data: {e}")
+            self.error_count += 1
+            self.failed_messages += 1
+
+    def get_statistics(self) -> Dict[str, Any]:
+        """Get publisher statistics"""
+        return {
+            "connected": self.connected,
+            "publish_count": self.publish_count,
+            "error_count": self.error_count,
+            "failed_messages": self.failed_messages,
+            "queue_size": self.event_queue.qsize(),
+            "broker_host": self.broker_host,
+            "broker_port": self.broker_port,
+            "data_topic": self.data_topic,
+            "status_topic": self.status_topic
+        }
+
+    def is_connected(self) -> bool:
+        """Check if MQTT client is connected"""
+        return self.connected

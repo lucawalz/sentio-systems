@@ -1,372 +1,528 @@
 #!/bin/bash
 
 # Animal Detector Installation Script
-# This script installs all necessary dependencies and creates required files
-# for the Animal Detector application.
+# Unified installation and configuration for Raspberry Pi with Hailo AI
 
-echo "Animal Detector Installation"
-echo "============================"
+set -e  # Exit on error
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Helper functions
+print_header() {
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}$1${NC}"
+    echo -e "${BLUE}========================================${NC}"
+}
+
+print_success() {
+    echo -e "${GREEN}✓${NC} $1"
+}
+
+print_error() {
+    echo -e "${RED}✗${NC} $1"
+}
+
+print_warning() {
+    echo -e "${YELLOW}⚠${NC} $1"
+}
+
+print_info() {
+    echo -e "${BLUE}ℹ${NC} $1"
+}
+
+# Main installation
+print_header "Animal Detector Installation"
 
 # Check if running on Raspberry Pi
 if [ -f /proc/device-tree/model ]; then
     PI_MODEL=$(cat /proc/device-tree/model)
     if [[ $PI_MODEL == *"Raspberry Pi"* ]]; then
-        echo "Detected Raspberry Pi: $PI_MODEL"
+        print_success "Detected Raspberry Pi: $PI_MODEL"
         IS_RASPBERRY_PI=true
     else
-        echo "Not running on Raspberry Pi"
+        print_warning "Not running on Raspberry Pi: $PI_MODEL"
         IS_RASPBERRY_PI=false
     fi
 else
-    echo "Unable to determine if running on Raspberry Pi"
+    print_warning "Unable to determine hardware model"
+    read -p "Continue anyway? (y/N): " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        exit 1
+    fi
     IS_RASPBERRY_PI=false
 fi
 
 # Check if Python is installed
 if ! command -v python3 &>/dev/null; then
-    echo "ERROR: Python 3 is required. Please install it first."
+    print_error "Python 3 is required but not installed"
     exit 1
 fi
 
-# Create virtual environment
-echo -e "\nCreating Python virtual environment (.venv)..."
-python3 -m venv .venv --system-site-packages
-source .venv/bin/activate
+PYTHON_VERSION=$(python3 --version | awk '{print $2}')
+print_success "Python $PYTHON_VERSION detected"
 
-# Update pip and setuptools
-echo "Upgrading pip and setuptools..."
-pip install --upgrade pip setuptools wheel
-
-# Create requirements.txt if it doesn't exist
-if [ ! -f requirements.txt ]; then
-    echo -e "\nCreating requirements.txt file..."
-    cat > requirements.txt << EOF
-paho-mqtt
-pyyaml
-setproctitle
-EOF
-    echo "Created requirements.txt"
+# Check for Hailo SDK
+echo ""
+print_info "Checking for Hailo SDK..."
+if [ -d "/home/$USER/hailo-apps-infra" ] || [ -d "/opt/hailo" ]; then
+    print_success "Hailo SDK detected"
+    HAILO_SDK_FOUND=true
+else
+    print_warning "Hailo SDK not found at standard locations"
+    print_info "Please ensure Hailo SDK is installed for AI acceleration"
+    read -p "Continue anyway? (y/N): " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        exit 1
+    fi
+    HAILO_SDK_FOUND=false
 fi
 
-# Install Python dependencies
-echo -e "\nInstalling Python dependencies from requirements.txt..."
-pip install -r requirements.txt
+# Install system dependencies
+if [ "$IS_RASPBERRY_PI" = true ]; then
+    echo ""
+    print_info "Installing system dependencies..."
+    sudo apt update -qq
+    sudo apt install -y \
+        python3-pip \
+        python3-venv \
+        python3-dev \
+        mosquitto \
+        mosquitto-clients \
+        libopencv-dev \
+        v4l-utils > /dev/null 2>&1
 
-# Check if libraries installed successfully
-echo -e "\nChecking Python installations..."
+    print_success "System dependencies installed"
+fi
+
+# Create virtual environment
+echo ""
+print_info "Creating Python virtual environment (.venv)..."
+python3 -m venv .venv --system-site-packages
+source .venv/bin/activate
+print_success "Virtual environment created"
+
+# Update pip and setuptools
+print_info "Upgrading pip and setuptools..."
+pip install --upgrade pip setuptools wheel -q
+print_success "pip and setuptools upgraded"
+
+# Install Python dependencies
+echo ""
+print_info "Installing Python dependencies..."
+
+# Check if requirements.txt exists, if not create it
+if [ ! -f requirements.txt ]; then
+    cat > requirements.txt << EOF
+# Core dependencies
+opencv-python
+numpy
+
+# MQTT communication
+paho-mqtt
+
+# Configuration
+pyyaml
+
+# Utilities
+setproctitle
+EOF
+fi
+
+pip install -r requirements.txt -q
+print_success "Python dependencies installed"
+
+# Verify installations
+echo ""
+print_info "Verifying installations..."
 MISSING_PACKAGES=false
 
-for package in opencv-python numpy paho-mqtt pyyaml setproctitle; do
-    if ! pip show $package &>/dev/null; then
-        echo "ERROR: $package is not installed correctly"
-        MISSING_PACKAGES=true
+PACKAGES=("cv2:opencv-python" "numpy" "paho.mqtt.client:paho-mqtt" "yaml:PyYAML")
+
+for pkg in "${PACKAGES[@]}"; do
+    IFS=':' read -r import_name pip_name <<< "$pkg"
+    pip_name=${pip_name:-$import_name}
+
+    if python3 -c "import $import_name" 2>/dev/null; then
+        VERSION=$(pip show $pip_name 2>/dev/null | grep Version | awk '{print $2}')
+        print_success "$pip_name ($VERSION)"
     else
-        VERSION=$(pip show $package | grep Version | awk '{print $2}')
-        echo "$package (version $VERSION) installed successfully"
+        print_error "$pip_name not installed correctly"
+        MISSING_PACKAGES=true
     fi
 done
 
 if [ "$MISSING_PACKAGES" = true ]; then
-    echo -e "\nWARNING: Some packages were not installed correctly."
-    echo "Please fix the issues above and try again."
-else
-    echo -e "\nAll Python packages installed successfully."
+    print_warning "Some packages were not installed correctly"
+    echo "  You may need to install them manually"
 fi
 
-# Create config file if it doesn't exist
-if [ ! -f config.yaml ]; then
-    echo -e "\nCreating default config file..."
-    cat > config.yaml << EOF
-# Camera settings
-camera:
-  width: 1280
-  height: 720
-  framerate: 30
-  rotation: 0
+# Interactive configuration
+echo ""
+print_header "Configuration Setup"
 
-# Detection settings
-detection:
-  confidence_threshold: 0.6
-  target_animals:
-    - cat
+# Generate device ID
+HOSTNAME=$(hostname)
+TIMESTAMP=$(date +%s)
+DEFAULT_DEVICE_ID="detector_${HOSTNAME}_${TIMESTAMP: -6}"
+
+echo ""
+print_info "Device Configuration"
+read -p "Enter device ID [${DEFAULT_DEVICE_ID}]: " DEVICE_ID
+DEVICE_ID=${DEVICE_ID:-$DEFAULT_DEVICE_ID}
+print_success "Device ID: $DEVICE_ID"
+
+read -p "Enter location (e.g., Garden Camera, Front Yard, Backyard) [Garden Camera]: " LOCATION
+LOCATION=${LOCATION:-"Garden Camera"}
+print_success "Location: $LOCATION"
+
+# Camera configuration
+echo ""
+print_info "Camera Configuration"
+read -p "Enter camera width [1280]: " CAM_WIDTH
+CAM_WIDTH=${CAM_WIDTH:-1280}
+
+read -p "Enter camera height [720]: " CAM_HEIGHT
+CAM_HEIGHT=${CAM_HEIGHT:-720}
+
+read -p "Enter camera framerate [30]: " CAM_FPS
+CAM_FPS=${CAM_FPS:-30}
+
+# Detection configuration
+echo ""
+print_info "Detection Configuration"
+read -p "Enter confidence threshold (0.0-1.0) [0.6]: " CONFIDENCE
+CONFIDENCE=${CONFIDENCE:-0.6}
+
+read -p "Enter cooldown period between detections (seconds) [3.0]: " COOLDOWN
+COOLDOWN=${COOLDOWN:-3.0}
+
+# Target animals
+echo ""
+print_info "Target Animals Configuration"
+echo "  Select animals to detect (space-separated list or 'all'):"
+echo "  Available: cat dog bird squirrel rabbit fox deer person"
+echo ""
+read -p "Enter target animals [cat dog bird]: " TARGET_ANIMALS
+TARGET_ANIMALS=${TARGET_ANIMALS:-"cat dog bird"}
+
+# Convert to YAML array format
+if [ "$TARGET_ANIMALS" == "all" ]; then
+    ANIMALS_YAML="    - cat
     - dog
     - bird
     - squirrel
     - rabbit
     - fox
     - deer
-    - person
+    - person"
+else
+    ANIMALS_YAML=""
+    for animal in $TARGET_ANIMALS; do
+        ANIMALS_YAML="${ANIMALS_YAML}    - ${animal}
+"
+    done
+    ANIMALS_YAML=${ANIMALS_YAML%$'\n'}  # Remove trailing newline
+fi
 
-# MQTT settings
-mqtt:
-  broker_host: "localhost"  # Change to backend server IP
-  broker_port: 1883
-  topic: "animal_detection/events"
-  username: null  # Set if authentication required
-  password: null  # Set if authentication required
+# MQTT configuration
+echo ""
+print_info "MQTT Broker Configuration"
+read -p "Enter MQTT broker host [localhost]: " MQTT_HOST
+MQTT_HOST=${MQTT_HOST:-localhost}
+
+read -p "Enter MQTT broker port [1883]: " MQTT_PORT
+MQTT_PORT=${MQTT_PORT:-1883}
+
+read -p "Enable MQTT authentication? (y/N): " -n 1 -r
+echo
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    read -p "Enter MQTT username: " MQTT_USER
+    read -s -p "Enter MQTT password: " MQTT_PASS
+    echo
+    MQTT_AUTH_ENABLED=true
+else
+    MQTT_AUTH_ENABLED=false
+fi
+
+# Create configuration file
+echo ""
+print_info "Creating configuration file..."
+
+cat > config.yaml << EOF
+# Animal Detector Configuration
+# Generated on $(date)
 
 # Device information
 device:
-  device_id: "pi_detector_001"
-  location: "Garden Camera"
-  camera_resolution: "1280x720"
+  device_id: "${DEVICE_ID}"
+  location: "${LOCATION}"
+
+# Logging Configuration
+logging:
+  level: "INFO"
+  file: "logs/animal_detector.log"
+
+# Camera settings
+camera:
+  width: ${CAM_WIDTH}
+  height: ${CAM_HEIGHT}
+  framerate: ${CAM_FPS}
+  rotation: 0
+
+# Detection settings
+detection:
+  confidence_threshold: ${CONFIDENCE}
+  cooldown_period: ${COOLDOWN}  # seconds between detections of same animal
+  target_animals:
+${ANIMALS_YAML}
+
+# MQTT settings
+mqtt:
+  broker_host: "${MQTT_HOST}"
+  broker_port: ${MQTT_PORT}
+  topic: "animal_detection/events"
+  status_topic: "animal_detection/status"
 EOF
-    echo "Created default config.yaml"
+
+if [ "$MQTT_AUTH_ENABLED" = true ]; then
+    cat >> config.yaml << EOF
+  username: "${MQTT_USER}"
+  password: "${MQTT_PASS}"
+EOF
 else
-    echo -e "\nConfig file already exists, skipping creation"
+    cat >> config.yaml << EOF
+  username: null
+  password: null
+EOF
 fi
 
-# Create comprehensive test script
-echo -e "\nCreating test script..."
-cat > test_animal_detector.py << EOF
-#!/usr/bin/env python3
-"""
-Test script for Animal Detector components
-"""
-import os
-import sys
-import time
-import yaml
-import cv2
-import numpy as np
-
-def test_environment():
-    """Test Python environment and imports"""
-    print("Testing Python environment...")
-    print(f"Python version: {sys.version}")
-    
-    # Test required imports
-    modules = {
-        "OpenCV": "cv2",
-        "NumPy": "numpy", 
-        "PyYAML": "yaml",
-        "MQTT": "paho.mqtt.client"
-    }
-    
-    all_success = True
-    for name, module in modules.items():
-        try:
-            __import__(module)
-            print(f"✓ {name} import successful")
-        except ImportError:
-            print(f"✗ {name} import failed")
-            all_success = False
-    
-    return all_success
-
-def test_camera():
-    """Test camera connection"""
-    print("\nTesting camera connection...")
-    try:
-        # Try to open camera with OpenCV
-        cap = cv2.VideoCapture(0)
-        if not cap.isOpened():
-            print("✗ Failed to open camera")
-            return False
-            
-        # Try to read a frame
-        ret, frame = cap.read()
-        if not ret or frame is None:
-            print("✗ Failed to read frame from camera")
-            cap.release()
-            return False
-            
-        # Show some info about the frame
-        height, width = frame.shape[:2]
-        print(f"✓ Successfully connected to camera")
-        print(f"  Frame size: {width}x{height}")
-        
-        # Save a test image
-        cv2.imwrite("test_camera.jpg", frame)
-        print(f"✓ Test image saved to test_camera.jpg")
-        
-        cap.release()
-        return True
-    except Exception as e:
-        print(f"✗ Camera test failed with error: {e}")
-        return False
-
-def test_config():
-    """Test configuration file loading"""
-    print("\nTesting config file...")
-    try:
-        if not os.path.exists("config.yaml"):
-            print("✗ Config file not found")
-            return False
-            
-        with open("config.yaml", "r") as f:
-            config = yaml.safe_load(f)
-            
-        # Check for required sections
-        required_sections = ["camera", "detection", "mqtt", "device"]
-        for section in required_sections:
-            if section not in config:
-                print(f"✗ Missing '{section}' section in config")
-                return False
-                
-        print(f"✓ Config file loaded successfully")
-        print(f"  Target animals: {', '.join(config['detection']['target_animals'])}")
-        return True
-    except Exception as e:
-        print(f"✗ Config test failed with error: {e}")
-        return False
-
-def test_mqtt():
-    """Test MQTT connection"""
-    print("\nTesting MQTT connection...")
-    try:
-        import paho.mqtt.client as mqtt
-        
-        # Load broker settings from config
-        with open("config.yaml", "r") as f:
-            config = yaml.safe_load(f)
-        
-        broker = config["mqtt"]["broker_host"]
-        port = config["mqtt"]["broker_port"]
-        
-        # Define callback function
-        def on_connect(client, userdata, flags, rc):
-            if rc == 0:
-                print(f"✓ Successfully connected to MQTT broker at {broker}:{port}")
-                client.disconnect()
-            else:
-                print(f"✗ Failed to connect to MQTT broker (code {rc})")
-        
-        # Connect to broker
-        client = mqtt.Client()
-        client.on_connect = on_connect
-        
-        print(f"  Connecting to MQTT broker at {broker}:{port}...")
-        try:
-            client.connect(broker, port, 5)
-            client.loop_start()
-            time.sleep(2)  # Give it time to connect
-            client.loop_stop()
-            return True
-        except Exception as e:
-            print(f"✗ MQTT connection failed: {e}")
-            print("  Check if MQTT broker is running and accessible")
-            return False
-    except ImportError:
-        print("✗ MQTT module not imported correctly")
-        return False
-    except Exception as e:
-        print(f"✗ MQTT test failed with error: {e}")
-        return False
-
-def run_all_tests():
-    """Run all tests"""
-    print("Animal Detector Test Suite")
-    print("=========================\n")
-    
-    tests = [
-        ("Environment", test_environment),
-        ("Configuration", test_config),
-        ("Camera", test_camera),
-        ("MQTT", test_mqtt)
-    ]
-    
-    results = {}
-    
-    for name, test_fn in tests:
-        results[name] = test_fn()
-        print("")
-    
-    # Print summary
-    print("Test Results Summary")
-    print("===================")
-    all_passed = True
-    for name, result in results.items():
-        status = "PASSED" if result else "FAILED"
-        if not result:
-            all_passed = False
-        print(f"{name}: {status}")
-    
-    if all_passed:
-        print("\nAll tests passed! The system is ready.")
-        return 0
-    else:
-        print("\nSome tests failed. Please fix the issues above.")
-        return 1
-
-if __name__ == "__main__":
-    sys.exit(run_all_tests())
+cat >> config.yaml << EOF
+  qos: 1
+  keepalive: 60
 EOF
-echo "Created test_animal_detector.py"
 
-# Make the test script executable
-chmod +x test_animal_detector.py
-echo "Made test script executable"
+print_success "Configuration file created: config.yaml"
 
-# Create start script
-echo -e "\nCreating start script..."
-cat > start_animal_detector.sh << EOF
+# Create setup_env.sh
+echo ""
+print_info "Creating environment setup script..."
+
+# Detect Hailo path
+HAILO_PATH="/home/$USER/hailo-apps-infra"
+if [ ! -d "$HAILO_PATH" ]; then
+    HAILO_PATH="/opt/hailo"
+    if [ ! -d "$HAILO_PATH" ]; then
+        HAILO_PATH=""
+        print_warning "Hailo SDK path not found, setup_env.sh may need manual adjustment"
+    fi
+fi
+
+cat > setup_env.sh << EOF
 #!/bin/bash
 
-# Start the Animal Detector application
-echo "Starting Animal Detector..."
+# Animal Detector Environment Setup
+# This script activates the virtual environment and sets required environment variables
+
+# Service-specific environment variables for Hailo
+EOF
+
+if [ -n "$HAILO_PATH" ]; then
+    cat >> setup_env.sh << EOF
+export PYTHONPATH="${HAILO_PATH}:\$PYTHONPATH"
+echo "✓ PYTHONPATH set to ${HAILO_PATH}"
+EOF
+else
+    cat >> setup_env.sh << EOF
+# export PYTHONPATH="/path/to/hailo-apps-infra:\$PYTHONPATH"
+# echo "✓ PYTHONPATH set"
+EOF
+fi
+
+cat >> setup_env.sh << 'EOF'
+export DISPLAY=:0
+echo "✓ DISPLAY set to :0"
 
 # Activate virtual environment
-if [ ! -d ".venv" ]; then
-    echo "Error: Virtual environment not found. Please run install.sh first."
+if [ -d ".venv" ]; then
+    source .venv/bin/activate
+    echo "✓ Virtual environment activated"
+else
+    echo "✗ .venv not found. Please run install.sh first."
+    return 1
+fi
+
+# Display environment info
+echo "Animal Detector environment ready"
+echo "Python: $(python --version)"
+echo "Working directory: $(pwd)"
+EOF
+
+chmod +x setup_env.sh
+print_success "Environment setup script created"
+
+# Create logs directory
+mkdir -p logs
+print_success "Logs directory created"
+
+# Create test script
+echo ""
+print_info "Creating test script..."
+
+cat > test_system.sh << 'EOF'
+#!/bin/bash
+
+# Animal Detector System Test
+cd "$(dirname "$0")"
+
+echo "=========================================="
+echo "Animal Detector System Test"
+echo "=========================================="
+echo ""
+
+# Check virtual environment
+echo "Checking virtual environment..."
+if [ -d ".venv" ]; then
+    echo "✓ Virtual environment exists"
+    source setup_env.sh
+else
+    echo "✗ Virtual environment missing. Run install.sh first."
     exit 1
 fi
 
-source .venv/bin/activate
-export PYTHONPATH="\$(pwd):\$PYTHONPATH"
-export DISPLAY=:0
+# Check Python packages
+echo ""
+echo "Checking Python packages..."
+python3 << PYTHON
+import sys
 
-# Check if MQTT broker is running
-echo "Checking MQTT broker..."
-if ! pgrep mosquitto > /dev/null; then
-    echo "Starting MQTT broker..."
-    mosquitto -d
-    sleep 1
+packages = {
+    "cv2": "opencv-python",
+    "numpy": "numpy",
+    "paho.mqtt.client": "paho-mqtt",
+    "yaml": "PyYAML"
+}
+
+all_ok = True
+for module, name in packages.items():
+    try:
+        __import__(module)
+        print(f"✓ {name}")
+    except ImportError:
+        print(f"✗ {name} missing")
+        all_ok = False
+
+sys.exit(0 if all_ok else 1)
+PYTHON
+
+if [ $? -ne 0 ]; then
+    echo ""
+    echo "✗ Some packages are missing"
+    exit 1
 fi
 
-# Start the application
-echo "Starting main application..."
-python3 animal_detector.py --config config.yaml
-
-# Note: this script will wait for the application to exit
-echo "Application exited"
-EOF
-
-chmod +x start_animal_detector.sh
-echo "Created start_animal_detector.sh"
-
-# Create stop script
-echo -e "\nCreating stop script..."
-cat > stop_animal_detector.sh << EOF
-#!/bin/bash
-
-# Stop the Animal Detector application
-echo "Stopping Animal Detector..."
-
-# Find and kill the main Python process
-PID=\$(pgrep -f "python3 animal_detector.py")
-if [ -n "\$PID" ]; then
-    echo "Killing process \$PID..."
-    kill \$PID
-    sleep 2
-    
-    # Force kill if still running
-    if ps -p \$PID > /dev/null; then
-        echo "Force killing process \$PID..."
-        kill -9 \$PID
+# Test configuration
+echo ""
+echo "Checking configuration..."
+if [ -f "config.yaml" ]; then
+    echo "✓ Config file exists"
+    python3 -c "import yaml; yaml.safe_load(open('config.yaml'))" 2>/dev/null
+    if [ $? -eq 0 ]; then
+        echo "✓ Config file is valid YAML"
+    else
+        echo "✗ Config file has syntax errors"
+        exit 1
     fi
-    
-    echo "Animal Detector stopped"
 else
-    echo "Animal Detector is not running"
+    echo "✗ Config file missing"
+    exit 1
 fi
+
+# Test camera
+echo ""
+echo "Testing camera connection..."
+python3 << PYTHON
+import cv2
+import sys
+
+cap = cv2.VideoCapture(0)
+if not cap.isOpened():
+    print("✗ Failed to open camera")
+    sys.exit(1)
+
+ret, frame = cap.read()
+if not ret or frame is None:
+    print("✗ Failed to read frame from camera")
+    cap.release()
+    sys.exit(1)
+
+height, width = frame.shape[:2]
+print(f"✓ Camera connected: {width}x{height}")
+
+# Save test image
+cv2.imwrite("test_camera.jpg", frame)
+print(f"✓ Test image saved: test_camera.jpg")
+
+cap.release()
+sys.exit(0)
+PYTHON
+
+# Test MQTT connection
+echo ""
+echo "Testing MQTT connection..."
+MQTT_HOST=$(python3 -c "import yaml; print(yaml.safe_load(open('config.yaml'))['mqtt']['broker_host'])")
+MQTT_PORT=$(python3 -c "import yaml; print(yaml.safe_load(open('config.yaml'))['mqtt']['broker_port'])")
+
+if command -v mosquitto_pub &>/dev/null; then
+    mosquitto_pub -h "$MQTT_HOST" -p "$MQTT_PORT" -t "test" -m "test" -q 0 2>/dev/null
+    if [ $? -eq 0 ]; then
+        echo "✓ MQTT broker accessible at $MQTT_HOST:$MQTT_PORT"
+    else
+        echo "✗ Cannot connect to MQTT broker at $MQTT_HOST:$MQTT_PORT"
+        echo "  Make sure mosquitto is running: sudo systemctl start mosquitto"
+    fi
+else
+    echo "⚠ mosquitto_pub not available, skipping MQTT test"
+fi
+
+echo ""
+echo "=========================================="
+echo "System test completed!"
+echo "=========================================="
+echo ""
+echo "Next steps:"
+echo "  1. Review config.yaml and adjust settings if needed"
+echo "  2. Start the system: ./start_animal_detector.sh"
+echo ""
 EOF
 
-chmod +x stop_animal_detector.sh
-echo "Created stop_animal_detector.sh"
+chmod +x test_system.sh
+print_success "Test script created"
 
-echo -e "\nInstallation complete!"
-echo "Run source setup_env.sh to activate the environment."
-echo "To run tests: ./test_animal_detector.py"
-echo "To start the application: ./start_animal_detector.sh"
-echo "To stop the application: ./stop_animal_detector.sh"
+# Final summary
+echo ""
+print_header "Installation Complete!"
+
+echo ""
+print_info "Summary:"
+echo "  Device ID: $DEVICE_ID"
+echo "  Location: $LOCATION"
+echo "  Camera Resolution: ${CAM_WIDTH}x${CAM_HEIGHT} @ ${CAM_FPS}fps"
+echo "  Confidence Threshold: $CONFIDENCE"
+echo "  Target Animals: $(echo $TARGET_ANIMALS | tr ' ' ', ')"
+echo "  MQTT Broker: $MQTT_HOST:$MQTT_PORT"
+echo ""
+
+print_info "Next steps:"
+echo "  1. Test the system: ${BLUE}./test_system.sh${NC}"
+echo "  2. Start the animal detector: ${BLUE}./start_animal_detector.sh${NC}"
+echo "  3. View logs: ${BLUE}tail -f logs/animal_detector.log${NC}"
+echo ""
+
+print_success "Happy animal detecting!"
