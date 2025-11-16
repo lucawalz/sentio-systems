@@ -9,7 +9,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 # Helper functions
 print_header() {
@@ -37,7 +37,7 @@ print_info() {
 # Main installation
 print_header "Weather Station Installation"
 
-# Check if running on Raspberry Pi (fixed null byte warning)
+# Check if running on Raspberry Pi
 if [ -f /proc/device-tree/model ]; then
     PI_MODEL=$(tr -d '\0' < /proc/device-tree/model 2>/dev/null || echo "Unknown")
     if [[ $PI_MODEL == *"Raspberry Pi"* ]]; then
@@ -173,8 +173,8 @@ read -p "Enter device ID [${DEFAULT_DEVICE_ID}]: " DEVICE_ID
 DEVICE_ID=${DEVICE_ID:-$DEFAULT_DEVICE_ID}
 print_success "Device ID: $DEVICE_ID"
 
-read -p "Enter location (e.g., garden, backyard, balcony) [garden]: " LOCATION
-LOCATION=${LOCATION:-garden}
+read -p "Enter location (e.g., Garden, Backyard, Balcony) [Garden]: " LOCATION
+LOCATION=${LOCATION:-"Garden"}
 print_success "Location: $LOCATION"
 
 # Data collection interval
@@ -413,6 +413,174 @@ EOF
 
 chmod +x test_system.sh
 print_success "Test script created"
+
+# Create start/stop scripts (ADD THIS SECTION)
+echo ""
+print_info "Creating start and stop scripts..."
+
+# Create start script
+cat > start_weather_station.sh << 'EOF'
+#!/bin/bash
+
+# Weather Station Start Script
+# Standardized service launcher
+
+cd "$(dirname "$0")"
+
+SERVICE_NAME="Weather Station"
+MAIN_SCRIPT="main.py"
+PID_FILE="weather_station.pid"
+LOG_FILE="logs/weather_station.log"
+
+# Check if virtual environment exists
+if [ ! -d ".venv" ]; then
+    echo "✗ Virtual environment not found. Please run install.sh first."
+    exit 1
+fi
+
+# Source environment setup
+source setup_env.sh
+if [ $? -ne 0 ]; then
+    echo "✗ Failed to setup environment"
+    exit 1
+fi
+
+# Check if main script exists
+if [ ! -f "$MAIN_SCRIPT" ]; then
+    echo "✗ $MAIN_SCRIPT not found. Please ensure your main application file exists."
+    exit 1
+fi
+
+# Check if already running
+if [ -f "$PID_FILE" ]; then
+    PID=$(cat "$PID_FILE")
+    if ps -p "$PID" > /dev/null 2>&1; then
+        echo "✗ $SERVICE_NAME is already running (PID: $PID)"
+        echo "  Use ./stop_weather_station.sh to stop it first."
+        exit 1
+    else
+        # Stale PID file, remove it
+        rm -f "$PID_FILE"
+    fi
+fi
+
+echo "=========================================="
+echo "$SERVICE_NAME"
+echo "=========================================="
+echo ""
+echo "Select mode:"
+echo "1) Foreground mode (with console output)"
+echo "2) Background mode (daemon, logs to file)"
+echo ""
+read -p "Enter your choice (1 or 2): " choice
+
+case $choice in
+    1)
+        echo ""
+        echo "Starting $SERVICE_NAME in foreground mode..."
+        echo "Press Ctrl+C to stop"
+        echo "------------------------------------------"
+        python "$MAIN_SCRIPT"
+        ;;
+    2)
+        echo ""
+        echo "Starting $SERVICE_NAME in background mode..."
+
+        # Ensure logs directory exists
+        mkdir -p logs
+
+        # Start in background
+        nohup python "$MAIN_SCRIPT" --quiet > "$LOG_FILE" 2>&1 &
+        echo $! > "$PID_FILE"
+
+        sleep 2
+
+        # Verify it's running
+        if ps -p $(cat "$PID_FILE") > /dev/null 2>&1; then
+            echo "✓ $SERVICE_NAME started successfully"
+            echo "  PID: $(cat $PID_FILE)"
+            echo "  Logs: $LOG_FILE"
+            echo "  Stop: ./stop_weather_station.sh"
+        else
+            echo "✗ Failed to start $SERVICE_NAME"
+            echo "  Check logs: $LOG_FILE"
+            rm -f "$PID_FILE"
+            exit 1
+        fi
+        ;;
+    *)
+        echo "✗ Invalid choice. Please run the script again and choose 1 or 2."
+        exit 1
+        ;;
+esac
+EOF
+
+chmod +x start_weather_station.sh
+
+# Create stop script
+cat > stop_weather_station.sh << 'EOF'
+#!/bin/bash
+
+# Weather Station Stop Script
+# Standardized service stopper
+
+cd "$(dirname "$0")"
+
+SERVICE_NAME="Weather Station"
+MAIN_SCRIPT="main.py"
+PID_FILE="weather_station.pid"
+
+echo "Stopping $SERVICE_NAME..."
+
+# Check if PID file exists (from background mode)
+if [ -f "$PID_FILE" ]; then
+    PID=$(cat "$PID_FILE")
+    if ps -p "$PID" > /dev/null 2>&1; then
+        echo "  Stopping process $PID..."
+        kill "$PID" 2>/dev/null
+
+        # Wait for graceful shutdown
+        sleep 2
+
+        # Force kill if still running
+        if ps -p "$PID" > /dev/null 2>&1; then
+            echo "  Force stopping process $PID..."
+            kill -9 "$PID" 2>/dev/null
+            sleep 1
+        fi
+
+        if ! ps -p "$PID" > /dev/null 2>&1; then
+            echo "✓ Process $PID stopped"
+        fi
+    else
+        echo "  Process $PID not running (stale PID file)"
+    fi
+    rm -f "$PID_FILE"
+fi
+
+# Kill any remaining Python processes running the main script
+if pgrep -f "python.*$MAIN_SCRIPT" > /dev/null; then
+    echo "  Stopping any remaining processes..."
+    pkill -f "python.*$MAIN_SCRIPT"
+    sleep 1
+
+    # Force kill if still running
+    if pgrep -f "python.*$MAIN_SCRIPT" > /dev/null; then
+        pkill -9 -f "python.*$MAIN_SCRIPT"
+    fi
+fi
+
+# Final check
+if pgrep -f "python.*$MAIN_SCRIPT" > /dev/null; then
+    echo "✗ Failed to stop all $SERVICE_NAME processes"
+    exit 1
+else
+    echo "✓ $SERVICE_NAME stopped successfully"
+fi
+EOF
+
+chmod +x stop_weather_station.sh
+print_success "Start and stop scripts created"
 
 # Final summary
 echo ""
