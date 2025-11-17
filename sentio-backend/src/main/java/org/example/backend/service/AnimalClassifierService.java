@@ -35,7 +35,6 @@ import java.util.Optional;
 @Slf4j
 public class AnimalClassifierService {
 
-    // private static final String PREPROCESSING_SERVICE_URL = "http://localhost:8082/preprocess-and-classify";
     @Value("${preprocessing.service.url}")
     private String preprocessingServiceUrl;
     private static final int MAX_ALTERNATE_SPECIES = 4;

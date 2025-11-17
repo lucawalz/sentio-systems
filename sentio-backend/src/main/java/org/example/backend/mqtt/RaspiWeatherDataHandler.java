@@ -36,18 +36,39 @@ public class RaspiWeatherDataHandler {
             log.info("Processing incoming weather data from MQTT");
             JsonNode rootNode = objectMapper.readTree(payload);
 
-            // Extract metadata (like AnimalDetection does)
+            // Validate required fields before accessing them
+            if (!hasNonNull(rootNode, "device_id")
+                    || !hasNonNull(rootNode, "location")
+                    || !hasNonNull(rootNode, "timestamp")
+                    || !hasNonNull(rootNode, "temperature")
+                    || !hasNonNull(rootNode, "humidity")
+                    || !hasNonNull(rootNode, "pressure")
+                    || !hasNonNull(rootNode, "lux")
+                    || !hasNonNull(rootNode, "uvi")) {
+
+                log.warn("Missing one or more required fields in weather data payload: {}",
+                        rootNode.toString());
+                return;
+            }
+
+            // Extract metadata
             String deviceId = rootNode.get("device_id").asText();
             String location = rootNode.get("location").asText();
             String timestampStr = rootNode.get("timestamp").asText();
-            LocalDateTime timestamp = LocalDateTime.parse(timestampStr, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+            LocalDateTime timestamp;
+            try {
+                timestamp = LocalDateTime.parse(timestampStr, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+            } catch (java.time.format.DateTimeParseException dtpe) {
+                log.error("Malformed timestamp '{}': {}", timestampStr, dtpe.getMessage());
+                return;
+            }
 
             // Extract sensor readings
-            float temperature = rootNode.get("temperature").floatValue();
-            float humidity = rootNode.get("humidity").floatValue();
-            float pressure = rootNode.get("pressure").floatValue();
-            float lux = rootNode.get("lux").floatValue();
-            float uvi = rootNode.get("uvi").floatValue();
+            float temperature = (float) rootNode.get("temperature").asDouble();
+            float humidity = (float) rootNode.get("humidity").asDouble();
+            float pressure = (float) rootNode.get("pressure").asDouble();
+            float lux = (float) rootNode.get("lux").asDouble();
+            float uvi = (float) rootNode.get("uvi").asDouble();
 
             // Create weather data object
             RaspiWeatherData raspiWeatherData = new RaspiWeatherData();
@@ -71,5 +92,16 @@ public class RaspiWeatherDataHandler {
         } catch (Exception e) {
             log.error("Error processing weather data payload: {}", e.getMessage(), e);
         }
+    }
+
+    /**
+     * Convenience method to check if a required field exists and is non-null.
+     */
+    private boolean hasNonNull(JsonNode node, String fieldName) {
+        if (!node.has(fieldName) || node.get(fieldName).isNull()) {
+            log.warn("Required field '{}' is missing or null in payload: {}", fieldName, node.toString());
+            return false;
+        }
+        return true;
     }
 }

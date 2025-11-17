@@ -37,7 +37,6 @@ public class RaspiWeatherData {
     private Long id;
 
     /** Device identifier */
-    @JsonProperty("device_id")
     @Column(name = "device_id", length = 100)
     private String deviceId;
 
