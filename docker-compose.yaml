@@ -71,7 +71,7 @@ services:
       MQTT_ENABLED: ${MQTT_ENABLED:-true}
       MQTT_BROKER: tcp://mosquitto:1883
       MQTT_CLIENT_ID: sentioBackend
-      MQTT_TOPICS: ${MQTT_TOPICS:-weather,camera,birds/detected}
+      MQTT_TOPICS: ${MQTT_TOPICS:-weather/data,weather/status,animal_detection/events,animal_detection/status}
       MQTT_USERNAME: ${MQTT_USERNAME:-}
       MQTT_PASSWORD: ${MQTT_PASSWORD:-}
 
@@ -127,7 +127,9 @@ services:
     environment:
       PREPROCESSING_PORT: ${PREPROCESSING_PORT:-8082}
       BIRDER_SERVICE_URL: ${BIRDER_SERVICE_URL:-http://birder:8000}
-      SPECIESNET_SERVICE_URL: ${SPECIESNET_SERVICE_URL:-http://speciesnet:8081}
+      SPECIESNET_SERVICE_URL: ${SPECIESNET_SERVICE_URL:-http://speciesnet:8000}
+      BIRD_CLASSIFIER_URL: http://birder:8000/detect
+      SPECIES_CLASSIFIER_URL: http://speciesnet:8000/detect
     ports:
       - "${PREPROCESSING_PORT:-8082}:8082"
     networks:

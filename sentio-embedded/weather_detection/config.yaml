@@ -1,0 +1,44 @@
+# Weather Station Configuration
+device:
+  id: "weather_station"
+  location: "garden"
+
+# Logging Configuration
+logging:
+  level: "INFO"
+  file: "logs/weather_station.log"
+
+# Data Collection Configuration
+collection:
+  interval: 300  # seconds
+
+# MQTT Configuration
+mqtt:
+  broker_host: "localhost"  # Change to backend server IP
+  broker_port: 1883
+  topic: "weather/data"
+  status_topic: "weather/status"
+  username: null  # Set if authentication required
+  password: null  # Set if authentication required
+  qos: 1
+  keepalive: 60
+
+# Sensor Configuration
+sensors:
+  bme280:
+    enabled: true
+    max_errors: 5
+    # BME280 provides: temperature, humidity, pressure
+
+  veml6030:
+    enabled: true
+    gain: 0.125
+    max_errors: 5
+    # VEML6030 provides: lux (primary ambient light sensor)
+
+  ltr390:
+    enabled: true
+    gain: 1
+    resolution: 3
+    max_errors: 5
+    # LTR390 provides: uvi (UV Index only)

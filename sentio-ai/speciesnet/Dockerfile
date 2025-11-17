@@ -1,6 +1,18 @@
 # Dockerfile - Optimized
 FROM python:3.11-slim
 
+# Install OpenCV dependencies for SpeciesNet/YOLOv5
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    libgthread-2.0-0 \
+    libgl1 \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # Install dependencies
@@ -13,7 +25,7 @@ RUN pip install --no-cache-dir -r requirements.txt && \
 COPY speciesnet_ai.py ./
 
 # Expose the API port
-EXPOSE 8081
+EXPOSE 8000
 
 # Run the application
 CMD ["python", "speciesnet_ai.py"]

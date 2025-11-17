@@ -1,3 +1,15 @@
+# Animal Detector Configuration
+
+# Device information
+device:
+  device_id: "pi_detector_001"
+  location: "Garden Camera"
+
+# Logging Configuration
+logging:
+  level: "INFO"
+  file: "logs/animal_detector.log"
+
 # Camera settings
 camera:
   width: 1280
@@ -8,6 +20,7 @@ camera:
 # Detection settings
 detection:
   confidence_threshold: 0.6
+  cooldown_period: 3.0  # seconds between detections of same animal
   target_animals:
     - cat
     - dog
@@ -23,11 +36,8 @@ mqtt:
   broker_host: "localhost"  # Change to backend server IP
   broker_port: 1883
   topic: "animal_detection/events"
+  status_topic: "animal_detection/status"
   username: null  # Set if authentication required
   password: null  # Set if authentication required
-
-# Device information
-device:
-  device_id: "pi_detector_001"
-  location: "Garden Camera"
-  camera_resolution: "1280x720"
+  qos: 1
+  keepalive: 60

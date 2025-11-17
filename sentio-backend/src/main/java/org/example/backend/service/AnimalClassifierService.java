@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.backend.dto.AnimalDetectionDTO;
 import org.example.backend.model.AnimalDetection;
 import org.example.backend.repository.AnimalDetectionRepository;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.http.*;
@@ -34,7 +35,8 @@ import java.util.Optional;
 @Slf4j
 public class AnimalClassifierService {
 
-    private static final String PREPROCESSING_SERVICE_URL = "http://localhost:8082/preprocess-and-classify";
+    @Value("${preprocessing.service.url}")
+    private String preprocessingServiceUrl;
     private static final int MAX_ALTERNATE_SPECIES = 4;
     private static final String DETECTION_KEY = "detection";
     private static final String CLASSIFICATION_KEY = "classification";
@@ -130,9 +132,9 @@ public class AnimalClassifierService {
             HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
 
             log.debug("Calling preprocessing service at: {} for animal type: {}",
-                    PREPROCESSING_SERVICE_URL, animalType);
+                    preprocessingServiceUrl, animalType);
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                    PREPROCESSING_SERVICE_URL,
+                    preprocessingServiceUrl,
                     HttpMethod.POST,
                     requestEntity,
                     new ParameterizedTypeReference<>() {}

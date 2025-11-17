@@ -299,7 +299,7 @@ async def forward_to_classifier(
         }
 
         # Forward to classifier with timeout
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=120.0) as client:
             logger.info(f"Forwarding preprocessed image to {target_url}")
             response = await client.post(target_url, files=files)
             response.raise_for_status()
