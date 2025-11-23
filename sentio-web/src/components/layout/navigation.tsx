@@ -4,6 +4,19 @@ import { useEffect, useState, useRef } from "react"
 import { gsap } from "gsap"
 import { Button } from "../ui/button"
 import { Link } from "react-router-dom"
+import { useAuth } from "../../context/auth"
+// NOTE (added): This component was wired to the temporary auth context today.
+// What I changed: when logged out this shows a "Login" button that
+// currently calls `login()` to simulate authentication.
+//
+// Where to put the real login screen link:
+// - Option A (recommended): replace `onClick={() => login()}` below with a
+//   navigation to your real login route (e.g. `<Link to="/login">`), or
+// - Option B: open a login modal from this onClick handler and, on success,
+//   call `login(user)` from the auth context.
+//
+// If you use Option A, add a `src/pages/Login.tsx` page and a route in
+// `src/App.tsx`: ` <Route path="/login" element={<Login />} />`.
 import { Menu, X } from "lucide-react"
 
 export function Navigation() {
@@ -12,6 +25,11 @@ export function Navigation() {
   const navRef = useRef<HTMLElement>(null)
   const logoRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+  // Auth state used to toggle the header CTA between Login and Dashboard
+  const { loggedIn, login } = useAuth()
+  // NOTE: `login()` currently simulates a successful login by setting
+  // a demo user in the auth provider. Replace this call with your real
+  // login flow (navigation to `/login` or a login modal) as described above.
 
   useEffect(() => {
     const handleScroll = () => {
@@ -65,11 +83,21 @@ export function Navigation() {
               <div className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] transition-all duration-300 group-hover:w-full" />
             </a>
           ))}
-          <Link to="/dashboard">
-            <Button className="bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] text-black hover:shadow-2xl hover:shadow-blue-500/25 font-medium transition-all duration-300 preload-fade">
-              View Dashboard
+          {/* Show Login button when logged out; View Dashboard when logged in */}
+          {loggedIn ? (
+            <Link to="/dashboard">
+              <Button className="bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] text-black hover:shadow-2xl hover:shadow-blue-500/25 font-medium transition-all duration-300 preload-fade">
+                View Dashboard
+              </Button>
+            </Link>
+          ) : (
+            <Button
+              onClick={() => login()}
+              className="bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] text-black hover:shadow-2xl hover:shadow-blue-500/25 font-medium transition-all duration-300 preload-fade"
+            >
+              Login
             </Button>
-          </Link>
+          )}
         </div>
 
         {/* Mobile Menu Button */}
@@ -92,11 +120,21 @@ export function Navigation() {
                 {item}
               </a>
             ))}
-            <Link to="/dashboard">
-              <Button className="w-full bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] text-black font-medium">
-                View Dashboard
+            {/* Mobile: show Login or View Dashboard similarly */}
+            {loggedIn ? (
+              <Link to="/dashboard">
+                <Button className="w-full bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] text-black font-medium">
+                  View Dashboard
+                </Button>
+              </Link>
+            ) : (
+              <Button
+                onClick={() => login()}
+                className="w-full bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] text-black font-medium"
+              >
+                Login
               </Button>
-            </Link>
+            )}
           </div>
         </div>
       )}
