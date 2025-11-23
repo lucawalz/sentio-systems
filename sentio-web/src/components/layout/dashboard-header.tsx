@@ -61,6 +61,8 @@ export function DashboardHeader() {
     }
   }, [isLoading]) // Run when isLoading changes
 
+  
+
   // Don't render until theme is loaded
   if (isLoading) {
     return null
@@ -112,7 +114,7 @@ export function DashboardHeader() {
                   className="text-muted-foreground hover:text-foreground hover:bg-accent/60 transition-all duration-300"
               >
                 <ArrowLeft className="w-4 h-4 mr-2" />
-                Back to Landing
+                To homepage
               </Button>
             </Link>
 

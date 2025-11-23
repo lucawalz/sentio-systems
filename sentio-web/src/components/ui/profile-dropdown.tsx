@@ -8,8 +8,13 @@ import {
 } from "./dropdown-menu"
 import { Button } from "./button"
 import { User } from "lucide-react"
+import { useAuth } from "../../context/auth"
+// NOTE: Logout is wired to call `logout()` from the auth provider.
+// After connecting a real backend you may want to call an API logout
+// and then call `logout()` here to clear client state and storage.
 
 export function ProfileDropdown() {
+  const { logout } = useAuth()
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -28,7 +33,7 @@ export function ProfileDropdown() {
         <DropdownMenuItem>Settings</DropdownMenuItem>
         <DropdownMenuItem>My Devices</DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem>Logout</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => logout()}>Logout</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )

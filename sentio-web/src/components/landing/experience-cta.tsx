@@ -5,6 +5,15 @@ import { SplitText } from "gsap/SplitText"
 import { Button } from "../ui/button"
 import { ArrowRight, Sparkles } from "lucide-react"
 import { Link } from "react-router-dom"
+import { useAuth } from "../../context/auth"
+// NOTE (added): This CTA was modified to simulate login for development.
+// What I changed: The primary CTA shows a "Login" button when not logged in
+// and will call `login()` from the auth provider to toggle the state.
+//
+// Where to place the real login screen link:
+// - Replace `onClick={() => login()}` below with a navigation to your
+//   login page (e.g. `navigate('/login')`) or open your login modal.
+// - Create `src/pages/Login.tsx` and add a `Route` for it in `src/App.tsx`.
 
 // Register ScrollTrigger plugin
 gsap.registerPlugin(ScrollTrigger, SplitText)
@@ -280,7 +289,13 @@ export function ExperienceCTA() {
     return () => ctx.revert()
   }, [])
 
-  return (
+    // Use the shared auth context so the CTA can simulate login.
+    // Clicking the CTA will call `login()` and switch the CTA to the
+    // original Dashboard link. Replace `login()` with your real auth
+    // flow later (e.g. open login modal, call API, then `login(user)`).
+    const { loggedIn, login } = useAuth()
+
+    return (
       <section ref={sectionRef} className="cta-section relative py-40 px-6 overflow-hidden">
         {/* Enhanced Animated Background */}
         <div ref={backgroundRef} className="absolute inset-0">
@@ -323,9 +338,16 @@ export function ExperienceCTA() {
           </div>
 
           <div ref={buttonRef} className="flex justify-center">
-            <Link to="/dashboard">
+            {!loggedIn ? (
               <Button
                   size="lg"
+                  // TODO: replace this handler with a call to your real
+                  // login flow. Example:
+                  //  - navigate('/login') // route to login page
+                  //  - or openLoginModal()
+                  // After a successful login call `login(user)` from the
+                  // auth provider to update the app state.
+                  onClick={() => login()}
                   className="relative bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] text-black font-bold px-20 py-10 text-3xl rounded-3xl group overflow-hidden shadow-2xl"
               >
                 {/* Pulse Glow Effect */}
@@ -337,7 +359,7 @@ export function ExperienceCTA() {
                 {/* Button Content */}
                 <div className="relative flex items-center justify-center">
                   <Sparkles className="sparkles w-8 h-8 mr-4" />
-                  <span className="font-black tracking-wide text-2xl">Start Monitoring</span>
+                  <span className="font-black tracking-wide text-2xl">Login</span>
                   <ArrowRight className="arrow w-8 h-8 ml-4" />
                 </div>
 
@@ -347,7 +369,33 @@ export function ExperienceCTA() {
                 {/* Border Glow */}
                 <div className="absolute inset-0 rounded-3xl border-2 border-white/20 group-hover:border-white/40 transition-all duration-300" />
               </Button>
-            </Link>
+            ) : (
+              <Link to="/dashboard">
+                <Button
+                    size="lg"
+                    className="relative bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] text-black font-bold px-20 py-10 text-3xl rounded-3xl group overflow-hidden shadow-2xl"
+                >
+                  {/* Pulse Glow Effect */}
+                  <div className="pulse-glow absolute inset-0 bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] rounded-3xl opacity-0 blur-2xl scale-110" />
+
+                  {/* Button Glow Effect */}
+                  <div className="button-glow absolute inset-0 bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] rounded-3xl opacity-0 blur-xl scale-120" />
+
+                  {/* Button Content */}
+                  <div className="relative flex items-center justify-center">
+                    <Sparkles className="sparkles w-8 h-8 mr-4" />
+                    <span className="font-black tracking-wide text-2xl">Start Monitoring</span>
+                    <ArrowRight className="arrow w-8 h-8 ml-4" />
+                  </div>
+
+                  {/* Shimmer Effect */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+
+                  {/* Border Glow */}
+                  <div className="absolute inset-0 rounded-3xl border-2 border-white/20 group-hover:border-white/40 transition-all duration-300" />
+                </Button>
+              </Link>
+            )}
           </div>
         </div>
       </section>
