@@ -1,5 +1,6 @@
 import {useState} from "react";
 import {Link} from "react-router-dom";
+import { verifyAccountMail } from "./verify-account-mail";
 
 //external error handling for password requirements + error messages
 function getPasswordErrors(password: string): string[] {
@@ -65,6 +66,16 @@ export function CreateAccountBox() {
         } else {
             setPasswordMatchError(null);
         }
+    }
+
+    function handleCreateAccount() {
+        verifyAccountMail(email, password)
+            .then((data) => {
+                alert(data.message); // oder setState für UI
+            })
+            .catch((err) => {
+                alert(err.message);
+            });
     }
 
     const canSubmit = isValidEmail && isStrongPassword && !passwordMatchError;
@@ -146,7 +157,8 @@ export function CreateAccountBox() {
                 />
 
                 {/*Button Create Account*/}
-                <button className="w-full mt-4 px-6 py-3 bg-white text-black rounded-lg font-semibold"
+                <button onClick={handleCreateAccount}
+                    className="w-full mt-4 px-6 py-3 bg-white text-black rounded-lg font-semibold"
                         disabled={!canSubmit}>
                     Create Account
                 </button>
