@@ -10,6 +10,7 @@ import { Features } from "../components/landing/features"
 import { ExperienceCTA } from "../components/landing/experience-cta"
 import { Navigation } from "../components/layout/navigation"
 import { SmoothScroll } from "../components/shared/smooth-scroll"
+import Footer from "../components/footer/footer.tsx";
 
 if (typeof window !== "undefined") {
   gsap.registerPlugin(ScrollTrigger, SplitText, MotionPathPlugin)
@@ -66,6 +67,7 @@ export default function LandingPage() {
           <ProductOverview />
           <Features />
           <ExperienceCTA />
+          <Footer/>
         </div>
       </SmoothScroll>
   )
