@@ -15,6 +15,9 @@ export default function LogIn({mode}: { mode: "login" | "register" }) {
 
     );
 }
+<<<<<<< HEAD
 
 
 
+=======
+>>>>>>> origin/feature/REQ-004-login
