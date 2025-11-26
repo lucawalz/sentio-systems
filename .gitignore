@@ -1,15 +1,19 @@
-# IntelliJ IDEA
+# IDE
 .idea/
 *.iml
 *.iws
 *.ipr
 out/
+.vscode/
 
 # Environment variables
 .env
 .env.local
 .env.*.local
 *.env
+
+# Keycloak generated configs
+init-scripts/sentio-realm.json
 
 # Python
 __pycache__/
