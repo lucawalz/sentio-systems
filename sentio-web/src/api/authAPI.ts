@@ -1,3 +1,5 @@
+//fake Backend for account creation
+
 let storedCode: string | null = null;
 let storedEmail: string | null = null;
 
@@ -14,11 +16,11 @@ export function createAccountMock(email: string) {
         storedEmail = email;
         storedCode = generateCode();
 
-        console.log("FAKE VERIFICATION CODE:", storedCode); // ← steht in der Browser-Konsole
+        console.log("FAKE VERIFICATION CODE:", storedCode); // ← in Browser console
 
         setTimeout(() => {
             resolve({
-                message: "Account erstellt. Bitte gib den Bestätigungscode ein.",
+                message: "Account created . Please insert verification code.",
             });
         }, 500);
     });
@@ -27,14 +29,14 @@ export function createAccountMock(email: string) {
 export function verifyAccountMock(email: string, code: string) {
     return new Promise<{ message: string }>((resolve, reject) => {
         if (email !== storedEmail) {
-            return reject(new Error("E-Mail ist nicht bekannt (Fake-Check)."));
+            return reject(new Error("Email is not real (fake check)."));
         }
         if (code !== storedCode) {
-            return reject(new Error("Code ist falsch (Fake-Check)."));
+            return reject(new Error("Code does not match (Fake-Check)."));
         }
 
         setTimeout(() => {
-            resolve({ message: "Account erfolgreich verifiziert! 🎉" });
+            resolve({ message: "Verified account successfully " });
         }, 500);
     });
 }
