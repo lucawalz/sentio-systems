@@ -9,7 +9,7 @@ export default function Footer() {
         <>
             <footer className="bg-black text-white overflow-x-hidden relative">
                 {/* CONTENT WRAPPER */}
-                <div className="max-w mx-auto px-6 pt-12 pb-6 border-t border-white">
+                <div className="max-w mx-auto px-6 pt-12 pb-4 border-t border-white">
 
                     {/* COLUMNS */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-12 text-center md:text-left">
