@@ -1,6 +1,7 @@
 import {Link} from "react-router-dom";
 
 
+
 export default function Footer() {
 
     return (
@@ -15,7 +16,7 @@ export default function Footer() {
 
                         {/* LEFT SECTION */}
                         <div>
-                            <h2 className="text-xl font-semibold tracking-wide mb-4">Sentio Systems</h2>
+                            <h2 className="text-xl text-blue-200 font-semibold tracking-wide mb-4">Sentio Systems</h2>
                             <p className="text-white leading-6">
                                 Nobelstraße 10<br/>
                                 Stuttgart,<br/>
@@ -25,28 +26,38 @@ export default function Footer() {
 
                         {/* CENTER SECTION */}
                         <div>
-                            <h3 className="text-white font-semibold uppercase text-sm mb-4">
+                            <h3 className="text-green-200 font-semibold uppercase text-sm mb-4">
                                 Links
                             </h3>
                             <ul className="space-y-2">
-                                <li><Link to="/" className="hover:underline">Home</Link></li>
-                                <li><Link to="/dashboard" className="hover:underline">Dashboard</Link></li>
-                                {/*<li><Link to="/login" className="hover:underline">Login</Link></li>
+                                <li><Link to="/" className="relative inline-block group">Home
+                                    <span className="absolute left-0 -bottom-0.5 h-0.5 w-0 bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] transition-all duration-500 group-hover:w-full"
+                                    ></span></Link></li>
+                                <li><Link to="/dashboard" className="relative inline-block group">Dashboard
+                                    <span className="absolute left-0 -bottom-0.5 h-0.5 w-0 bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] transition-all duration-500 group-hover:w-full"
+                                ></span>
+                            </Link>
+                        </li>
+                        {/*<li><Link to="/login" className="hover:underline">Login</Link></li>
                                 <li> <Link to=/createAccount className="hover:underline">Create Account</Link></li>*/}
                             </ul>
                         </div>
 
                         {/* RIGHT SECTION */}
                         <div>
-                            <h3 className="text-white font-semibold uppercase text-sm mb-4">
+                            <h3 className="text-green-200 font-semibold uppercase text-sm mb-4">
                                 Help
                             </h3>
                             <ul className="space-y-2">
                                 <li>
-                                    <Link to="/contact" className="hover:underline">Contact</Link>
+                                    <Link to="/contact" className="relative inline-block group">Contact
+                                        <span className="absolute left-0 -bottom-0.5 h-0.5 w-0 bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] transition-all duration-500 group-hover:w-full"
+                                    ></span></Link>
                                 </li>
                                 <li>
-                                    <Link to="/privacy" className="hover:underline">Privacy Policies</Link>
+                                    <Link to="/privacy" className="relative inline-block group">Privacy Policies
+                                        <span className="absolute left-0 -bottom-0.5 h-0.5 w-0 bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] transition-all duration-500 group-hover:w-full"
+                                    ></span></Link>
                                 </li>
                             </ul>
                         </div>
