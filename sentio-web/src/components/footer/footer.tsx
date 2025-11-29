@@ -8,7 +8,7 @@ export default function Footer() {
         <>
             <footer className="bg-black text-white overflow-x-hidden relative">
                 {/* CONTENT WRAPPER */}
-                <div className="max-w-6xl mx-auto px-6 py-12">
+                <div className="max-w mx-auto px-6 pt-12 pb-6 border-t border-white">
 
                     {/* COLUMNS */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-12 text-center md:text-left">
@@ -16,7 +16,7 @@ export default function Footer() {
                         {/* LEFT SECTION */}
                         <div>
                             <h2 className="text-xl font-semibold tracking-wide mb-4">Sentio Systems</h2>
-                            <p className="text-gray-700 leading-6">
+                            <p className="text-white leading-6">
                                 Nobelstraße 10<br/>
                                 Stuttgart,<br/>
                                 GERMANY
@@ -25,7 +25,7 @@ export default function Footer() {
 
                         {/* CENTER SECTION */}
                         <div>
-                            <h3 className="text-gray-500 font-semibold uppercase text-sm mb-4">
+                            <h3 className="text-white font-semibold uppercase text-sm mb-4">
                                 Links
                             </h3>
                             <ul className="space-y-2">
@@ -38,7 +38,7 @@ export default function Footer() {
 
                         {/* RIGHT SECTION */}
                         <div>
-                            <h3 className="text-gray-500 font-semibold uppercase text-sm mb-4">
+                            <h3 className="text-white font-semibold uppercase text-sm mb-4">
                                 Help
                             </h3>
                             <ul className="space-y-2">
@@ -54,8 +54,8 @@ export default function Footer() {
                     </div>
 
                     {/* LINE DIVIDER */}
-                    <div className="border-t border-gray-300 mt-10 pt-6">
-                        <p className="text-center text-gray-700 text-sm">
+                    <div className="border-t border-white w-250 mx-auto mt-10 pt-4 mb-0">
+                        <p className="text-center text-white text-sm mb-0">
                             2025 Sentio Systems. All rights reserved
                         </p>
                     </div>
