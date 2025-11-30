@@ -262,6 +262,8 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
+          build-args: |
+            VITE_API_URL=/api
 
       - name: Run Trivy vulnerability scanner on image
         uses: aquasecurity/trivy-action@master
