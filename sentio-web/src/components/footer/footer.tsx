@@ -67,7 +67,7 @@ export default function Footer() {
                     {/* LINE DIVIDER */}
                     <div className="border-t border-white w-250 mx-auto mt-10 pt-4 mb-0">
                         <p className="text-center text-white text-sm mb-0">
-                            2025 Sentio Systems. All rights reserved
+                            ©2025 Sentio Systems. All rights reserved
                         </p>
                     </div>
 
