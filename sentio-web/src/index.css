@@ -3,7 +3,7 @@
 @import "tw-animate-css";
 
 @custom-variant twilight (&:is(.twilight *));
-
+/* utility classes */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
