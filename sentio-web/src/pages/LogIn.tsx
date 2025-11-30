@@ -1,4 +1,3 @@
-import React from 'react';
 import {LoginBox} from "../components/login/login-box.tsx";
 import {Navigation} from "../components/layout/navigation.tsx";
 import {CreateAccountBox} from "../components/login/create-account-box.tsx";
