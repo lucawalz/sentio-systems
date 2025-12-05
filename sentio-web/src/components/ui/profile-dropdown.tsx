@@ -13,8 +13,11 @@ import { useAuth } from "../../context/auth"
 // After connecting a real backend you may want to call an API logout
 // and then call `logout()` here to clear client state and storage.
 
+import { useNavigate } from "react-router-dom";
+
 export function ProfileDropdown() {
   const { logout } = useAuth()
+  const navigate = useNavigate()
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -33,7 +36,10 @@ export function ProfileDropdown() {
         <DropdownMenuItem>Settings</DropdownMenuItem>
         <DropdownMenuItem>My Devices</DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => logout()}>Logout</DropdownMenuItem>
+        <DropdownMenuItem onClick={async () => {
+          await logout();
+          navigate("/login");
+        }}>Logout</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )

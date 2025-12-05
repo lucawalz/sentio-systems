@@ -113,7 +113,7 @@ export function ExperienceCTA() {
             scale: 1.15,
             y: -10,
             boxShadow:
-                "0 0 80px rgba(176, 214, 255, 0.8), 0 0 160px rgba(168, 213, 186, 0.6), 0 20px 40px rgba(0,0,0,0.3)",
+              "0 0 80px rgba(176, 214, 255, 0.8), 0 0 160px rgba(168, 213, 186, 0.6), 0 20px 40px rgba(0,0,0,0.3)",
             duration: 0.5,
             ease: "power2.out",
           })
@@ -289,66 +289,60 @@ export function ExperienceCTA() {
     return () => ctx.revert()
   }, [])
 
-    // Use the shared auth context so the CTA can simulate login.
-    // Clicking the CTA will call `login()` and switch the CTA to the
-    // original Dashboard link. Replace `login()` with your real auth
-    // flow later (e.g. open login modal, call API, then `login(user)`).
-    const { loggedIn, login } = useAuth()
+  // Use the shared auth context so the CTA can simulate login.
+  // Clicking the CTA will call `login()` and switch the CTA to the
+  // original Dashboard link. Replace `login()` with your real auth
+  // flow later (e.g. open login modal, call API, then `login(user)`).
+  const { loggedIn } = useAuth()
 
-    return (
-      <section ref={sectionRef} className="cta-section relative py-40 px-6 overflow-hidden">
-        {/* Enhanced Animated Background */}
-        <div ref={backgroundRef} className="absolute inset-0">
-          {/* Gradient Base */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black via-gray-900 to-black" />
+  return (
+    <section ref={sectionRef} className="cta-section relative py-40 px-6 overflow-hidden">
+      {/* Enhanced Animated Background */}
+      <div ref={backgroundRef} className="absolute inset-0">
+        {/* Gradient Base */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black via-gray-900 to-black" />
 
-          {/* Animated Orbs */}
-          <div className="absolute top-1/4 left-1/4 w-64 h-64 rounded-full bg-gradient-radial from-[#B0D6FF]/20 to-transparent blur-3xl animate-pulse" />
+        {/* Animated Orbs */}
+        <div className="absolute top-1/4 left-1/4 w-64 h-64 rounded-full bg-gradient-radial from-[#B0D6FF]/20 to-transparent blur-3xl animate-pulse" />
+        <div
+          className="absolute bottom-1/4 right-1/4 w-80 h-80 rounded-full bg-gradient-radial from-[#A8D5BA]/15 to-transparent blur-3xl animate-pulse"
+          style={{ animationDelay: "1s" }}
+        />
+        <div
+          className="absolute top-1/2 left-1/2 w-96 h-96 rounded-full bg-gradient-radial from-[#FFD8A8]/10 to-transparent blur-3xl animate-pulse transform -translate-x-1/2 -translate-y-1/2"
+          style={{ animationDelay: "2s" }}
+        />
+
+        {/* Floating Particles */}
+        {Array.from({ length: 20 }).map((_, i) => (
           <div
-              className="absolute bottom-1/4 right-1/4 w-80 h-80 rounded-full bg-gradient-radial from-[#A8D5BA]/15 to-transparent blur-3xl animate-pulse"
-              style={{ animationDelay: "1s" }}
+            key={i}
+            className="bg-particle absolute w-2 h-2 bg-white/20 rounded-full"
+            style={{
+              left: `${Math.random() * 100}%`,
+              top: `${Math.random() * 100}%`,
+              animationDelay: `${Math.random() * 4}s`,
+            }}
           />
-          <div
-              className="absolute top-1/2 left-1/2 w-96 h-96 rounded-full bg-gradient-radial from-[#FFD8A8]/10 to-transparent blur-3xl animate-pulse transform -translate-x-1/2 -translate-y-1/2"
-              style={{ animationDelay: "2s" }}
-          />
+        ))}
+      </div>
 
-          {/* Floating Particles */}
-          {Array.from({ length: 20 }).map((_, i) => (
-              <div
-                  key={i}
-                  className="bg-particle absolute w-2 h-2 bg-white/20 rounded-full"
-                  style={{
-                    left: `${Math.random() * 100}%`,
-                    top: `${Math.random() * 100}%`,
-                    animationDelay: `${Math.random() * 4}s`,
-                  }}
-              />
-          ))}
+      <div className="relative z-10 max-w-5xl mx-auto text-center">
+        <div ref={contentRef}>
+          <h2 className="text-6xl md:text-8xl font-bold mb-8 text-white">
+            Experience Nature's Intelligence
+          </h2>
+          <p className="text-2xl text-white/80 mb-16 max-w-3xl mx-auto leading-relaxed">
+            Discover how Orbis-Sentio transforms your space into a hub for climate science, biodiversity research, and community protection. Join the future of environmental monitoring.
+          </p>
         </div>
 
-        <div className="relative z-10 max-w-5xl mx-auto text-center">
-          <div ref={contentRef}>
-            <h2 className="text-6xl md:text-8xl font-bold mb-8 text-white">
-                Experience Nature's Intelligence
-            </h2>
-            <p className="text-2xl text-white/80 mb-16 max-w-3xl mx-auto leading-relaxed">
-                Discover how Orbis-Sentio transforms your space into a hub for climate science, biodiversity research, and community protection. Join the future of environmental monitoring.
-            </p>
-          </div>
-
-          <div ref={buttonRef} className="flex justify-center">
-            {!loggedIn ? (
+        <div ref={buttonRef} className="flex justify-center">
+          {!loggedIn ? (
+            <Link to="/login">
               <Button
-                  size="lg"
-                  // TODO: replace this handler with a call to your real
-                  // login flow. Example:
-                  //  - navigate('/login') // route to login page
-                  //  - or openLoginModal()
-                  // After a successful login call `login(user)` from the
-                  // auth provider to update the app state.
-                  onClick={() => login()}
-                  className="relative bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] text-black font-bold px-20 py-10 text-3xl rounded-3xl group overflow-hidden shadow-2xl"
+                size="lg"
+                className="relative bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] text-black font-bold px-20 py-10 text-3xl rounded-3xl group overflow-hidden shadow-2xl"
               >
                 {/* Pulse Glow Effect */}
                 <div className="pulse-glow absolute inset-0 bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] rounded-3xl opacity-0 blur-2xl scale-110" />
@@ -369,35 +363,36 @@ export function ExperienceCTA() {
                 {/* Border Glow */}
                 <div className="absolute inset-0 rounded-3xl border-2 border-white/20 group-hover:border-white/40 transition-all duration-300" />
               </Button>
-            ) : (
-              <Link to="/dashboard">
-                <Button
-                    size="lg"
-                    className="relative bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] text-black font-bold px-20 py-10 text-3xl rounded-3xl group overflow-hidden shadow-2xl"
-                >
-                  {/* Pulse Glow Effect */}
-                  <div className="pulse-glow absolute inset-0 bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] rounded-3xl opacity-0 blur-2xl scale-110" />
+            </Link>
+          ) : (
+            <Link to="/dashboard">
+              <Button
+                size="lg"
+                className="relative bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] text-black font-bold px-20 py-10 text-3xl rounded-3xl group overflow-hidden shadow-2xl"
+              >
+                {/* Pulse Glow Effect */}
+                <div className="pulse-glow absolute inset-0 bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] rounded-3xl opacity-0 blur-2xl scale-110" />
 
-                  {/* Button Glow Effect */}
-                  <div className="button-glow absolute inset-0 bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] rounded-3xl opacity-0 blur-xl scale-120" />
+                {/* Button Glow Effect */}
+                <div className="button-glow absolute inset-0 bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] rounded-3xl opacity-0 blur-xl scale-120" />
 
-                  {/* Button Content */}
-                  <div className="relative flex items-center justify-center">
-                    <Sparkles className="sparkles w-8 h-8 mr-4" />
-                    <span className="font-black tracking-wide text-2xl">Start Monitoring</span>
-                    <ArrowRight className="arrow w-8 h-8 ml-4" />
-                  </div>
+                {/* Button Content */}
+                <div className="relative flex items-center justify-center">
+                  <Sparkles className="sparkles w-8 h-8 mr-4" />
+                  <span className="font-black tracking-wide text-2xl">Start Monitoring</span>
+                  <ArrowRight className="arrow w-8 h-8 ml-4" />
+                </div>
 
-                  {/* Shimmer Effect */}
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+                {/* Shimmer Effect */}
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
 
-                  {/* Border Glow */}
-                  <div className="absolute inset-0 rounded-3xl border-2 border-white/20 group-hover:border-white/40 transition-all duration-300" />
-                </Button>
-              </Link>
-            )}
-          </div>
+                {/* Border Glow */}
+                <div className="absolute inset-0 rounded-3xl border-2 border-white/20 group-hover:border-white/40 transition-all duration-300" />
+              </Button>
+            </Link>
+          )}
         </div>
-      </section>
+      </div>
+    </section>
   )
 }

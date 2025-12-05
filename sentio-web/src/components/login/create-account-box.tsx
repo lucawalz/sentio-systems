@@ -1,8 +1,8 @@
-import {useState} from "react";
-import {Link} from "react-router-dom";
-import { verifyAccountMail } from "./verify-account-mail";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/auth";
 
-//external error handling for password requirements + error messages
+// Password validation helper
 function getPasswordErrors(password: string): string[] {
     const errors: string[] = [];
 
@@ -26,32 +26,32 @@ function getPasswordErrors(password: string): string[] {
 }
 
 export function CreateAccountBox() {
-
-    const [email, setEmail] = useState("")
-    const [isValidEmail, setIsValidEmail] = useState(false)
+    const [username, setUsername] = useState("");
+    const [email, setEmail] = useState("");
+    const [isValidEmail, setIsValidEmail] = useState(false);
     const [password, setPassword] = useState("");
     const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
     const [confirmPassword, setConfirmPassword] = useState("");
     const [passwordMatchError, setPasswordMatchError] = useState<string | null>(null);
+    const [firstName, setFirstName] = useState("");
+    const [lastName, setLastName] = useState("");
+
+    const { register, isLoading, error, clearError } = useAuth();
+    const navigate = useNavigate();
 
     const isStrongPassword = password.length > 0 && passwordErrors.length === 0;
 
-    //check if insert is an email address
     function validateEmail(value: string) {
-        setEmail(value)
-
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-        setIsValidEmail(emailRegex.test(value))
+        setEmail(value);
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        setIsValidEmail(emailRegex.test(value));
     }
 
-
-    //Checks if password requirements match otherwise error handling
     function validatePassword(value: string) {
         setPassword(value);
         const errors = getPasswordErrors(value);
         setPasswordErrors(errors);
 
-        //check if confirmPassword matches password
         if (confirmPassword.length > 0 && value !== confirmPassword) {
             setPasswordMatchError("Passwords do not match.");
         } else {
@@ -68,105 +68,151 @@ export function CreateAccountBox() {
         }
     }
 
-    function handleCreateAccount() {
-        verifyAccountMail(email, password)
-            .then((data) => {
-                alert(data.message); // oder setState für UI
-            })
-            .catch((err) => {
-                alert(err.message);
-            });
+    async function handleCreateAccount(e: React.FormEvent) {
+        e.preventDefault();
+        clearError();
+
+        const success = await register({
+            username,
+            email,
+            password,
+            firstName,
+            lastName,
+        });
+
+        if (success) {
+            // Redirect to login page after successful registration
+            navigate("/login");
+        }
     }
 
-    const canSubmit = isValidEmail && isStrongPassword && !passwordMatchError;
+    const canSubmit =
+        username.length > 0 &&
+        isValidEmail &&
+        isStrongPassword &&
+        !passwordMatchError &&
+        firstName.length > 0 &&
+        lastName.length > 0;
 
     return (
         <>
-            {/*background*/}
-            <div className="absolute inset-0 bg-gradient-to-t from-black via-gray-900 to-black"/>
+            {/* Background */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black via-gray-900 to-black" />
 
-            <div
-                className="relative w-full max-w-md p-10 bg-gray-900/40 border border-gray-700 rounded-xl backdrop-blur text-center mt-20">
-                <h2 className="font-bold text-3xl mb-6 ">Create Account</h2>
+            <div className="relative w-full max-w-md p-10 bg-gray-900/40 border border-gray-700 rounded-xl backdrop-blur text-center mt-20">
+                <h2 className="font-bold text-3xl mb-6">Create Account</h2>
 
-                {/*Mail*/}
-                <input
-                    type="email"
-                    placeholder="email"
-                    className="w-full p-3 mb-4 rounded-lg text-black bg-white"
-                    value={email}
-                    onChange={(e) => validateEmail(e.target.value)}
-                />
+                <form onSubmit={handleCreateAccount}>
+                    {/* Username */}
+                    <input
+                        type="text"
+                        placeholder="username"
+                        className="w-full p-3 mb-4 rounded-lg text-black bg-white"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        disabled={isLoading}
+                        autoComplete="username"
+                    />
 
-                {/*Mail validation*/}
-                {!isValidEmail && email.length > 0 && (
-                    <p className="text-red-400 text-sm mb-2">Please enter a valid email</p>
-                )}
+                    {/* Email */}
+                    <input
+                        type="email"
+                        placeholder="email"
+                        className="w-full p-3 mb-4 rounded-lg text-black bg-white"
+                        value={email}
+                        onChange={(e) => validateEmail(e.target.value)}
+                        disabled={isLoading}
+                        autoComplete="email"
+                    />
 
-                {/*Passwort choice*/}
-                <input
-                    type="password"
-                    placeholder="password"
-                    className="w-full p-3 mb-4 rounded-lg text-black bg-white"
-                    value={password}
-                    onChange={(e) => validatePassword(e.target.value)}
-                />
+                    {/* Email validation */}
+                    {!isValidEmail && email.length > 0 && (
+                        <p className="text-red-400 text-sm mb-2">Please enter a valid email</p>
+                    )}
 
+                    {/* Password */}
+                    <input
+                        type="password"
+                        placeholder="password"
+                        className="w-full p-3 mb-4 rounded-lg text-black bg-white"
+                        value={password}
+                        onChange={(e) => validatePassword(e.target.value)}
+                        disabled={isLoading}
+                        autoComplete="new-password"
+                    />
 
-                {/* CONFIRM PASSWORD */}
-                <input
-                    type="password"
-                    placeholder="confirm password"
-                    className="w-full p-3 mb-4 rounded-lg text-black bg-white"
-                    value={confirmPassword}
-                    onChange={(e) => validateConfirmPassword(e.target.value)}
-                />
+                    {/* Confirm Password */}
+                    <input
+                        type="password"
+                        placeholder="confirm password"
+                        className="w-full p-3 mb-4 rounded-lg text-black bg-white"
+                        value={confirmPassword}
+                        onChange={(e) => validateConfirmPassword(e.target.value)}
+                        disabled={isLoading}
+                        autoComplete="new-password"
+                    />
 
-                {/*Error handling Password requirements*/}
-                {password.length > 0 && passwordErrors.length > 0 && (
-                    <div className="text-left text-red-400 text-sm mb-4">
-                        <p className="font-semibold">Password must:</p>
-                        {passwordErrors.map((err, i) => (
-                            <p key={i}>• {err}</p>
-                        ))}
-                    </div>
-                )}
+                    {/* Password requirements errors */}
+                    {password.length > 0 && passwordErrors.length > 0 && (
+                        <div className="text-left text-red-400 text-sm mb-4">
+                            <p className="font-semibold">Password must:</p>
+                            {passwordErrors.map((err, i) => (
+                                <p key={i}>• {err}</p>
+                            ))}
+                        </div>
+                    )}
 
-                {/*Message Password is strong*/}
-                {isStrongPassword && (
-                    <p className="text-left text-green-400 text-sm mb-2">✔ Strong password</p>
-                )}
+                    {/* Strong password confirmation */}
+                    {isStrongPassword && (
+                        <p className="text-left text-green-400 text-sm mb-2">✔ Strong password</p>
+                    )}
 
-                {/*Password correct?*/}
-                {passwordMatchError && (
-                    <p className="text-red-400 text-sm mb-4 text-left">{passwordMatchError}</p>
-                )}
+                    {/* Password match error */}
+                    {passwordMatchError && (
+                        <p className="text-red-400 text-sm mb-4 text-left">{passwordMatchError}</p>
+                    )}
 
-                {/*Surname*/}
-                <input
-                    type="surname"
-                    placeholder="surname"
-                    className="w-full p-3 mb-4 rounded-lg text-black bg-white"
-                />
+                    {/* First Name */}
+                    <input
+                        type="text"
+                        placeholder="first name"
+                        className="w-full p-3 mb-4 rounded-lg text-black bg-white"
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value)}
+                        disabled={isLoading}
+                        autoComplete="given-name"
+                    />
 
-                {/*Name*/}
-                <input
-                    type="name"
-                    placeholder="name"
-                    className="w-full p-3 mb-4 rounded-lg text-black bg-white"
-                />
+                    {/* Last Name */}
+                    <input
+                        type="text"
+                        placeholder="last name"
+                        className="w-full p-3 mb-4 rounded-lg text-black bg-white"
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value)}
+                        disabled={isLoading}
+                        autoComplete="family-name"
+                    />
 
-                {/*Button Create Account*/}
-                <button onClick={handleCreateAccount}
-                    className="w-full mt-4 px-6 py-3 bg-white text-black rounded-lg font-semibold"
-                        disabled={!canSubmit}>
-                    Create Account
-                </button>
+                    {/* Server error message */}
+                    {error && (
+                        <p className="text-red-400 text-sm mb-4">{error}</p>
+                    )}
+
+                    {/* Submit button */}
+                    <button
+                        type="submit"
+                        className="w-full mt-4 px-6 py-3 bg-white text-black rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={!canSubmit || isLoading}
+                    >
+                        {isLoading ? "Creating Account..." : "Create Account"}
+                    </button>
+                </form>
 
                 <Link className="w-full mt-10 mb-6 px6 py-3 text-white underline hover-grey" to="/login">
                     <p className="mt-6 mb-6">Login into your Account</p>
                 </Link>
             </div>
         </>
-    )
+    );
 }

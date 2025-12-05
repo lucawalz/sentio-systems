@@ -1,5 +1,7 @@
 package org.example.backend.service.impl;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.ws.rs.core.Response;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,8 +19,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.Base64;
 import java.util.Collections;
 import java.util.Map;
 
@@ -29,6 +33,7 @@ public class KeycloakAuthService implements AuthService {
 
     private final Keycloak keycloak;
     private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper;
 
     @Value("${keycloak.realm}")
     private String realm;
@@ -98,10 +103,14 @@ public class KeycloakAuthService implements AuthService {
                         (String) body.get("token_type"),
                         ((Number) body.get("expires_in")).longValue());
             }
+        } catch (HttpClientErrorException e) {
+            log.warn("Invalid login attempt for user '{}': {}", request.getUsername(), e.getMessage());
+            return null;
         } catch (Exception e) {
-            log.error("Login failed: {}", e.getMessage());
+            log.error("Login failed for user '{}': {}", request.getUsername(), e.getMessage());
             throw new RuntimeException("Login failed", e);
         }
+        log.warn("Login failed for user '{}': No body in response", request.getUsername());
         return null;
     }
 
@@ -140,5 +149,34 @@ public class KeycloakAuthService implements AuthService {
             throw new RuntimeException("Failed to delete user");
         }
         log.info("User deleted successfully");
+    }
+
+    @Override
+    public AuthDTOs.UserInfo getUserFromToken(String accessToken) {
+        try {
+            // JWT format: header.payload.signature
+            String[] parts = accessToken.split("\\.");
+            if (parts.length != 3) {
+                log.error("Invalid JWT format");
+                throw new RuntimeException("Invalid token format");
+            }
+
+            // Decode the payload (second part)
+            String payload = new String(Base64.getUrlDecoder().decode(parts[1]));
+            JsonNode claims = objectMapper.readTree(payload);
+
+            String username = claims.has("preferred_username")
+                    ? claims.get("preferred_username").asText()
+                    : null;
+            String email = claims.has("email")
+                    ? claims.get("email").asText()
+                    : null;
+
+            log.debug("Extracted user info from token: username={}, email={}", username, email);
+            return new AuthDTOs.UserInfo(username, email);
+        } catch (Exception e) {
+            log.error("Failed to parse JWT token: {}", e.getMessage());
+            throw new RuntimeException("Failed to parse token", e);
+        }
     }
 }

@@ -34,4 +34,12 @@ public class AuthDTOs {
         private String tokenType;
         private Long expiresIn;
     }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class UserInfo {
+        private String username;
+        private String email;
+    }
 }

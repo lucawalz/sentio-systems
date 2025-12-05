@@ -1,5 +1,6 @@
 package org.example.backend.config;
 
+import lombok.extern.slf4j.Slf4j;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.KeycloakBuilder;
 import org.springframework.beans.factory.annotation.Value;
@@ -9,6 +10,7 @@ import org.springframework.context.annotation.Configuration;
 import static org.keycloak.OAuth2Constants.CLIENT_CREDENTIALS;
 
 @Configuration
+@Slf4j
 public class KeycloakConfig {
 
     @Value("${keycloak.admin.server-url}")
@@ -25,11 +27,11 @@ public class KeycloakConfig {
 
     @Bean
     public Keycloak keycloak() {
-        System.out.println("Initializing Keycloak Admin Client...");
-        System.out.println("Server URL: " + serverUrl);
-        System.out.println("Realm: " + realm);
-        System.out.println("Client ID: " + clientId);
-        System.out.println("Client Secret: " + (clientSecret != null ? clientSecret.substring(0, 5) + "..." : "null"));
+        log.info("Initializing Keycloak Admin Client...");
+        log.info("Server URL: {}", serverUrl);
+        log.info("Realm: {}", realm);
+        log.info("Client ID: {}", clientId);
+        log.info("Client Secret: {}", (clientSecret != null ? "******" : "null"));
 
         return KeycloakBuilder.builder()
                 .serverUrl(serverUrl)
@@ -39,4 +41,5 @@ public class KeycloakConfig {
                 .clientSecret(clientSecret)
                 .build();
     }
+
 }

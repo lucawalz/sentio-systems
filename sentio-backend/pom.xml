@@ -28,7 +28,7 @@
 	</scm>
 	<properties>
 		<java.version>21</java.version>
-		<keycloak.version>25.0.6</keycloak.version>
+		<keycloak.version>23.0.7</keycloak.version>
 	</properties>
 	<dependencies>
         <dependency>

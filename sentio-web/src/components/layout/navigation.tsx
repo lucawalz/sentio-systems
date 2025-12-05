@@ -26,7 +26,7 @@ export function Navigation() {
   const logoRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   // Auth state used to toggle the header CTA between Login and Dashboard
-  const { loggedIn, login } = useAuth()
+  const { loggedIn } = useAuth()
   // NOTE: `login()` currently simulates a successful login by setting
   // a demo user in the auth provider. Replace this call with your real
   // login flow (navigation to `/login` or a login modal) as described above.
@@ -58,9 +58,8 @@ export function Navigation() {
   return (
     <nav
       ref={navRef}
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-700 ${
-        isScrolled ? "bg-black/90 backdrop-blur-2xl border-b border-white/20 shadow-2xl" : "bg-transparent"
-      }`}
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-700 ${isScrolled ? "bg-black/90 backdrop-blur-2xl border-b border-white/20 shadow-2xl" : "bg-transparent"
+        }`}
     >
       <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
         <div ref={logoRef} className="text-2xl font-bold tracking-tight cursor-pointer group">
@@ -91,12 +90,11 @@ export function Navigation() {
               </Button>
             </Link>
           ) : (
-            <Button
-              onClick={() => login()}
-              className="bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] text-black hover:shadow-2xl hover:shadow-blue-500/25 font-medium transition-all duration-300 preload-fade"
-            >
-              Login
-            </Button>
+            <Link to="/login">
+              <Button className="bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] text-black hover:shadow-2xl hover:shadow-blue-500/25 font-medium transition-all duration-300 preload-fade">
+                Login
+              </Button>
+            </Link>
           )}
         </div>
 
@@ -104,40 +102,43 @@ export function Navigation() {
         <button className="md:hidden text-white" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
           {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
         </button>
-      </div>
+      </div >
 
       {/* Mobile Menu */}
-      {isMobileMenuOpen && (
-        <div className="md:hidden bg-black/95 backdrop-blur-2xl border-b border-white/20">
-          <div className="px-6 py-4 space-y-4">
-            {["Our Story", "How It Works", "Features"].map((item) => (
-              <a
-                key={item}
-                href={`#${item.toLowerCase().replace(/\s+/g, "-")}`}
-                className="block text-white/70 hover:text-white transition-colors"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                {item}
-              </a>
-            ))}
-            {/* Mobile: show Login or View Dashboard similarly */}
-            {loggedIn ? (
-              <Link to="/dashboard">
-                <Button className="w-full bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] text-black font-medium">
-                  View Dashboard
-                </Button>
-              </Link>
-            ) : (
-              <Button
-                onClick={() => login()}
-                className="w-full bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] text-black font-medium"
-              >
-                Login
-              </Button>
-            )}
+      {
+        isMobileMenuOpen && (
+          <div className="md:hidden bg-black/95 backdrop-blur-2xl border-b border-white/20">
+            <div className="px-6 py-4 space-y-4">
+              {["Our Story", "How It Works", "Features"].map((item) => (
+                <a
+                  key={item}
+                  href={`#${item.toLowerCase().replace(/\s+/g, "-")}`}
+                  className="block text-white/70 hover:text-white transition-colors"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  {item}
+                </a>
+              ))}
+              {/* Mobile: show Login or View Dashboard similarly */}
+              {loggedIn ? (
+                <Link to="/dashboard">
+                  <Button className="w-full bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] text-black font-medium">
+                    View Dashboard
+                  </Button>
+                </Link>
+              ) : (
+                <Link to="/login">
+                  <Button
+                    className="w-full bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] text-black font-medium"
+                  >
+                    Login
+                  </Button>
+                </Link>
+              )}
+            </div>
           </div>
-        </div>
-      )}
-    </nav>
+        )
+      }
+    </nav >
   )
 }

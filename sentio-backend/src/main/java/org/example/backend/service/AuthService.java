@@ -10,4 +10,12 @@ public interface AuthService {
     void logout(String refreshToken);
 
     void deleteUser(String userId);
+
+    /**
+     * Extracts user information from a JWT access token.
+     * 
+     * @param accessToken The JWT access token
+     * @return UserInfo containing username and email
+     */
+    AuthDTOs.UserInfo getUserFromToken(String accessToken);
 }
