@@ -42,6 +42,8 @@ export function CreateAccountBox() {
 
     const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
     const [emailError, setEmailError] = useState<string | null>(null);
+    const [confirmPassword, setConfirmPassword] = useState("");
+    const [confirmPasswordError, setConfirmPasswordError] = useState<string | null>(null);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
@@ -50,6 +52,12 @@ export function CreateAccountBox() {
         // Real-time validation
         if (name === "password") {
             setPasswordErrors(getPasswordErrors(value));
+            // Check match if confirm password has value
+            if (confirmPassword && value !== confirmPassword) {
+                setConfirmPasswordError("Passwords do not match.");
+            } else if (confirmPassword && value === confirmPassword) {
+                setConfirmPasswordError(null);
+            }
         } else if (name === "email") {
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             if (!emailRegex.test(value)) {
@@ -74,6 +82,11 @@ export function CreateAccountBox() {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(formData.email)) {
             setEmailError("Invalid email address format.");
+            return;
+        }
+
+        if (formData.password !== confirmPassword) {
+            setConfirmPasswordError("Passwords do not match.");
             return;
         }
 
@@ -178,10 +191,32 @@ export function CreateAccountBox() {
                         )}
                     </div>
 
+                    <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-1">Confirm Password</label>
+                        <input
+                            name="confirmPassword"
+                            type="password"
+                            required
+                            value={confirmPassword}
+                            onChange={(e) => {
+                                setConfirmPassword(e.target.value);
+                                if (e.target.value !== formData.password) {
+                                    setConfirmPasswordError("Passwords do not match.");
+                                } else {
+                                    setConfirmPasswordError(null);
+                                }
+                            }}
+                            className={`w-full px-4 py-2 bg-black/50 border rounded-lg focus:outline-none text-white ${confirmPasswordError ? 'border-red-500' : 'border-gray-700 focus:border-white'}`}
+                        />
+                        {confirmPasswordError && (
+                            <p className="text-xs text-red-400 mt-1">{confirmPasswordError}</p>
+                        )}
+                    </div>
+
                     <button
                         type="submit"
                         className="w-full mt-6 px-6 py-3 bg-white text-black rounded-lg font-semibold hover:bg-gray-200 transition-colors disabled:opacity-50"
-                        disabled={isLoading || passwordErrors.length > 0 || !!emailError}
+                        disabled={isLoading || passwordErrors.length > 0 || !!emailError || !!confirmPasswordError || !confirmPassword}
                     >
                         {isLoading ? "Creating Account..." : "Register"}
                     </button>
