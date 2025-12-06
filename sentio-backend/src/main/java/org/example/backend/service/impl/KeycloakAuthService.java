@@ -19,12 +19,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
-import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.Base64;
 import java.util.Collections;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @RequiredArgsConstructor
@@ -40,6 +40,9 @@ public class KeycloakAuthService implements AuthService {
 
     @Value("${keycloak.admin.server-url}")
     private String serverUrl;
+
+    @Value("${keycloak.public-url:http://localhost:8080}")
+    private String publicUrl;
 
     @Value("${keycloak.admin.client-id}")
     private String clientId;
@@ -67,6 +70,12 @@ public class KeycloakAuthService implements AuthService {
         UsersResource usersResource = keycloak.realm(realm).users();
         Response response = usersResource.create(user);
 
+        if (response.getStatus() == 409) {
+            log.warn("User already exists: {}", request.getUsername());
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.CONFLICT, "User already exists");
+        }
+
         if (response.getStatus() != 201) {
             log.error("Failed to register user. Status: {}", response.getStatus());
             throw new RuntimeException("Failed to register user");
@@ -75,8 +84,22 @@ public class KeycloakAuthService implements AuthService {
     }
 
     @Override
-    public AuthDTOs.TokenResponse login(AuthDTOs.LoginRequest request) {
-        log.info("Logging in user: {}", request.getUsername());
+    public String getLoginUrl() {
+        return publicUrl + "/realms/" + realm + "/protocol/openid-connect/auth" +
+                "?client_id=" + clientId +
+                "&response_type=code" +
+                "&scope=openid profile email roles" +
+                "&redirect_uri=http://localhost:8083/api/auth/callback";
+    }
+
+    @Override
+    public String getRegisterUrl() {
+        return getLoginUrl() + "&kc_action=register";
+    }
+
+    @Override
+    public AuthDTOs.TokenResponse exchangeCodeForTokens(String code) {
+        log.info("Exchanging code for tokens");
         String tokenEndpoint = serverUrl + "/realms/" + realm + "/protocol/openid-connect/token";
 
         HttpHeaders headers = new HttpHeaders();
@@ -85,32 +108,66 @@ public class KeycloakAuthService implements AuthService {
         MultiValueMap<String, String> map = new LinkedMultiValueMap<>();
         map.add("client_id", clientId);
         map.add("client_secret", clientSecret);
-        map.add("grant_type", "password");
-        map.add("username", request.getUsername());
-        map.add("password", request.getPassword());
+        map.add("grant_type", "authorization_code");
+        map.add("code", code);
+        map.add("redirect_uri", "http://localhost:8083/api/auth/callback");
 
         HttpEntity<MultiValueMap<String, String>> entity = new HttpEntity<>(map, headers);
 
         try {
-            ResponseEntity<Map> response = restTemplate.postForEntity(tokenEndpoint, entity, Map.class);
-            @SuppressWarnings("unchecked")
-            Map<String, Object> body = (Map<String, Object>) response.getBody();
-
-            if (body != null) {
-                return new AuthDTOs.TokenResponse(
-                        (String) body.get("access_token"),
-                        (String) body.get("refresh_token"),
-                        (String) body.get("token_type"),
-                        ((Number) body.get("expires_in")).longValue());
-            }
-        } catch (HttpClientErrorException e) {
-            log.warn("Invalid login attempt for user '{}': {}", request.getUsername(), e.getMessage());
-            return null;
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    tokenEndpoint,
+                    org.springframework.http.HttpMethod.POST,
+                    entity,
+                    new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {
+                    });
+            return parseTokenResponse(response);
         } catch (Exception e) {
-            log.error("Login failed for user '{}': {}", request.getUsername(), e.getMessage());
-            throw new RuntimeException("Login failed", e);
+            log.error("Token exchange failed: {}", e.getMessage());
+            throw new RuntimeException("Token exchange failed", e);
         }
-        log.warn("Login failed for user '{}': No body in response", request.getUsername());
+    }
+
+    @Override
+    public synchronized AuthDTOs.TokenResponse refreshToken(String refreshToken) {
+        log.info("Refreshing token");
+        String tokenEndpoint = serverUrl + "/realms/" + realm + "/protocol/openid-connect/token";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+
+        MultiValueMap<String, String> map = new LinkedMultiValueMap<>();
+        map.add("client_id", clientId);
+        map.add("client_secret", clientSecret);
+        map.add("grant_type", "refresh_token");
+        map.add("refresh_token", refreshToken);
+
+        HttpEntity<MultiValueMap<String, String>> entity = new HttpEntity<>(map, headers);
+
+        try {
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    tokenEndpoint,
+                    org.springframework.http.HttpMethod.POST,
+                    entity,
+                    new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {
+                    });
+            return parseTokenResponse(response);
+        } catch (Exception e) {
+            log.error("Token refresh failed: {}", e.getMessage());
+            throw new RuntimeException("Token refresh failed", e);
+        }
+    }
+
+    private AuthDTOs.TokenResponse parseTokenResponse(ResponseEntity<Map<String, Object>> response) {
+        Map<String, Object> body = response.getBody();
+
+        if (body != null) {
+            return new AuthDTOs.TokenResponse(
+                    (String) body.get("access_token"),
+                    (String) body.get("refresh_token"),
+                    (String) body.get("token_type"),
+                    ((Number) body.get("expires_in")).longValue());
+        }
         return null;
     }
 
@@ -172,8 +229,13 @@ public class KeycloakAuthService implements AuthService {
                     ? claims.get("email").asText()
                     : null;
 
-            log.debug("Extracted user info from token: username={}, email={}", username, email);
-            return new AuthDTOs.UserInfo(username, email);
+            java.util.List<String> roles = new java.util.ArrayList<>();
+            if (claims.has("realm_access") && claims.get("realm_access").has("roles")) {
+                claims.get("realm_access").get("roles").forEach(role -> roles.add(role.asText()));
+            }
+
+            log.debug("Extracted user info from token: username={}, email={}, roles={}", username, email, roles);
+            return new AuthDTOs.UserInfo(username, email, roles);
         } catch (Exception e) {
             log.error("Failed to parse JWT token: {}", e.getMessage());
             throw new RuntimeException("Failed to parse token", e);

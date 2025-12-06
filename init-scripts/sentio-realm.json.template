@@ -1,5 +1,6 @@
 {
   "realm": "sentio",
+  "loginTheme": "sentio",
   "enabled": true,
   "sslRequired": "none",
   "registrationAllowed": true,
@@ -21,7 +22,9 @@
   "accessTokenLifespan": 300,
   "accessTokenLifespanForImplicitFlow": 900,
   "ssoSessionIdleTimeout": 1800,
+  "ssoSessionIdleTimeout": 1800,
   "ssoSessionMaxLifespan": 36000,
+  "passwordPolicy": "hashAlgorithm(pbkdf2-sha256) and length(8) and digits(1) and specialChars(1) and notUsername(undefined)",
   "clients": [
     {
       "clientId": "sentio-backend",
@@ -55,11 +58,13 @@
       },
       "redirectUris": [
         "http://localhost:8083/*",
-        "http://localhost:3000/*"
+        "http://localhost:3000/*",
+        "http://localhost:8083/api/auth/callback"
       ],
       "webOrigins": [
         "http://localhost:8083",
-        "http://localhost:3000"
+        "http://localhost:3000",
+        "http://localhost:8083/api/auth/callback"
       ],
       "defaultClientScopes": [
         "web-origins",
@@ -85,10 +90,31 @@
       {
         "name": "admin",
         "description": "Administrator role"
+      },
+      {
+        "name": "operator",
+        "description": "Operator role with modify permissions"
+      },
+      {
+        "name": "viewer",
+        "description": "Read-only viewer role"
       }
     ]
   },
-  "users": [],
+  "users": [
+    {
+      "username": "service-account-sentio-backend",
+      "enabled": true,
+      "serviceAccountClientId": "sentio-backend",
+      "clientRoles": {
+        "realm-management": [
+          "manage-users",
+          "view-users",
+          "query-users"
+        ]
+      }
+    }
+  ],
   "browserSecurityHeaders": {
     "contentSecurityPolicy": "frame-src 'self'; frame-ancestors 'self'; object-src 'none';",
     "xContentTypeOptions": "nosniff",

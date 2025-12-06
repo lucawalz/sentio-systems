@@ -8,7 +8,7 @@ type AuthContextValue = {
   loggedIn: boolean;
   isLoading: boolean;
   error: string | null;
-  login: (username: string, password: string) => Promise<boolean>;
+  login: () => void;
   register: (data: RegisterRequest) => Promise<boolean>;
   logout: () => Promise<void>;
   clearError: () => void;
@@ -45,21 +45,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setError(null);
   }, []);
 
-  const login = useCallback(async (username: string, password: string): Promise<boolean> => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const userInfo = await authService.login({ username, password });
-      setUser(userInfo);
-      return true;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Login failed';
-      setError(message);
-      return false;
-    } finally {
-      setIsLoading(false);
-    }
+  const login = useCallback(() => {
+    authService.initiateLogin();
   }, []);
 
   const register = useCallback(async (data: RegisterRequest): Promise<boolean> => {

@@ -1,4 +1,5 @@
-import {Link} from "react-router-dom";
+import { Link } from "react-router-dom";
+import { authService } from "../../services/authService";
 
 
 
@@ -18,8 +19,8 @@ export default function Footer() {
                         <div>
                             <h2 className="text-xl text-blue-200 font-semibold tracking-wide mb-4">Sentio Systems</h2>
                             <p className="text-white leading-6">
-                                Nobelstraße 10<br/>
-                                Stuttgart,<br/>
+                                Nobelstraße 10<br />
+                                Stuttgart,<br />
                                 GERMANY
                             </p>
                         </div>
@@ -35,11 +36,18 @@ export default function Footer() {
                                     ></span></Link></li>
                                 <li><Link to="/dashboard" className="relative inline-block group">Dashboard
                                     <span className="absolute left-0 -bottom-0.5 h-0.5 w-0 bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] transition-all duration-500 group-hover:w-full"
-                                ></span>
-                            </Link>
-                        </li>
-                        {/*<li><Link to="/login" className="hover:underline">Login</Link></li>
-                                <li> <Link to=/createAccount className="hover:underline">Create Account</Link></li>*/}
+                                    ></span>
+                                </Link>
+                                </li>
+                                <li>
+                                    <button
+                                        onClick={() => authService.initiateRegister()}
+                                        className="relative inline-block group hover:text-white transition-colors text-left"
+                                    >
+                                        Create Account
+                                        <span className="absolute left-0 -bottom-0.5 h-0.5 w-0 bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] transition-all duration-500 group-hover:w-full"></span>
+                                    </button>
+                                </li>
                             </ul>
                         </div>
 
@@ -52,12 +60,12 @@ export default function Footer() {
                                 <li>
                                     <Link to="/contact" className="relative inline-block group">Contact
                                         <span className="absolute left-0 -bottom-0.5 h-0.5 w-0 bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] transition-all duration-500 group-hover:w-full"
-                                    ></span></Link>
+                                        ></span></Link>
                                 </li>
                                 <li>
                                     <Link to="/privacy" className="relative inline-block group">Privacy Policies
                                         <span className="absolute left-0 -bottom-0.5 h-0.5 w-0 bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] transition-all duration-500 group-hover:w-full"
-                                    ></span></Link>
+                                        ></span></Link>
                                 </li>
                             </ul>
                         </div>

@@ -41,5 +41,6 @@ public class AuthDTOs {
     public static class UserInfo {
         private String username;
         private String email;
+        private java.util.List<String> roles;
     }
 }

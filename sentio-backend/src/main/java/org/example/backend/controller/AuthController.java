@@ -19,23 +19,26 @@ public class AuthController {
     private final AuthService authService;
     private final CookieAuthService cookieAuthService;
 
-    @PostMapping("/register")
-    public ResponseEntity<Void> register(@RequestBody AuthDTOs.RegisterRequest request) {
-        authService.register(request);
-        return ResponseEntity.status(HttpStatus.CREATED).build();
+    @GetMapping("/register")
+    public void register(HttpServletResponse response) throws java.io.IOException {
+        // Log the registration attempt
+        org.slf4j.LoggerFactory.getLogger(AuthController.class).info("Initiating Keycloak registration flow");
+        response.sendRedirect(authService.getRegisterUrl());
     }
 
-    @PostMapping("/login")
-    public ResponseEntity<AuthDTOs.UserInfo> login(
-            @RequestBody AuthDTOs.LoginRequest request,
-            HttpServletResponse response) {
+    // Deprecated: Old custom registration
+    // @PostMapping("/register")
+    // public ResponseEntity<Void> register(@RequestBody AuthDTOs.RegisterRequest
+    // request) { ... }
 
-        // Get tokens from Keycloak
-        AuthDTOs.TokenResponse tokens = authService.login(request);
+    @GetMapping("/login")
+    public void login(HttpServletResponse response) throws java.io.IOException {
+        response.sendRedirect(authService.getLoginUrl());
+    }
 
-        if (tokens == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
+    @GetMapping("/callback")
+    public void callback(@RequestParam String code, HttpServletResponse response) throws java.io.IOException {
+        AuthDTOs.TokenResponse tokens = authService.exchangeCodeForTokens(code);
 
         // Set httpOnly cookies
         response.addHeader(HttpHeaders.SET_COOKIE,
@@ -46,9 +49,45 @@ public class AuthController {
                 cookieAuthService.createRefreshTokenCookie(
                         tokens.getRefreshToken()).toString());
 
-        // Return user info (not tokens) - extract from the token we just got
-        AuthDTOs.UserInfo userInfo = authService.getUserFromToken(tokens.getAccessToken());
-        return ResponseEntity.ok(userInfo);
+        // Redirect back to frontend
+        response.sendRedirect("http://localhost:3000");
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<Void> refresh(
+            @CookieValue(name = "refresh_token", required = false) String refreshToken,
+            HttpServletResponse response) {
+
+        if (refreshToken == null || refreshToken.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        try {
+            AuthDTOs.TokenResponse tokens = authService.refreshToken(refreshToken);
+
+            // Update cookies
+            response.addHeader(HttpHeaders.SET_COOKIE,
+                    cookieAuthService.createAccessTokenCookie(
+                            tokens.getAccessToken(),
+                            tokens.getExpiresIn()).toString());
+            response.addHeader(HttpHeaders.SET_COOKIE,
+                    cookieAuthService.createRefreshTokenCookie(
+                            tokens.getRefreshToken()).toString());
+
+            return ResponseEntity.ok().build();
+        } catch (Exception e) {
+            // Log the error
+            org.slf4j.LoggerFactory.getLogger(AuthController.class).warn("Token refresh failed, clearing cookies: {}",
+                    e.getMessage());
+
+            // CRITICAL FIX: Clear cookies if refresh fails (e.g. invalid_grant/expired)
+            // This prevents the browser from getting stuck in a loop sending the bad token
+            for (ResponseCookie cookie : cookieAuthService.createLogoutCookies()) {
+                response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+            }
+
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
     }
 
     @GetMapping("/me")

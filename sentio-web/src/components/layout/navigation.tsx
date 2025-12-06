@@ -5,6 +5,7 @@ import { gsap } from "gsap"
 import { Button } from "../ui/button"
 import { Link } from "react-router-dom"
 import { useAuth } from "../../context/auth"
+import { authService } from "../../services/authService"
 // NOTE (added): This component was wired to the temporary auth context today.
 // What I changed: when logged out this shows a "Login" button that
 // currently calls `login()` to simulate authentication.
@@ -90,54 +91,71 @@ export function Navigation() {
               </Button>
             </Link>
           ) : (
-            <Link to="/login">
-              <Button className="bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] text-black hover:shadow-2xl hover:shadow-blue-500/25 font-medium transition-all duration-300 preload-fade">
-                Login
-              </Button>
-            </Link>
+            <Button
+              onClick={() => authService.initiateRegister()}
+              className="bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] text-black hover:shadow-2xl hover:shadow-blue-500/25 font-medium transition-all duration-300 preload-fade"
+            >
+              Create Account
+            </Button>
           )}
         </div>
 
         {/* Mobile Menu Button */}
-        <button className="md:hidden text-white" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
-          {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-        </button>
-      </div >
+        <div className="md:hidden">
+          <button
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="text-gray-300 hover:text-white focus:outline-none"
+          >
+            {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
+        </div>
+      </div>
 
       {/* Mobile Menu */}
-      {
-        isMobileMenuOpen && (
-          <div className="md:hidden bg-black/95 backdrop-blur-2xl border-b border-white/20">
-            <div className="px-6 py-4 space-y-4">
-              {["Our Story", "How It Works", "Features"].map((item) => (
-                <a
-                  key={item}
-                  href={`#${item.toLowerCase().replace(/\s+/g, "-")}`}
-                  className="block text-white/70 hover:text-white transition-colors"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                >
-                  {item}
-                </a>
-              ))}
-              {/* Mobile: show Login or View Dashboard similarly */}
-              {loggedIn ? (
-                <Link to="/dashboard">
-                  <Button className="w-full bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] text-black font-medium">
-                    View Dashboard
-                  </Button>
-                </Link>
-              ) : (
-                <Link to="/login">
-                  <Button
-                    className="w-full bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] text-black font-medium"
-                  >
-                    Login
-                  </Button>
-                </Link>
-              )}
-            </div>
+      {isMobileMenuOpen && (
+        <div className="md:hidden bg-black/95 backdrop-blur-md absolute top-full left-0 w-full border-t border-white/10">
+          <div className="px-4 py-6 space-y-4">
+            <Link
+              to="/#features"
+              className="block text-gray-300 hover:text-white font-medium"
+              onClick={() => setIsMobileMenuOpen(false)}
+            >
+              Features
+            </Link>
+            <Link
+              to="/#how-it-works"
+              className="block text-gray-300 hover:text-white font-medium"
+              onClick={() => setIsMobileMenuOpen(false)}
+            >
+              How It Works
+            </Link>
+            <Link
+              to="/#story"
+              className="block text-gray-300 hover:text-white font-medium"
+              onClick={() => setIsMobileMenuOpen(false)}
+            >
+              Our Story
+            </Link>
+            {loggedIn ? (
+              <Link to="/dashboard" onClick={() => setIsMobileMenuOpen(false)}>
+                <Button className="w-full bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] text-black font-medium">
+                  View Dashboard
+                </Button>
+              </Link>
+            ) : (
+              <Button
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  authService.initiateRegister();
+                }}
+                className="w-full bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] text-black font-medium"
+              >
+                Create Account
+              </Button>
+            )}
           </div>
-        )
+        </div>
+      )
       }
     </nav >
   )

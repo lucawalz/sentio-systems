@@ -33,10 +33,12 @@ services:
       KC_HOSTNAME: localhost
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET}
     ports:
       - "${KEYCLOAK_PORT:-8080}:8080"
     volumes:
       - ./init-scripts/sentio-realm.json:/opt/keycloak/data/import/sentio-realm.json
+      - ./themes:/opt/keycloak/themes
     depends_on:
       postgres:
         condition: service_healthy
@@ -95,6 +97,7 @@ services:
       KEYCLOAK_ISSUER_URI: http://localhost:8080/realms/sentio
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/sentio/protocol/openid-connect/certs
       KEYCLOAK_ADMIN_SERVER_URL: http://keycloak:8080
+      KEYCLOAK_PUBLIC_URL: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8080}
       KEYCLOAK_ADMIN_REALM: sentio
       KEYCLOAK_ADMIN_CLIENT_ID: sentio-backend
       KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET}

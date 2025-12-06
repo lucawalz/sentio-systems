@@ -40,22 +40,20 @@ export const authService = {
      * Authenticate user with username and password.
      * On success, cookies are automatically set by the browser.
      */
-    async login(credentials: LoginRequest): Promise<UserInfo> {
-        const response = await fetch(`${API_BASE}/api/auth/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include', // Critical: sends/receives cookies
-            body: JSON.stringify(credentials),
-        });
+    /**
+     * Initiates the login flow by redirecting to the backend login endpoint.
+     * The backend will redirect to Keycloak.
+     */
+    initiateLogin(): void {
+        window.location.href = `${API_BASE}/api/auth/login`;
+    },
 
-        if (!response.ok) {
-            if (response.status === 401) {
-                throw new AuthServiceError('Invalid username or password', 401);
-            }
-            throw new AuthServiceError('Login failed', response.status);
-        }
-
-        return response.json();
+    /**
+     * Initiates the registration flow by redirecting to the backend register endpoint.
+     */
+    initiateRegister: () => {
+        console.log("Redirecting to Keycloak registration...");
+        window.location.href = `${API_BASE}/api/auth/register`;
     },
 
     /**
@@ -96,12 +94,24 @@ export const authService = {
     /**
      * Check if the user is currently authenticated.
      * Returns user info if authenticated, null otherwise.
+     * Automatically attempts to refresh token if access token is expired.
      */
     async getCurrentUser(): Promise<UserInfo | null> {
         try {
-            const response = await fetch(`${API_BASE}/api/auth/me`, {
+            let response = await fetch(`${API_BASE}/api/auth/me`, {
                 credentials: 'include',
             });
+
+            if (response.status === 401) {
+                // Access token expired, try to refresh
+                const refreshSuccess = await this.refreshToken();
+                if (refreshSuccess) {
+                    // Retry the request
+                    response = await fetch(`${API_BASE}/api/auth/me`, {
+                        credentials: 'include',
+                    });
+                }
+            }
 
             if (!response.ok) {
                 return null;
@@ -112,6 +122,21 @@ export const authService = {
             return null;
         }
     },
+
+    /**
+     * Attempt to refresh the access token using the httpOnly refresh token cookie.
+     */
+    async refreshToken(): Promise<boolean> {
+        try {
+            const response = await fetch(`${API_BASE}/api/auth/refresh`, {
+                method: 'POST',
+                credentials: 'include',
+            });
+            return response.ok;
+        } catch {
+            return false;
+        }
+    }
 };
 
 export { AuthServiceError };

@@ -5,6 +5,7 @@ import { SplitText } from "gsap/SplitText"
 import { Button } from "../ui/button"
 import { ArrowRight, Sparkles } from "lucide-react"
 import { Link } from "react-router-dom"
+import { authService } from "../../services/authService"
 import { useAuth } from "../../context/auth"
 // NOTE (added): This CTA was modified to simulate login for development.
 // What I changed: The primary CTA shows a "Login" button when not logged in
@@ -339,31 +340,30 @@ export function ExperienceCTA() {
 
         <div ref={buttonRef} className="flex justify-center">
           {!loggedIn ? (
-            <Link to="/login">
-              <Button
-                size="lg"
-                className="relative bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] text-black font-bold px-20 py-10 text-3xl rounded-3xl group overflow-hidden shadow-2xl"
-              >
-                {/* Pulse Glow Effect */}
-                <div className="pulse-glow absolute inset-0 bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] rounded-3xl opacity-0 blur-2xl scale-110" />
+            <Button
+              onClick={() => authService.initiateRegister()}
+              size="lg"
+              className="relative bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] text-black font-bold px-20 py-10 text-3xl rounded-3xl group overflow-hidden shadow-2xl"
+            >
+              {/* Pulse Glow Effect */}
+              <div className="pulse-glow absolute inset-0 bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] rounded-3xl opacity-0 blur-2xl scale-110" />
 
-                {/* Button Glow Effect */}
-                <div className="button-glow absolute inset-0 bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] rounded-3xl opacity-0 blur-xl scale-120" />
+              {/* Button Glow Effect */}
+              <div className="button-glow absolute inset-0 bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] rounded-3xl opacity-0 blur-xl scale-120" />
 
-                {/* Button Content */}
-                <div className="relative flex items-center justify-center">
-                  <Sparkles className="sparkles w-8 h-8 mr-4" />
-                  <span className="font-black tracking-wide text-2xl">Login</span>
-                  <ArrowRight className="arrow w-8 h-8 ml-4" />
-                </div>
+              {/* Button Content */}
+              <div className="relative flex items-center justify-center">
+                <Sparkles className="sparkles w-8 h-8 mr-4" />
+                <span className="font-black tracking-wide text-2xl">Create Account</span>
+                <ArrowRight className="arrow w-8 h-8 ml-4" />
+              </div>
 
-                {/* Shimmer Effect */}
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+              {/* Shimmer Effect */}
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
 
-                {/* Border Glow */}
-                <div className="absolute inset-0 rounded-3xl border-2 border-white/20 group-hover:border-white/40 transition-all duration-300" />
-              </Button>
-            </Link>
+              {/* Border Glow */}
+              <div className="absolute inset-0 rounded-3xl border-2 border-white/20 group-hover:border-white/40 transition-all duration-300" />
+            </Button>
           ) : (
             <Link to="/dashboard">
               <Button

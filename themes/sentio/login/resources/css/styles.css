@@ -1,0 +1,255 @@
+/* Sentio Keycloak Theme Overhaul v2 */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+/* GLOBAL RESET & BACKGROUND */
+body {
+    background-color: #000000 !important;
+    background-image: linear-gradient(to top, #000000, #111827, #000000) !important;
+    font-family: 'Inter', sans-serif !important;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+}
+
+/* Remove default PatternFly background image */
+.login-pf-page {
+    background-image: none !important;
+    background-color: transparent !important;
+}
+
+/* LOGO / HEADER */
+#kc-header {
+    margin-bottom: 2rem;
+    display: none;
+    /* Hide outer header to match Sentio design (title is inside card) */
+}
+
+/* CARD CONTAINER (The white box in the screenshot) */
+.card-pf {
+    background: rgba(17, 24, 39, 0.4) !important;
+    /* bg-gray-900/40 */
+    backdrop-filter: blur(12px) !important;
+    border: 1px solid rgb(55, 65, 81) !important;
+    /* border-gray-700 */
+    box-shadow: none !important;
+    border-radius: 0.75rem !important;
+    /* rounded-xl */
+    padding: 2.5rem !important;
+    margin: 0 !important;
+    max-width: 450px !important;
+    width: 100% !important;
+    color: white !important;
+}
+
+/* Ensure content fits */
+#kc-content {
+    margin: 0 !important;
+}
+
+/* TITLE inside the card */
+h1#kc-page-title {
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    font-size: 1.875rem !important;
+    /* 3xl */
+    text-align: center !important;
+    margin-bottom: 2rem !important;
+    margin-top: 0 !important;
+    text-transform: none !important;
+}
+
+/* INPUT FIELDS */
+/* Keycloak uses .form-control or input[type="text"] */
+/* INPUT FIELDS */
+/* Keycloak uses .form-control or input[type="text"] */
+input.form-control,
+input[type="text"],
+input[type="password"],
+input[type="email"],
+.pf-c-form-control {
+    background-color: #ffffff !important;
+    border: 1px solid transparent !important;
+    border-radius: 0.5rem !important;
+    color: #000000 !important;
+    padding: 0.75rem 1rem !important;
+    height: auto !important;
+    font-size: 1rem !important;
+    box-shadow: none !important;
+    width: 100% !important;
+}
+
+/* Password Visibility Wrapper - Often Keycloak/PatternFly uses a group */
+.pf-c-input-group {
+    background-color: #ffffff !important;
+    border-radius: 0.5rem !important;
+    border: 1px solid transparent !important;
+    overflow: hidden !important;
+    /* Clipped corners */
+    display: flex !important;
+}
+
+/* When inside a group, the input itself needs no radius/border */
+.pf-c-input-group input.form-control,
+.pf-c-input-group input[type="password"] {
+    border-radius: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+/* The Toggle Button (Eye icon) */
+.pf-c-button.pf-m-control {
+    background: transparent !important;
+    border: none !important;
+    color: #9ca3af !important;
+    /* gray-400 */
+    padding-right: 1rem !important;
+}
+
+input.form-control:focus,
+.pf-c-form-control:focus,
+.pf-c-input-group:focus-within {
+    border-color: #B0D6FF !important;
+    outline: none !important;
+}
+
+/* LABELS */
+/* To match Sentio "placeholders", we might ideally hide labels, 
+   but Keycloak puts labels above. styling them to look like Sentio text styles. */
+.control-label {
+    color: #9ca3af !important;
+    /* text-gray-400 */
+    font-size: 0.875rem !important;
+    font-weight: normal !important;
+    text-align: left !important;
+    margin-bottom: 0.5rem !important;
+    padding-top: 0 !important;
+}
+
+/* BUTTONS */
+/* BUTTONS */
+#kc-login,
+#kc-register,
+input[type="submit"],
+.pf-c-button.pf-m-primary {
+    background-color: #ffffff !important;
+    /* Default to white like Sentio active state or allow gradient */
+    background-image: none !important;
+    color: #000000 !important;
+    border: none !important;
+    border-radius: 0.5rem !important;
+    font-weight: 600 !important;
+    font-size: 1rem !important;
+    padding: 0.75rem 1.5rem !important;
+    margin-top: 1.5rem !important;
+    text-transform: none !important;
+    width: 100% !important;
+    transition: all 0.2s;
+    box-shadow: none !important;
+    cursor: pointer !important;
+}
+
+#kc-login:hover,
+#kc-register:hover,
+input[type="submit"]:hover,
+.pf-c-button.pf-m-primary:hover {
+    background-color: #f3f4f6 !important;
+    /* gray-100 */
+    transform: translateY(-1px);
+}
+
+/* LINKS (Forgot password etc) */
+#kc-form-options,
+.login-pf-signup {
+    margin-top: 1.5rem !important;
+    text-align: center !important;
+    color: #9ca3af !important;
+}
+
+a,
+a:link,
+a:visited {
+    color: #ffffff !important;
+    text-decoration: underline !important;
+}
+
+a:hover {
+    color: #B0D6FF !important;
+}
+
+/* Error/Alert Messages */
+.alert-error,
+.pf-c-alert.pf-m-danger,
+.kc-feedback-text-error {
+    background: rgba(239, 68, 68, 0.15) !important;
+    color: #fca5a5 !important;
+    border: 1px solid rgba(239, 68, 68, 0.3) !important;
+    text-shadow: none !important;
+    border-radius: 0.5rem !important;
+    padding: 1rem !important;
+    margin-bottom: 1rem !important;
+    font-size: 0.875rem !important;
+    display: flex !important;
+    align-items: center !important;
+}
+
+.alert-error .pficon {
+    display: none !important;
+}
+
+/* Hide unwanted elements */
+.login-pf-page-header {
+    display: none !important;
+}
+
+/* Force container centering */
+.login-pf-page {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 20px !important;
+}
+
+/* Remove any other card-like wrappers */
+#kc-form {
+    margin: 0 !important;
+}
+
+.form-group {
+    margin-bottom: 1rem !important;
+}
+
+/* REORDER REGISTRATION FORM */
+/* Make the form a flex container to control order of children */
+#kc-register-form {
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+/* 1. Input fields stay at the top */
+#kc-register-form .form-group {
+    order: 1 !important;
+}
+
+/* 2. Register Button comes next */
+#kc-register-form #kc-form-buttons {
+    order: 2 !important;
+    margin-top: 1rem !important;
+}
+
+/* 3. "Back to Login" link goes to the bottom */
+#kc-register-form #kc-form-options {
+    order: 3 !important;
+    margin-top: 1.5rem !important;
+    margin-bottom: 0 !important;
+}
+
+/* Ensure the link inside options is centered and styled */
+#kc-register-form #kc-form-options span,
+#kc-register-form #kc-form-options a {
+    display: block !important;
+    width: 100% !important;
+    text-align: center !important;
+}
