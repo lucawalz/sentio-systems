@@ -709,8 +709,8 @@ jobs:
           sarif_file: 'trivy-preprocessing-image.sarif'
           category: 'preprocessing-image'
 
-    # ============================================
-  # DEPLOYMENT - Trigger Tekton Pipeline
+  # ============================================
+  # DEPLOYMENT - Configure based on target
   # ============================================
   deploy:
     name: Deploy to ${{ github.ref_name == 'main' && 'Production' || 'Staging' }}
@@ -722,47 +722,53 @@ jobs:
       - speciesnet-build
       - preprocessing-build
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
-
+    
     environment:
       name: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
-      url: ${{ github.ref_name == 'main' && 'https://sentio.syslabs.dev' || 'https://sentio-staging.syslabs.dev' }}
-
+      url: ${{ github.ref_name == 'main' && 'https://sentio-systems.com' || 'https://staging.sentio-systems.com' }}
+    
     timeout-minutes: 30
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Trigger Tekton Deployment
-        env:
-          # Configure this secret in GitHub Repo Settings -> Secrets and variables -> Actions
-          WEBHOOK_SECRET: ${{ secrets.TEKTON_WEBHOOK_SECRET }}
-          WEBHOOK_URL: "https://sentio-webhook.syslabs.dev"
+      - name: Set environment variables
         run: |
-          echo "Triggering deployment..."
-          
-          # Construct JSON payload compatible with our Tekton TriggerBinding
-          PAYLOAD=$(cat <<EOF
-          {
-            "ref": "${{ github.ref }}",
-            "after": "${{ github.sha }}",
-            "repository": {
-              "clone_url": "https://github.com/${{ github.repository }}.git",
-              "full_name": "${{ github.repository }}"
-            }
-          }
-          EOF
-          )
-          
-          # Generate HMAC signature for security (required by GitHub Interceptor)
-          SIG="sha1=$(echo -n "$PAYLOAD" | openssl sha1 -hmac "$WEBHOOK_SECRET" | awk '{print $2}')"
-          
-          # Send Request
-          curl -v -X POST "$WEBHOOK_URL" \
-            -H "Content-Type: application/json" \
-            -H "X-GitHub-Event: push" \
-            -H "X-Hub-Signature: $SIG" \
-            -d "$PAYLOAD"
+          if [ "${{ github.ref_name }}" == "main" ]; then
+            echo "DEPLOY_ENV=production" >> $GITHUB_ENV
+            echo "DEPLOY_TAG=latest" >> $GITHUB_ENV
+          else
+            echo "DEPLOY_ENV=staging" >> $GITHUB_ENV
+            echo "DEPLOY_TAG=develop" >> $GITHUB_ENV
+          fi
+
+      # ============================================
+      # Manual deployment trigger placeholder
+      # ============================================
+      - name: Deployment Ready
+        run: |
+          echo "All images built and pushed successfully!"
+          echo ""
+          echo "Images available:"
+          echo "  - ${{ env.REGISTRY }}/${{ env.REPO }}/sentio-backend:${{ env.DEPLOY_TAG }}"
+          echo "  - ${{ env.REGISTRY }}/${{ env.REPO }}/sentio-web:${{ env.DEPLOY_TAG }}"
+          echo "  - ${{ env.REGISTRY }}/${{ env.REPO }}/birder-ai:${{ env.DEPLOY_TAG }}"
+          echo "  - ${{ env.REGISTRY }}/${{ env.REPO }}/speciesnet-ai:${{ env.DEPLOY_TAG }}"
+          echo "  - ${{ env.REGISTRY }}/${{ env.REPO }}/preprocessing-service:${{ env.DEPLOY_TAG }}"
+          echo ""
+          echo "Configure deployment by uncommenting one of the deployment options above"
+          echo "   or set up your own deployment strategy in this job."
+
+      # ============================================
+      # Health Check (uncomment after deployment is configured)
+      # ============================================
+      # - name: Wait for deployment
+      #   run: sleep 30
+      #
+      # - name: Health check
+      #   run: |
+      #     curl -f https://${{ env.DEPLOY_ENV == 'production' && 'sentio-systems.com' || 'staging.sentio-systems.com' }}/health || exit 1
 
   # ============================================
   # DEPLOYMENT SUMMARY
