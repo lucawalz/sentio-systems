@@ -1,7 +1,6 @@
 package org.example.backend.model;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -14,10 +13,14 @@ import java.time.LocalDateTime;
  * JPA entity representing real-time weather sensor measurements.
  * Stores environmental data collected from IoT weather monitoring devices.
  * <p>
- * This entity captures essential weather parameters including temperature, humidity,
- * atmospheric pressure, and light sensor readings (lux and UV index). The data is
- * timestamped for temporal analysis and statistical processing. It serves as the
- * primary data model for real-time weather monitoring and historical data analysis.
+ * This entity captures essential weather parameters including temperature,
+ * humidity,
+ * atmospheric pressure, and light sensor readings (lux and UV index). The data
+ * is
+ * timestamped for temporal analysis and statistical processing. It serves as
+ * the
+ * primary data model for real-time weather monitoring and historical data
+ * analysis.
  * </p>
  *
  * @author Sentio Team

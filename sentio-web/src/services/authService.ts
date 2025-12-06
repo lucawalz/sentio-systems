@@ -75,9 +75,17 @@ export const authService = {
         if (!response.ok) {
             let errorMessage = 'Registration failed';
             try {
-                const errorData = await response.json();
-                if (errorData.message) {
-                    errorMessage = errorData.message;
+                const text = await response.text();
+                // Try to parse as JSON first
+                try {
+                    const errorData = JSON.parse(text);
+                    // Check for common Spring Boot / Backend error fields
+                    errorMessage = errorData.message || errorData.error || errorMessage;
+                } catch {
+                    // If not JSON, use the text body if available
+                    if (text && text.length < 200) {
+                        errorMessage = text;
+                    }
                 }
             } catch (e) {
                 // Ignore parsing error, use default message

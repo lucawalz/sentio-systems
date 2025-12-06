@@ -24,7 +24,6 @@ import org.springframework.web.client.RestTemplate;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @RequiredArgsConstructor

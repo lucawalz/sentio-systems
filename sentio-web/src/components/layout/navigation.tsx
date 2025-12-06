@@ -91,9 +91,9 @@ export function Navigation() {
               </Button>
             </Link>
           ) : (
-            <Link to="/create-account">
+            <Link to="/login">
               <Button className="bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] text-black hover:shadow-2xl hover:shadow-blue-500/25 font-medium transition-all duration-300 preload-fade">
-                Create Account
+                Login
               </Button>
             </Link>
           )}
@@ -142,9 +142,9 @@ export function Navigation() {
                 </Button>
               </Link>
             ) : (
-              <Link to="/create-account" onClick={() => setIsMobileMenuOpen(false)}>
+              <Link to="/login" onClick={() => setIsMobileMenuOpen(false)}>
                 <Button className="w-full bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] text-black font-medium">
-                  Create Account
+                  Login
                 </Button>
               </Link>
             )}

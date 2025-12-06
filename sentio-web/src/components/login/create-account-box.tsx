@@ -3,6 +3,29 @@ import { Link, useNavigate } from "react-router-dom";
 import { authService } from "../../services/authService";
 import type { RegisterRequest } from "../../services/authService";
 
+//external error handling for password requirements + error messages
+function getPasswordErrors(password: string): string[] {
+    const errors: string[] = [];
+
+    if (!/.{8,}/.test(password)) {
+        errors.push("Password must be at least 8 characters long.");
+    }
+    if (!/[A-Z]/.test(password)) {
+        errors.push("Password must contain at least 1 uppercase letter (A–Z).");
+    }
+    if (!/[a-z]/.test(password)) {
+        errors.push("Password must contain at least 1 lowercase letter (a–z).");
+    }
+    if (!/\d/.test(password)) {
+        errors.push("Password must contain at least 1 number.");
+    }
+    if (!/\W/.test(password)) {
+        errors.push("Password must contain at least 1 special character.");
+    }
+
+    return errors;
+}
+
 export function CreateAccountBox() {
     const navigate = useNavigate();
     const [isLoading, setIsLoading] = useState(false);
@@ -17,13 +40,44 @@ export function CreateAccountBox() {
         password: ""
     });
 
+    const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
+    const [emailError, setEmailError] = useState<string | null>(null);
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
+        const { name, value } = e.target;
+        setFormData({ ...formData, [name]: value });
+
+        // Real-time validation
+        if (name === "password") {
+            setPasswordErrors(getPasswordErrors(value));
+        } else if (name === "email") {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(value)) {
+                setEmailError("Invalid email address format.");
+            } else {
+                setEmailError(null);
+            }
+        }
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null);
+
+        // Final validation check
+        const pwdErrors = getPasswordErrors(formData.password);
+        if (pwdErrors.length > 0) {
+            setPasswordErrors(pwdErrors);
+            return;
+        }
+
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(formData.email)) {
+            setEmailError("Invalid email address format.");
+            return;
+        }
+
+
         setIsLoading(true);
 
         try {
@@ -38,12 +92,12 @@ export function CreateAccountBox() {
     };
 
     return (
-        <div className="flex items-center justify-center min-h-screen">
+        <div className="flex items-center justify-center min-h-screen p-4 overflow-y-auto">
             {/* Background */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black via-gray-900 to-black" />
+            <div className="fixed inset-0 bg-gradient-to-t from-black via-gray-900 to-black pointer-events-none" />
 
             {/* Register Box */}
-            <div className="relative w-full max-w-md p-10 bg-gray-900/40 border border-gray-700 rounded-xl backdrop-blur">
+            <div className="relative w-full max-w-md p-6 md:p-10 bg-gray-900/40 border border-gray-700 rounded-xl backdrop-blur my-8">
                 <h2 className="text-3xl font-bold mb-6 text-center text-white">Create Account</h2>
 
                 {error && (
@@ -98,8 +152,11 @@ export function CreateAccountBox() {
                             required
                             value={formData.email}
                             onChange={handleChange}
-                            className="w-full px-4 py-2 bg-black/50 border border-gray-700 rounded-lg focus:outline-none focus:border-white text-white"
+                            className={`w-full px-4 py-2 bg-black/50 border rounded-lg focus:outline-none text-white ${emailError ? 'border-red-500' : 'border-gray-700 focus:border-white'}`}
                         />
+                        {emailError && (
+                            <p className="text-xs text-red-400 mt-1">{emailError}</p>
+                        )}
                     </div>
 
                     <div>
@@ -110,15 +167,21 @@ export function CreateAccountBox() {
                             required
                             value={formData.password}
                             onChange={handleChange}
-                            className="w-full px-4 py-2 bg-black/50 border border-gray-700 rounded-lg focus:outline-none focus:border-white text-white"
+                            className={`w-full px-4 py-2 bg-black/50 border rounded-lg focus:outline-none text-white ${passwordErrors.length > 0 ? 'border-red-500' : 'border-gray-700 focus:border-white'}`}
                         />
-                        <p className="text-xs text-gray-500 mt-1">Min 8 chars, 1 number, 1 special char</p>
+                        {passwordErrors.length > 0 && (
+                            <ul className="text-xs text-red-400 mt-2 list-disc list-inside">
+                                {passwordErrors.map((err, index) => (
+                                    <li key={index}>{err}</li>
+                                ))}
+                            </ul>
+                        )}
                     </div>
 
                     <button
                         type="submit"
                         className="w-full mt-6 px-6 py-3 bg-white text-black rounded-lg font-semibold hover:bg-gray-200 transition-colors disabled:opacity-50"
-                        disabled={isLoading}
+                        disabled={isLoading || passwordErrors.length > 0 || !!emailError}
                     >
                         {isLoading ? "Creating Account..." : "Register"}
                     </button>

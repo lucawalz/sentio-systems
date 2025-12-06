@@ -15,8 +15,8 @@ public class CookieAuthService {
     private static final String ACCESS_TOKEN_COOKIE = "access_token";
     private static final String REFRESH_TOKEN_COOKIE = "refresh_token";
 
-    // Set to true in production with HTTPS
-    private static final boolean SECURE_COOKIES = false;
+    @org.springframework.beans.factory.annotation.Value("${sentio.auth.secure-cookies:false}")
+    private boolean secureCookies;
 
     /**
      * Creates an httpOnly cookie for the access token.
@@ -28,7 +28,7 @@ public class CookieAuthService {
     public ResponseCookie createAccessTokenCookie(String token, long maxAgeSeconds) {
         return ResponseCookie.from(ACCESS_TOKEN_COOKIE, token)
                 .httpOnly(true)
-                .secure(SECURE_COOKIES)
+                .secure(secureCookies)
                 .path("/")
                 .maxAge(maxAgeSeconds)
                 .sameSite("Lax")
@@ -45,7 +45,7 @@ public class CookieAuthService {
     public ResponseCookie createRefreshTokenCookie(String token) {
         return ResponseCookie.from(REFRESH_TOKEN_COOKIE, token)
                 .httpOnly(true)
-                .secure(SECURE_COOKIES)
+                .secure(secureCookies)
                 .path("/api/auth") // Only sent to auth endpoints
                 .maxAge(Duration.ofDays(7).getSeconds())
                 .sameSite("Lax")
@@ -62,7 +62,7 @@ public class CookieAuthService {
         String path = REFRESH_TOKEN_COOKIE.equals(cookieName) ? "/api/auth" : "/";
         return ResponseCookie.from(cookieName, "")
                 .httpOnly(true)
-                .secure(SECURE_COOKIES)
+                .secure(secureCookies)
                 .path(path)
                 .maxAge(0)
                 .sameSite("Lax")
