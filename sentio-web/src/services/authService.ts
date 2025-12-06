@@ -5,7 +5,7 @@
  * Uses credentials: 'include' to send/receive httpOnly cookies.
  */
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8083';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
 export interface LoginRequest {
     username: string;
