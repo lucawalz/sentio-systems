@@ -31,7 +31,7 @@ echo ""
 # Generate passwords
 DB_PASSWORD=$(openssl rand -base64 32 | tr -d '=')
 KC_ADMIN_PASSWORD=$(openssl rand -base64 32 | tr -d '=')
-KC_CLIENT_SECRET=$(openssl rand -base64 32 | tr -d '=')
+KC_CLIENT_SECRET=$(openssl rand -hex 32)
 
 # Update .env file with generated passwords (macOS compatible)
 if [[ "$OSTYPE" == "darwin"* ]]; then

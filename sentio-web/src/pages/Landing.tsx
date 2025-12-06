@@ -3,6 +3,7 @@ import { gsap } from "gsap"
 import { ScrollTrigger } from "gsap/ScrollTrigger"
 import { SplitText } from "gsap/SplitText"
 import { MotionPathPlugin } from "gsap/MotionPathPlugin"
+import { Link } from "react-router-dom"
 import { Hero } from "../components/landing/hero"
 import { OurStory } from "../components/landing/our-story"
 import { ProductOverview } from "../components/landing/product-overview.tsx"
@@ -11,7 +12,6 @@ import { ExperienceCTA } from "../components/landing/experience-cta"
 import { Navigation } from "../components/layout/navigation"
 import { SmoothScroll } from "../components/shared/smooth-scroll"
 import Footer from "../components/footer/footer.tsx";
-import { authService } from "../services/authService";
 
 
 if (typeof window !== "undefined") {
@@ -75,12 +75,12 @@ export default function LandingPage() {
         <ExperienceCTA />
 
         <div className="p-10 text-center">
-          <button
-            onClick={() => authService.initiateRegister()}
-            className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition"
+          <Link
+            to="/create-account"
+            className="inline-block bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition"
           >
             Create Account
-          </button>
+          </Link>
         </div>
         <Footer />
       </div>

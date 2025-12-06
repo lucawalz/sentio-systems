@@ -19,26 +19,15 @@ public class AuthController {
     private final AuthService authService;
     private final CookieAuthService cookieAuthService;
 
-    @GetMapping("/register")
-    public void register(HttpServletResponse response) throws java.io.IOException {
-        // Log the registration attempt
-        org.slf4j.LoggerFactory.getLogger(AuthController.class).info("Initiating Keycloak registration flow");
-        response.sendRedirect(authService.getRegisterUrl());
+    @PostMapping("/register")
+    public ResponseEntity<Void> register(@RequestBody AuthDTOs.RegisterRequest request) {
+        authService.register(request);
+        return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 
-    // Deprecated: Old custom registration
-    // @PostMapping("/register")
-    // public ResponseEntity<Void> register(@RequestBody AuthDTOs.RegisterRequest
-    // request) { ... }
-
-    @GetMapping("/login")
-    public void login(HttpServletResponse response) throws java.io.IOException {
-        response.sendRedirect(authService.getLoginUrl());
-    }
-
-    @GetMapping("/callback")
-    public void callback(@RequestParam String code, HttpServletResponse response) throws java.io.IOException {
-        AuthDTOs.TokenResponse tokens = authService.exchangeCodeForTokens(code);
+    @PostMapping("/login")
+    public ResponseEntity<Void> login(@RequestBody AuthDTOs.LoginRequest request, HttpServletResponse response) {
+        AuthDTOs.TokenResponse tokens = authService.login(request.getUsername(), request.getPassword());
 
         // Set httpOnly cookies
         response.addHeader(HttpHeaders.SET_COOKIE,
@@ -49,8 +38,7 @@ public class AuthController {
                 cookieAuthService.createRefreshTokenCookie(
                         tokens.getRefreshToken()).toString());
 
-        // Redirect back to frontend
-        response.sendRedirect("http://localhost:3000");
+        return ResponseEntity.ok().build();
     }
 
     @PostMapping("/refresh")

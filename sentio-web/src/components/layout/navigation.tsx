@@ -5,7 +5,7 @@ import { gsap } from "gsap"
 import { Button } from "../ui/button"
 import { Link } from "react-router-dom"
 import { useAuth } from "../../context/auth"
-import { authService } from "../../services/authService"
+
 // NOTE (added): This component was wired to the temporary auth context today.
 // What I changed: when logged out this shows a "Login" button that
 // currently calls `login()` to simulate authentication.
@@ -91,12 +91,11 @@ export function Navigation() {
               </Button>
             </Link>
           ) : (
-            <Button
-              onClick={() => authService.initiateRegister()}
-              className="bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] text-black hover:shadow-2xl hover:shadow-blue-500/25 font-medium transition-all duration-300 preload-fade"
-            >
-              Create Account
-            </Button>
+            <Link to="/create-account">
+              <Button className="bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] text-black hover:shadow-2xl hover:shadow-blue-500/25 font-medium transition-all duration-300 preload-fade">
+                Create Account
+              </Button>
+            </Link>
           )}
         </div>
 
@@ -143,15 +142,11 @@ export function Navigation() {
                 </Button>
               </Link>
             ) : (
-              <Button
-                onClick={() => {
-                  setIsMobileMenuOpen(false);
-                  authService.initiateRegister();
-                }}
-                className="w-full bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] text-black font-medium"
-              >
-                Create Account
-              </Button>
+              <Link to="/create-account" onClick={() => setIsMobileMenuOpen(false)}>
+                <Button className="w-full bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] text-black font-medium">
+                  Create Account
+                </Button>
+              </Link>
             )}
           </div>
         </div>

@@ -60,6 +60,22 @@ public class KeycloakAuthService implements AuthService {
         user.setLastName(request.getLastName());
         user.setEnabled(true);
 
+        UsersResource usersResource = keycloak.realm(realm).users();
+
+        // Check if username already exists
+        if (!usersResource.search(request.getUsername(), true).isEmpty()) {
+            log.warn("Username already exists: {}", request.getUsername());
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.CONFLICT, "Username already exists");
+        }
+
+        // Check if email already exists
+        if (!usersResource.searchByEmail(request.getEmail(), true).isEmpty()) {
+            log.warn("Email already exists: {}", request.getEmail());
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.CONFLICT, "Email already exists");
+        }
+
         CredentialRepresentation credential = new CredentialRepresentation();
         credential.setType(CredentialRepresentation.PASSWORD);
         credential.setValue(request.getPassword());
@@ -67,7 +83,8 @@ public class KeycloakAuthService implements AuthService {
 
         user.setCredentials(Collections.singletonList(credential));
 
-        UsersResource usersResource = keycloak.realm(realm).users();
+        user.setCredentials(Collections.singletonList(credential));
+
         Response response = usersResource.create(user);
 
         if (response.getStatus() == 409) {
@@ -84,22 +101,8 @@ public class KeycloakAuthService implements AuthService {
     }
 
     @Override
-    public String getLoginUrl() {
-        return publicUrl + "/realms/" + realm + "/protocol/openid-connect/auth" +
-                "?client_id=" + clientId +
-                "&response_type=code" +
-                "&scope=openid profile email roles" +
-                "&redirect_uri=http://localhost:8083/api/auth/callback";
-    }
-
-    @Override
-    public String getRegisterUrl() {
-        return getLoginUrl() + "&kc_action=register";
-    }
-
-    @Override
-    public AuthDTOs.TokenResponse exchangeCodeForTokens(String code) {
-        log.info("Exchanging code for tokens");
+    public AuthDTOs.TokenResponse login(String username, String password) {
+        log.info("Authenticating user via direct grant: {}", username);
         String tokenEndpoint = serverUrl + "/realms/" + realm + "/protocol/openid-connect/token";
 
         HttpHeaders headers = new HttpHeaders();
@@ -108,9 +111,9 @@ public class KeycloakAuthService implements AuthService {
         MultiValueMap<String, String> map = new LinkedMultiValueMap<>();
         map.add("client_id", clientId);
         map.add("client_secret", clientSecret);
-        map.add("grant_type", "authorization_code");
-        map.add("code", code);
-        map.add("redirect_uri", "http://localhost:8083/api/auth/callback");
+        map.add("grant_type", "password");
+        map.add("username", username);
+        map.add("password", password);
 
         HttpEntity<MultiValueMap<String, String>> entity = new HttpEntity<>(map, headers);
 
@@ -122,9 +125,13 @@ public class KeycloakAuthService implements AuthService {
                     new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {
                     });
             return parseTokenResponse(response);
+        } catch (org.springframework.web.client.HttpClientErrorException.Unauthorized e) {
+            log.warn("Invalid credentials for user: {}", username);
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.UNAUTHORIZED, "Invalid credentials");
         } catch (Exception e) {
-            log.error("Token exchange failed: {}", e.getMessage());
-            throw new RuntimeException("Token exchange failed", e);
+            log.error("Login failed: {}", e.getMessage());
+            throw new RuntimeException("Login failed", e);
         }
     }
 

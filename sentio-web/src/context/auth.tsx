@@ -8,7 +8,7 @@ type AuthContextValue = {
   loggedIn: boolean;
   isLoading: boolean;
   error: string | null;
-  login: () => void;
+  login: (username?: string, password?: string) => Promise<void>;
   register: (data: RegisterRequest) => Promise<boolean>;
   logout: () => Promise<void>;
   clearError: () => void;
@@ -45,8 +45,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setError(null);
   }, []);
 
-  const login = useCallback(() => {
-    authService.initiateLogin();
+  const login = useCallback(async (username?: string, password?: string) => {
+    // If args provided, perform native login. Otherwise do nothing (or could redirect if we kept that).
+    if (username && password) {
+      setIsLoading(true);
+      setError(null);
+      try {
+        await authService.login({ username, password });
+        // After successful login, fetch user info to update state
+        const currentUser = await authService.getCurrentUser();
+        setUser(currentUser);
+      } catch (err: any) {
+        throw err; // Re-throw so component can handle error
+      } finally {
+        setIsLoading(false);
+      }
+    }
   }, []);
 
   const register = useCallback(async (data: RegisterRequest): Promise<boolean> => {

@@ -41,19 +41,24 @@ export const authService = {
      * On success, cookies are automatically set by the browser.
      */
     /**
-     * Initiates the login flow by redirecting to the backend login endpoint.
-     * The backend will redirect to Keycloak.
+     * Authenticate user with username and password.
+     * On success, cookies are automatically set by the browser.
      */
-    initiateLogin(): void {
-        window.location.href = `${API_BASE}/api/auth/login`;
-    },
+    async login(data: LoginRequest): Promise<void> {
+        const response = await fetch(`${API_BASE}/api/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(data),
+        });
 
-    /**
-     * Initiates the registration flow by redirecting to the backend register endpoint.
-     */
-    initiateRegister: () => {
-        console.log("Redirecting to Keycloak registration...");
-        window.location.href = `${API_BASE}/api/auth/register`;
+        if (!response.ok) {
+            let message = 'Login failed';
+            if (response.status === 401) {
+                message = 'Invalid credentials';
+            }
+            throw new AuthServiceError(message, response.status);
+        }
     },
 
     /**
@@ -68,10 +73,17 @@ export const authService = {
         });
 
         if (!response.ok) {
-            if (response.status === 409) {
-                throw new AuthServiceError('Username or email already exists', 409);
+            let errorMessage = 'Registration failed';
+            try {
+                const errorData = await response.json();
+                if (errorData.message) {
+                    errorMessage = errorData.message;
+                }
+            } catch (e) {
+                // Ignore parsing error, use default message
             }
-            throw new AuthServiceError('Registration failed', response.status);
+
+            throw new AuthServiceError(errorMessage, response.status);
         }
     },
 

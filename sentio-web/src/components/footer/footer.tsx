@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { authService } from "../../services/authService";
+
 
 
 
@@ -40,13 +40,10 @@ export default function Footer() {
                                 </Link>
                                 </li>
                                 <li>
-                                    <button
-                                        onClick={() => authService.initiateRegister()}
-                                        className="relative inline-block group hover:text-white transition-colors text-left"
-                                    >
+                                    <Link to="/create-account" className="relative inline-block group hover:text-white transition-colors text-left">
                                         Create Account
                                         <span className="absolute left-0 -bottom-0.5 h-0.5 w-0 bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] transition-all duration-500 group-hover:w-full"></span>
-                                    </button>
+                                    </Link>
                                 </li>
                             </ul>
                         </div>
