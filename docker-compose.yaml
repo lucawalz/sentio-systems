@@ -1,4 +1,18 @@
 services:
+  # Init Container for Realm Configuration
+  init-realm:
+    image: alpine:latest
+    container_name: sentio-init-realm
+    command: >
+      sh -c "apk add --no-cache gettext sed &&  echo 'Generating Keycloak realm configuration...' && sed 's|KEYCLOAK_CLIENT_SECRET_PLACEHOLDER|'\"$${KEYCLOAK_ADMIN_CLIENT_SECRET}\"'|g' /init-scripts/sentio-realm.json.template > /realm_data/sentio-realm.json && echo 'Realm configuration generated successfully.'"
+    volumes:
+      - ./init-scripts:/init-scripts:ro
+      - realm_data:/realm_data
+    environment:
+      KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET}
+    networks:
+      - sentio-network
+
   # Database
   postgres:
     image: postgres:17-alpine
@@ -37,11 +51,13 @@ services:
     ports:
       - "${KEYCLOAK_PORT:-8080}:8080"
     volumes:
-      - ./init-scripts/sentio-realm.json:/opt/keycloak/data/import/sentio-realm.json
+      - realm_data:/opt/keycloak/data/import
       - ./themes:/opt/keycloak/themes
     depends_on:
       postgres:
         condition: service_healthy
+      init-realm:
+        condition: service_completed_successfully
     networks:
       - sentio-network
     restart: unless-stopped
@@ -212,6 +228,8 @@ networks:
 volumes:
   postgres_data:
     name: sentio_postgres_data
+  realm_data:
+    name: sentio_realm_data
   mosquitto_data:
     name: sentio_mosquitto_data
   mosquitto_logs:
