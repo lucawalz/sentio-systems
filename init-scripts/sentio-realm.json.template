@@ -22,7 +22,6 @@
   "accessTokenLifespan": 300,
   "accessTokenLifespanForImplicitFlow": 900,
   "ssoSessionIdleTimeout": 1800,
-  "ssoSessionIdleTimeout": 1800,
   "ssoSessionMaxLifespan": 36000,
   "passwordPolicy": "hashAlgorithm(pbkdf2-sha256) and length(8) and digits(1) and specialChars(1) and notUsername(undefined)",
   "clients": [
