@@ -25,7 +25,7 @@ export function LoginBox() {
     };
 
     return (
-        <div className="flex items-center justify-center min-h-screen p-4 overflow-y-auto">
+        <div className="flex items-center justify-center min-h-screen p-4 py-24 overflow-y-auto">
             {/* Background */}
             <div className="fixed inset-0 bg-gradient-to-t from-black via-gray-900 to-black pointer-events-none" />
 
