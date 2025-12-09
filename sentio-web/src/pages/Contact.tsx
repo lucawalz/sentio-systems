@@ -53,6 +53,8 @@ export default function Contact(){
                             placeholder="message*"
                             className="w-full p-3 mb-4 rounded-lg text-black bg-white h-32"
                         />
+
+                        <button className="w-50 mt-4 px-6 py-3 bg-white text-black rounded-lg font-semibold">Send message</button>
                     </div>
 
                     {/* right contact box with links */}
