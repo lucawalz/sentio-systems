@@ -12,10 +12,15 @@ export default function Contact(){
                 {/* Grid with two boxes */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-5xl mt-20 mb-8">
 
+                    {/*Contact head*/}
+                    <div className="text-center md:col-span-3">
+                        <h1 className="text-4xl font-bold mb-1 text-white">Contact</h1>
+                    </div>
+
                     {/* left contact text box*/}
                     <div
                         className="md:col-span-2 p-10 bg-gray-900/40 border border-gray-700 rounded-xl backdrop-blur text-center">
-                        <h1 className="text-3xl font-bold mb-6 text-white">Contact</h1>
+                        <h2 className="text-2xl font-bold mb-6 text-green-200">Send a message</h2>
 
                         {/* reason of contact */}
                         <input
@@ -51,27 +56,25 @@ export default function Contact(){
                     </div>
 
                     {/* right contact box with links */}
-                    {/*TODO: Style*/}
                     <div
-                        className="w-80 p-6 bg-gray-900/40 border border-gray-700 rounded-xl backdrop-blur text-left ml-8">
-                        <h2 className="text-xl font-bold mb-4">Or contact us via:</h2>
+                        className="w-80 p-10 bg-gray-900/40 border border-gray-700 rounded-xl backdrop-blur text-left ml-8">
+                        <h2 className="text-green-200 text-2xl font-bold mb-6">Other contacts:</h2>
 
                         <ul className="space-y-2 list-none">
                             <li>
                                 Instagram:{" "}
-                                <a href="https://www.instagram.com/"
-                                   target="_blank"
-                                   className="text-blue-400 hover:underline">
-                                    @SentioSystems
+                                <a href="https://www.instagram.com/" target="_blank" className="text-blue-200 hover:underline">@SentioSystems
                                 </a>
                             </li>
 
                             <li>
                                 E-Mail:{" "}
-                                <a href="mailto:SentioSystems@outlook.com"
-                                   className="text-blue-400 hover:underline">
-                                    SentioSystems@outlook.com
-                                </a>
+                                <a href="mailto:SentioSystems@outlook.com" className="text-blue-200 hover:underline">SentioSystems@outlook.com</a>
+                            </li>
+
+                            <li>
+                                Phone:{" "}
+                                <a href="tel:+49 000 123456" className="custom-scrollbar text-blue-200 hover:underline">+49 000 123456</a>
                             </li>
                         </ul>
                     </div>
