@@ -1,7 +1,67 @@
+import { useState } from "react";
+import type { FormEvent } from "react";
 import {Navigation} from "../components/layout/navigation.tsx"
 import Footer from "../components/footer/footer.tsx";
 
 export default function Contact(){
+
+    const [reference, setReference] = useState("");
+    const [name, setName] = useState("");
+    const [surname, setSurname] = useState("");
+    const [mail, setMail] = useState("");
+    const [message, setMessage] = useState("");
+    const [isSending, setIsSending] = useState(false);
+    const [feedback, setFeedback] = useState<string | null>(null);
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        setIsSending(true);
+        setFeedback(null);
+
+        if (!emailRegex.test(mail)) {
+            setFeedback("Please enter a valid email address.");
+            setIsSending(false);
+            return;
+        }
+        try {
+            const res = await fetch("/api/contact", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    reference,
+                    name,
+                    surname,
+                    mail,
+                    message,
+                }),
+            });
+
+            if (!res.ok) {
+                setFeedback("Oops, something went wrong. Please try again later.");
+                return;
+            }
+
+            setFeedback("Thank you! Your message has been sent.");
+            setReference("");
+            setName("");
+            setSurname("");
+            setMail("");
+            setMessage("");
+        } catch (error) {
+            // just load real network issues
+            console.error("Failed to send contact form", error);
+            setFeedback("Oops, something went wrong. Please try again later.");
+        } finally {
+            setIsSending(false);
+        }
+    };
+
+
+
 
     return(
 
@@ -18,8 +78,10 @@ export default function Contact(){
                     </div>
 
                     {/* left contact text box*/}
-                    <div
-                        className="md:col-span-2 p-10 bg-gray-900/40 border border-gray-700 rounded-xl backdrop-blur text-center">
+                    <form
+                        onSubmit={handleSubmit}
+                        className="md:col-span-2 p-10 bg-gray-900/40 border border-gray-700 rounded-xl backdrop-blur text-center"
+                    >
                         <h2 className="text-2xl font-bold mb-6 text-green-200">Send a message</h2>
 
                         {/* reason of contact */}
@@ -27,6 +89,9 @@ export default function Contact(){
                             type="text"
                             placeholder="reference*"
                             className="w-full p-3 mb-4 rounded-lg text-black bg-white"
+                            value={reference}
+                            onChange={(e) => setReference(e.target.value)}
+                            required
                         />
 
                         <div className="grid grid-cols-2 gap-4 mb-4">
@@ -34,28 +99,51 @@ export default function Contact(){
                                 type="text"
                                 placeholder="name*"
                                 className="w-full p-3 rounded-lg text-black bg-white"
+                                value={name}
+                                onChange={(e) => setName(e.target.value)}
+                                required
                             />
 
                             <input
                                 type="text"
                                 placeholder="surname*"
                                 className="w-full p-3 rounded-lg text-black bg-white"
+                                value={surname}
+                                onChange={(e) => setSurname(e.target.value)}
+                                required
                             />
                         </div>
 
                         <input
-                            type="text"
+                            type="email"
                             placeholder="mail*"
                             className="w-full p-3 mb-4 rounded-lg text-black bg-white"
+                            value={mail}
+                            onChange={(e) => setMail(e.target.value)}
+                            required
                         />
 
                         <textarea
                             placeholder="message*"
                             className="w-full p-3 mb-4 rounded-lg text-black bg-white h-32"
+                            value={message}
+                            onChange={(e) => setMessage(e.target.value)}
+                            required
                         />
 
-                        <button className="w-50 mt-4 px-6 py-3 bg-white text-black rounded-lg font-semibold">Send message</button>
-                    </div>
+                        <button
+                            disabled={isSending}
+                            className="mt-2 px-6 py-2 rounded-lg bg-gradient-to-r from-[#B0D6FF] to-[#A8D5BA] text-black font-semibold disabled:opacity-60"
+                        >
+                            {isSending ? "Sending..." : "Send"}
+                            {/*className="w-50 mt-4 px-6 py-3 bg-white text-black rounded-lg font-semibold">Send message*/}</button>
+
+                        {feedback && (
+                            <p className="mt-3 text-sm text-gray-300">
+                                {feedback}
+                            </p>
+                        )}
+                    </form>
 
                     {/* right contact box with links */}
                     <div
