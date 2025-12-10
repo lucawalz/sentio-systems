@@ -1,91 +1,117 @@
-import React, { createContext, useContext, useEffect, useState } from "react"
-
-// Simple user type for this demo. Expand with email/id/token fields
-// when integrating a real auth backend.
-type User = {
-  name?: string
-}
+import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { authService } from "../services/authService";
+import type { RegisterRequest, UserInfo } from "../services/authService";
 
 // Shape of the auth context value that components will consume.
-// - `user`: the current logged-in user (or null)
-// - `loggedIn`: convenience boolean (true when `user` !== null)
-// - `login`: function to set the user (can be wired to a real auth flow)
-// - `logout`: function to clear the user
 type AuthContextValue = {
-  user: User | null
-  loggedIn: boolean
-  login: (user?: User) => void
-  logout: () => void
-}
-
-// Key used to persist a small amount of auth state to localStorage.
-// This is intentionally minimal (only `user`) to make the demo easy to reason about.
-// For production, prefer httpOnly cookies for tokens and server-side session checks.
-const STORAGE_KEY = "sentio_auth"
+  user: UserInfo | null;
+  loggedIn: boolean;
+  isLoading: boolean;
+  error: string | null;
+  login: (username?: string, password?: string) => Promise<void>;
+  register: (data: RegisterRequest) => Promise<boolean>;
+  logout: () => Promise<void>;
+  clearError: () => void;
+};
 
 // Create the React context. The initial value is `undefined` so that
 // `useAuth()` can throw a helpful error if used outside the provider.
-const AuthContext = createContext<AuthContextValue | undefined>(undefined)
+const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-// AuthProvider wraps the app and exposes `user`, `loggedIn`, `login`, and `logout`.
-// It also persists the `user` to localStorage so the UI remains logged-in across reloads.
+// AuthProvider wraps the app and exposes auth state and methods.
+// It checks for existing session on mount via the /me endpoint.
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Internal state holding the current user object (or null).
-  const [user, setUser] = useState<User | null>(null)
+  const [user, setUser] = useState<UserInfo | null>(null);
+  const [isLoading, setIsLoading] = useState(true); // Start true to check existing session
+  const [error, setError] = useState<string | null>(null);
 
-  // On mount, try to restore persisted user from localStorage.
-  // This is synchronous and lightweight; it only affects the client-side UI.
+  // On mount, check if user is already authenticated via cookie
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY)
-      if (raw) {
-        const parsed = JSON.parse(raw)
-        // parsed should be an object like { user: { name: '...' } }
-        setUser(parsed.user ?? null)
+    const checkAuth = async () => {
+      try {
+        const currentUser = await authService.getCurrentUser();
+        setUser(currentUser);
+      } catch {
+        // Not authenticated, that's fine
+        setUser(null);
+      } finally {
+        setIsLoading(false);
       }
-    } catch {
-      // ignore JSON parse errors and continue with null user
-    }
-  }, [])
+    };
+    checkAuth();
+  }, []);
 
-  // Persist the `user` to localStorage whenever it changes.
-  // In a real app you'd store only non-sensitive metadata client-side,
-  // and keep tokens in httpOnly cookies or secure storage handled by the server.
-  useEffect(() => {
+  const clearError = useCallback(() => {
+    setError(null);
+  }, []);
+
+  const login = useCallback(async (username?: string, password?: string) => {
+    // If args provided, perform native login. Otherwise do nothing (or could redirect if we kept that).
+    if (username && password) {
+      setIsLoading(true);
+      setError(null);
+      try {
+        await authService.login({ username, password });
+        // After successful login, fetch user info to update state
+        const currentUser = await authService.getCurrentUser();
+        setUser(currentUser);
+      } catch (err: any) {
+        throw err; // Re-throw so component can handle error
+      } finally {
+        setIsLoading(false);
+      }
+    }
+  }, []);
+
+  const register = useCallback(async (data: RegisterRequest): Promise<boolean> => {
+    setIsLoading(true);
+    setError(null);
+
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ user }))
-    } catch {
-      // ignore storage errors (e.g., private mode restrictions)
+      await authService.register(data);
+      return true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Registration failed';
+      setError(message);
+      return false;
+    } finally {
+      setIsLoading(false);
     }
-  }, [user])
+  }, []);
 
-  // `login` is intentionally simple: it sets the user object. Replace this
-  // with an async API call that authenticates and then calls `setUser` with
-  // the returned user info (and possibly a token handled by the server).
-  const login = (u?: User) => {
-    setUser(u ?? { name: "User" })
-  }
+  const logout = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      await authService.logout();
+    } finally {
+      setUser(null);
+      setIsLoading(false);
+    }
+  }, []);
 
-  // Clear local user (and persistent storage via the effect above).
-  const logout = () => setUser(null)
-
-  // Provide the context value to consumers.
   return (
-    <AuthContext.Provider value={{ user, loggedIn: !!user, login, logout }}>
+    <AuthContext.Provider value={{
+      user,
+      loggedIn: !!user,
+      isLoading,
+      error,
+      login,
+      register,
+      logout,
+      clearError
+    }}>
       {children}
     </AuthContext.Provider>
-  )
-}
+  );
+};
 
 // Custom hook that components can call to access auth state and helpers.
-// It throws if used outside of the `AuthProvider` which helps catch wiring bugs early.
 export function useAuth() {
-  const ctx = useContext(AuthContext)
+  const ctx = useContext(AuthContext);
   if (!ctx) {
-    throw new Error("useAuth must be used within AuthProvider")
+    throw new Error("useAuth must be used within AuthProvider");
   }
-  return ctx
+  return ctx;
 }
 
-// Default export kept for convenience, but prefer named `AuthProvider` import.
-export default AuthProvider
+export default AuthProvider;

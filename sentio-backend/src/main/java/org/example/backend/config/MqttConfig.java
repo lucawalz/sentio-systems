@@ -54,7 +54,7 @@ public class MqttConfig {
         MqttConnectOptions options = new MqttConnectOptions();
 
         // Server URIs
-        options.setServerURIs(new String[]{mqttBroker});
+        options.setServerURIs(new String[] { mqttBroker });
 
         // Authentication
         if (!mqttUsername.isEmpty() && !mqttPassword.isEmpty()) {
@@ -82,10 +82,9 @@ public class MqttConfig {
 
     @Bean
     public MessageProducer inboundChannel() {
-        MqttPahoMessageDrivenChannelAdapter adapter =
-                new MqttPahoMessageDrivenChannelAdapter(mqttClientId,
-                        mqttClientFactory(),
-                        mqttTopics);
+        MqttPahoMessageDrivenChannelAdapter adapter = new MqttPahoMessageDrivenChannelAdapter(mqttClientId,
+                mqttClientFactory(),
+                mqttTopics);
         adapter.setCompletionTimeout(5000);
         adapter.setConverter(new DefaultPahoMessageConverter());
         adapter.setQos(1);
@@ -97,7 +96,12 @@ public class MqttConfig {
     @ServiceActivator(inputChannel = "mqttInputChannel")
     public MessageHandler handler() {
         return message -> {
-            String topic = message.getHeaders().get("mqtt_receivedTopic").toString();
+            Object topicHeader = message.getHeaders().get("mqtt_receivedTopic");
+            if (topicHeader == null) {
+                System.err.println("Received MQTT message without topic header");
+                return;
+            }
+            String topic = topicHeader.toString();
             String payload = message.getPayload().toString();
 
             System.out.println("=== MQTT MESSAGE RECEIVED ===");
@@ -117,7 +121,8 @@ public class MqttConfig {
                 } else if (topic.equals("animal_detection/status")) {
                     System.out.println("Animal detector status: " + payload);
                 } else if (topic.equals("camera")) {
-                    System.out.println("Camera data received: " + payload.substring(0, Math.min(100, payload.length())) + "...");
+                    System.out.println(
+                            "Camera data received: " + payload.substring(0, Math.min(100, payload.length())) + "...");
                 } else {
                     System.out.println("Unknown topic: " + topic);
                 }

@@ -1,8 +1,12 @@
 
 # Build stage
-FROM node:20-alpine as build
+FROM node:24-alpine AS build
 
 WORKDIR /app
+
+# Accept build argument for API URL
+ARG VITE_API_BASE_URL=http://localhost:8083
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 
 # Copy package files
 COPY package.json package-lock.json ./

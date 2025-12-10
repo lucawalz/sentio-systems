@@ -1,25 +1,65 @@
-version: '3.8'
-
 services:
+  # Init Container for Realm Configuration
+  init-realm:
+    image: alpine:latest
+    container_name: sentio-init-realm
+    command: >
+      sh -c "apk add --no-cache gettext sed &&  echo 'Generating Keycloak realm configuration...' && sed 's|KEYCLOAK_CLIENT_SECRET_PLACEHOLDER|'\"$${KEYCLOAK_ADMIN_CLIENT_SECRET}\"'|g' /init-scripts/sentio-realm.json.template > /realm_data/sentio-realm.json && echo 'Realm configuration generated successfully.'"
+    volumes:
+      - ./init-scripts:/init-scripts:ro
+      - realm_data:/realm_data
+    environment:
+      KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET}
+    networks:
+      - sentio-network
+
   # Database
   postgres:
     image: postgres:17-alpine
     container_name: sentio-postgres
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-sentio}
-      POSTGRES_USER: ${POSTGRES_USER:-sentio}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sentio123}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
     networks:
       - sentio-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sentio}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}" ]
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+
+  # Keycloak Identity Provider
+  keycloak:
+    image: quay.io/keycloak/keycloak:23.0.7
+    container_name: sentio-keycloak
+    command: start-dev --import-realm
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: ${POSTGRES_USER:-sentio}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      KC_HOSTNAME: localhost
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET}
+    ports:
+      - "${KEYCLOAK_PORT:-8080}:8080"
+    volumes:
+      - realm_data:/opt/keycloak/data/import
+      - ./themes:/opt/keycloak/themes
+    depends_on:
+      postgres:
+        condition: service_healthy
+      init-realm:
+        condition: service_completed_successfully
+    networks:
+      - sentio-network
     restart: unless-stopped
 
   # MQTT Broker
@@ -36,7 +76,7 @@ services:
     networks:
       - sentio-network
     healthcheck:
-      test: ["CMD-SHELL", "mosquitto_sub -t '$$SYS/#' -C 1 -i healthcheck -W 3"]
+      test: [ "CMD-SHELL", "mosquitto_sub -t '$$SYS/#' -C 1 -i healthcheck -W 3" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -53,11 +93,13 @@ services:
         condition: service_healthy
       mosquitto:
         condition: service_healthy
+      keycloak:
+        condition: service_started
     environment:
       # Database Configuration
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-sentio}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/sentio
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-sentio}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-sentio123}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
 
       # JPA Configuration
       JPA_HIBERNATE_DDL: ${JPA_HIBERNATE_DDL:-update}
@@ -66,6 +108,16 @@ services:
 
       # Server Configuration
       SERVER_PORT: 8080
+
+      # Keycloak Configuration
+      KEYCLOAK_ISSUER_URI: http://localhost:8080/realms/sentio
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/sentio/protocol/openid-connect/certs
+      KEYCLOAK_ADMIN_SERVER_URL: http://keycloak:8080
+      KEYCLOAK_PUBLIC_URL: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8080}
+      KEYCLOAK_ADMIN_REALM: sentio
+      KEYCLOAK_ADMIN_CLIENT_ID: sentio-backend
+      KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET}
+      KEYCLOAK_REALM: sentio
 
       # MQTT Configuration
       MQTT_ENABLED: ${MQTT_ENABLED:-true}
@@ -91,7 +143,7 @@ services:
       PREPROCESSING_SERVICE_URL: http://preprocessing:8082/preprocess-and-classify
       PREPROCESSING_SERVICE_ENABLED: ${PREPROCESSING_SERVICE_ENABLED:-true}
     ports:
-      - "${BACKEND_PORT:-8080}:8080"
+      - "${BACKEND_PORT:-8083}:8080"
     networks:
       - sentio-network
     volumes:
@@ -104,6 +156,8 @@ services:
     build:
       context: ./sentio-web
       dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ""
     container_name: sentio-frontend
     depends_on:
       - backend
@@ -111,8 +165,6 @@ services:
       - "${FRONTEND_PORT:-3000}:80"
     networks:
       - sentio-network
-    environment:
-      VITE_API_URL: ${VITE_API_URL:-http://localhost:8080}
     restart: unless-stopped
 
   # Image Preprocessing Service
@@ -176,6 +228,8 @@ networks:
 volumes:
   postgres_data:
     name: sentio_postgres_data
+  realm_data:
+    name: sentio_realm_data
   mosquitto_data:
     name: sentio_mosquitto_data
   mosquitto_logs:
