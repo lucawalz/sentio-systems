@@ -1,8 +1,8 @@
-
 @import "tailwindcss";
 @import "tw-animate-css";
 
 @custom-variant twilight (&:is(.twilight *));
+
 /* utility classes */
 @theme inline {
   --color-background: var(--background);
@@ -132,6 +132,7 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }

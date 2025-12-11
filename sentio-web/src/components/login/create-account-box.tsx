@@ -1,6 +1,7 @@
-import {useState} from "react";
-import {Link} from "react-router-dom";
-import { verifyAccountMail } from "./verify-account-mail";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { authService } from "../../services/authService";
+import type { RegisterRequest } from "../../services/authService";
 
 //external error handling for password requirements + error messages
 function getPasswordErrors(password: string): string[] {
@@ -26,147 +27,207 @@ function getPasswordErrors(password: string): string[] {
 }
 
 export function CreateAccountBox() {
+    const navigate = useNavigate();
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
-    const [email, setEmail] = useState("")
-    const [isValidEmail, setIsValidEmail] = useState(false)
-    const [password, setPassword] = useState("");
+    // Form State
+    const [formData, setFormData] = useState<RegisterRequest>({
+        username: "",
+        email: "",
+        firstName: "",
+        lastName: "",
+        password: ""
+    });
+
     const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
+    const [emailError, setEmailError] = useState<string | null>(null);
     const [confirmPassword, setConfirmPassword] = useState("");
-    const [passwordMatchError, setPasswordMatchError] = useState<string | null>(null);
+    const [confirmPasswordError, setConfirmPasswordError] = useState<string | null>(null);
 
-    const isStrongPassword = password.length > 0 && passwordErrors.length === 0;
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { name, value } = e.target;
+        setFormData({ ...formData, [name]: value });
 
-    //check if insert is an email address
-    function validateEmail(value: string) {
-        setEmail(value)
-
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-        setIsValidEmail(emailRegex.test(value))
-    }
-
-
-    //Checks if password requirements match otherwise error handling
-    function validatePassword(value: string) {
-        setPassword(value);
-        const errors = getPasswordErrors(value);
-        setPasswordErrors(errors);
-
-        //check if confirmPassword matches password
-        if (confirmPassword.length > 0 && value !== confirmPassword) {
-            setPasswordMatchError("Passwords do not match.");
-        } else {
-            setPasswordMatchError(null);
+        // Real-time validation
+        if (name === "password") {
+            setPasswordErrors(getPasswordErrors(value));
+            // Check match if confirm password has value
+            if (confirmPassword && value !== confirmPassword) {
+                setConfirmPasswordError("Passwords do not match.");
+            } else if (confirmPassword && value === confirmPassword) {
+                setConfirmPasswordError(null);
+            }
+        } else if (name === "email") {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(value)) {
+                setEmailError("Invalid email address format.");
+            } else {
+                setEmailError(null);
+            }
         }
-    }
+    };
 
-    function validateConfirmPassword(value: string) {
-        setConfirmPassword(value);
-        if (password && value !== password) {
-            setPasswordMatchError("Passwords do not match.");
-        } else {
-            setPasswordMatchError(null);
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError(null);
+
+        // Final validation check
+        const pwdErrors = getPasswordErrors(formData.password);
+        if (pwdErrors.length > 0) {
+            setPasswordErrors(pwdErrors);
+            return;
         }
-    }
 
-    function handleCreateAccount() {
-        verifyAccountMail(email, password)
-            .then((data) => {
-                alert(data.message); // oder setState für UI
-            })
-            .catch((err) => {
-                alert(err.message);
-            });
-    }
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(formData.email)) {
+            setEmailError("Invalid email address format.");
+            return;
+        }
 
-    const canSubmit = isValidEmail && isStrongPassword && !passwordMatchError;
+        if (formData.password !== confirmPassword) {
+            setConfirmPasswordError("Passwords do not match.");
+            return;
+        }
+
+
+        setIsLoading(true);
+
+        try {
+            await authService.register(formData);
+            // On success, redirect to login
+            navigate("/login");
+        } catch (err: any) {
+            setError(err.message || "Registration failed. Please try again.");
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     return (
-        <>
-            {/*background*/}
-            <div className="absolute inset-0 bg-gradient-to-t from-black via-gray-900 to-black"/>
+        <div className="flex items-center justify-center min-h-screen p-4 py-24 overflow-y-auto">
+            {/* Background */}
+            <div className="fixed inset-0 bg-gradient-to-t from-black via-gray-900 to-black pointer-events-none" />
 
-            <div
-                className="relative w-full max-w-md p-10 bg-gray-900/40 border border-gray-700 rounded-xl backdrop-blur text-center mt-20">
-                <h2 className="font-bold text-3xl mb-6 ">Create Account</h2>
+            {/* Register Box */}
+            <div className="relative w-full max-w-md p-6 md:p-10 bg-gray-900/40 border border-gray-700 rounded-xl backdrop-blur my-8">
+                <h2 className="text-3xl font-bold mb-6 text-center text-white">Create Account</h2>
 
-                {/*Mail*/}
-                <input
-                    type="email"
-                    placeholder="email"
-                    className="w-full p-3 mb-4 rounded-lg text-black bg-white"
-                    value={email}
-                    onChange={(e) => validateEmail(e.target.value)}
-                />
-
-                {/*Mail validation*/}
-                {!isValidEmail && email.length > 0 && (
-                    <p className="text-red-400 text-sm mb-2">Please enter a valid email</p>
-                )}
-
-                {/*Passwort choice*/}
-                <input
-                    type="password"
-                    placeholder="password"
-                    className="w-full p-3 mb-4 rounded-lg text-black bg-white"
-                    value={password}
-                    onChange={(e) => validatePassword(e.target.value)}
-                />
-
-
-                {/* CONFIRM PASSWORD */}
-                <input
-                    type="password"
-                    placeholder="confirm password"
-                    className="w-full p-3 mb-4 rounded-lg text-black bg-white"
-                    value={confirmPassword}
-                    onChange={(e) => validateConfirmPassword(e.target.value)}
-                />
-
-                {/*Error handling Password requirements*/}
-                {password.length > 0 && passwordErrors.length > 0 && (
-                    <div className="text-left text-red-400 text-sm mb-4">
-                        <p className="font-semibold">Password must:</p>
-                        {passwordErrors.map((err, i) => (
-                            <p key={i}>• {err}</p>
-                        ))}
+                {error && (
+                    <div className="mb-4 p-3 bg-red-500/10 border border-red-500/50 text-red-500 rounded text-sm text-center">
+                        {error}
                     </div>
                 )}
 
-                {/*Message Password is strong*/}
-                {isStrongPassword && (
-                    <p className="text-left text-green-400 text-sm mb-2">✔ Strong password</p>
-                )}
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-400 mb-1">First Name</label>
+                            <input
+                                name="firstName"
+                                type="text"
+                                required
+                                value={formData.firstName}
+                                onChange={handleChange}
+                                className="w-full px-4 py-2 bg-black/50 border border-gray-700 rounded-lg focus:outline-none focus:border-white text-white"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-400 mb-1">Last Name</label>
+                            <input
+                                name="lastName"
+                                type="text"
+                                required
+                                value={formData.lastName}
+                                onChange={handleChange}
+                                className="w-full px-4 py-2 bg-black/50 border border-gray-700 rounded-lg focus:outline-none focus:border-white text-white"
+                            />
+                        </div>
+                    </div>
 
-                {/*Password correct?*/}
-                {passwordMatchError && (
-                    <p className="text-red-400 text-sm mb-4 text-left">{passwordMatchError}</p>
-                )}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-1">Username</label>
+                        <input
+                            name="username"
+                            type="text"
+                            required
+                            value={formData.username}
+                            onChange={handleChange}
+                            className="w-full px-4 py-2 bg-black/50 border border-gray-700 rounded-lg focus:outline-none focus:border-white text-white"
+                        />
+                    </div>
 
-                {/*Surname*/}
-                <input
-                    type="surname"
-                    placeholder="surname"
-                    className="w-full p-3 mb-4 rounded-lg text-black bg-white"
-                />
+                    <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-1">Email</label>
+                        <input
+                            name="email"
+                            type="email"
+                            required
+                            value={formData.email}
+                            onChange={handleChange}
+                            className={`w-full px-4 py-2 bg-black/50 border rounded-lg focus:outline-none text-white ${emailError ? 'border-red-500' : 'border-gray-700 focus:border-white'}`}
+                        />
+                        {emailError && (
+                            <p className="text-xs text-red-400 mt-1">{emailError}</p>
+                        )}
+                    </div>
 
-                {/*Name*/}
-                <input
-                    type="name"
-                    placeholder="name"
-                    className="w-full p-3 mb-4 rounded-lg text-black bg-white"
-                />
+                    <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-1">Password</label>
+                        <input
+                            name="password"
+                            type="password"
+                            required
+                            value={formData.password}
+                            onChange={handleChange}
+                            className={`w-full px-4 py-2 bg-black/50 border rounded-lg focus:outline-none text-white ${passwordErrors.length > 0 ? 'border-red-500' : 'border-gray-700 focus:border-white'}`}
+                        />
+                        {passwordErrors.length > 0 && (
+                            <ul className="text-xs text-red-400 mt-2 list-disc list-inside">
+                                {passwordErrors.map((err, index) => (
+                                    <li key={index}>{err}</li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
 
-                {/*Button Create Account*/}
-                <button onClick={handleCreateAccount}
-                    className="w-full mt-4 px-6 py-3 bg-white text-black rounded-lg font-semibold"
-                        disabled={!canSubmit}>
-                    Create Account
-                </button>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-1">Confirm Password</label>
+                        <input
+                            name="confirmPassword"
+                            type="password"
+                            required
+                            value={confirmPassword}
+                            onChange={(e) => {
+                                setConfirmPassword(e.target.value);
+                                if (e.target.value !== formData.password) {
+                                    setConfirmPasswordError("Passwords do not match.");
+                                } else {
+                                    setConfirmPasswordError(null);
+                                }
+                            }}
+                            className={`w-full px-4 py-2 bg-black/50 border rounded-lg focus:outline-none text-white ${confirmPasswordError ? 'border-red-500' : 'border-gray-700 focus:border-white'}`}
+                        />
+                        {confirmPasswordError && (
+                            <p className="text-xs text-red-400 mt-1">{confirmPasswordError}</p>
+                        )}
+                    </div>
 
-                <Link className="w-full mt-10 mb-6 px6 py-3 text-white underline hover-grey" to="/login">
-                    <p className="mt-6 mb-6">Login into your Account</p>
-                </Link>
+                    <button
+                        type="submit"
+                        className="w-full mt-6 px-6 py-3 bg-white text-black rounded-lg font-semibold hover:bg-gray-200 transition-colors disabled:opacity-50"
+                        disabled={isLoading || passwordErrors.length > 0 || !!emailError || !!confirmPasswordError || !confirmPassword}
+                    >
+                        {isLoading ? "Creating Account..." : "Register"}
+                    </button>
+                </form>
+
+                <div className="mt-8 pt-6 border-t border-gray-800 text-center">
+                    <Link className="text-sm text-gray-400 hover:text-white transition-colors" to="/login">
+                        Already have an account? <span className="underline">Login</span>
+                    </Link>
+                </div>
             </div>
-        </>
-    )
+        </div>
+    );
 }

@@ -1,66 +1,94 @@
-import {Link} from "react-router-dom";
-import { useState } from "react"
+import { useState } from "react";
+import { useNavigate, Link } from "react-router-dom";
+import { useAuth } from "../../context/auth";
 
 export function LoginBox() {
-    const [email, setEmail] = useState("")
-    const [isValidEmail, setIsValidEmail] = useState(false)
+    const navigate = useNavigate();
+    const { login, isLoading } = useAuth();
+    const [username, setUsername] = useState("");
+    const [password, setPassword] = useState("");
+    const [error, setError] = useState<string | null>(null);
 
-    function validateEmail(value: string) {
-        setEmail(value)
-
-        // simple email regex
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-        setIsValidEmail(emailRegex.test(value))
-    }
-
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError(null);
+        try {
+            await login(username, password);
+            navigate("/dashboard");
+        } catch (err: any) {
+            if (err.statusCode === 401) {
+                setError("Invalid username or password");
+            } else {
+                setError(err.message || "Login failed. Please try again.");
+            }
+        }
+    };
 
     return (
-        <div>
+        <div className="flex items-center justify-center min-h-screen p-4 py-24 overflow-y-auto">
             {/* Background */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black via-gray-900 to-black"/>
+            <div className="fixed inset-0 bg-gradient-to-t from-black via-gray-900 to-black pointer-events-none" />
 
             {/* Login-Box */}
-            <div
-                className="relative w-full max-w-md p-10 bg-gray-900/40 border border-gray-700 rounded-xl backdrop-blur text-center">
-                <h2 className="text-3xl font-bold mb-6">Login</h2>
+            <div className="relative w-full max-w-md p-6 md:p-10 bg-gray-900/40 border border-gray-700 rounded-xl backdrop-blur my-8">
+                <h2 className="text-3xl font-bold mb-6 text-center text-white">Sentio Systems</h2>
+                <p className="text-gray-400 mb-8 text-center">Sign in to access your dashboard</p>
 
-                <input
-                    type="text"
-                    placeholder="email"
-                    className="w-full p-3 mb-4 rounded-lg text-black bg-white"
-                    value={email}
-                    onChange={(e) => validateEmail(e.target.value)}
-                />
-
-                <input
-                    type="password"
-                    placeholder="password"
-                    className="w-full p-3 mb-4 rounded-lg text-black bg-white"
-                />
-                {/* forgot password LINK */}
-                {isValidEmail && (
-                    <>
-                <a
-                    href="/forgot-password"
-                    className="block text-sm text-gray-300 underline hover:text-white"
-                >
-                    Forgot password?
-                </a>
-                    </>
+                {error && (
+                    <div className="mb-4 p-3 bg-red-500/10 border border-red-500/50 text-red-500 rounded text-sm text-center">
+                        {error}
+                    </div>
                 )}
 
-                <button className="w-full mt-4 px-6 py-3 bg-white text-black rounded-lg font-semibold">
-                    Login
-                </button>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-1">Username</label>
+                        <input
+                            type="text"
+                            placeholder="username"
+                            value={username}
+                            onChange={(e) => setUsername(e.target.value)}
+                            className="w-full px-4 py-2 bg-black/50 border border-gray-700 rounded-lg focus:outline-none focus:border-white text-white"
+                            required
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-1">Password</label>
+                        <input
+                            type="password"
+                            placeholder="password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            className="w-full px-4 py-2 bg-black/50 border border-gray-700 rounded-lg focus:outline-none focus:border-white text-white"
+                            required
+                        />
+                    </div>
 
-                <Link className="w-full mt-4 px6 py-3 text-white" to="/create-account">
-                    <p className="mt-6 mb-6 underline">Create account</p>
-                </Link>
+                    {/* forgot password LINK */}
+                    <div className="flex justify-end">
+                        <a
+                            href="/forgot-password"
+                            className="text-sm text-gray-400 underline hover:text-white transition-colors"
+                        >
+                            Forgot password?
+                        </a>
+                    </div>
 
+                    <button
+                        type="submit"
+                        className="w-full mt-6 px-6 py-3 bg-white text-black rounded-lg font-semibold hover:bg-gray-200 transition-colors disabled:opacity-50"
+                        disabled={isLoading}
+                    >
+                        {isLoading ? "Signing in..." : "Login"}
+                    </button>
+                </form>
 
+                <div className="mt-8 pt-6 border-t border-gray-800 text-center">
+                    <Link className="text-sm text-gray-400 hover:text-white transition-colors" to="/create-account">
+                        Create account
+                    </Link>
+                </div>
             </div>
         </div>
-
-
-    )
+    );
 }
