@@ -26,7 +26,7 @@ export default function Contact(){
             return;
         }
         try {
-            const res = await fetch("/api/contact", {
+            const res = await fetch("http://localhost:8080/api/contact", { //api path
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
