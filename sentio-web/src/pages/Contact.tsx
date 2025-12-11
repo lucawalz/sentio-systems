@@ -26,19 +26,13 @@ export default function Contact(){
             return;
         }
         try {
-            const res = await fetch("http://localhost:8080/api/contact", { //api path
+            const res = await fetch("http://localhost:8080/api/contact", { //api path correct???
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    reference,
-                    name,
-                    surname,
-                    mail,
-                    message,
-                }),
+                headers: {"Content-Type": "application/json",},
+                body: JSON.stringify({reference, name, surname, mail, message,}),
             });
+
+            console.log("HTTP status:", res.status);
 
             if (!res.ok) {
                 setFeedback("Oops, something went wrong. Please try again later.");

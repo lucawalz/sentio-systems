@@ -16,6 +16,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
 
+//ToDo Fix: my api/contact is not accepted. Something is wrong
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
