@@ -18,6 +18,7 @@ public class ContactController {
 
     @PostMapping
     public ResponseEntity<Void> send(@RequestBody ContactRequest request) {
+        System.out.println(">>> ContactController reached, mail=" + request.getMail()); //remove if i works out
         // easy server validation (add to frontend)
         if (isBlank(request.getMail()) || isBlank(request.getMessage())) {
             return ResponseEntity.badRequest().build();
