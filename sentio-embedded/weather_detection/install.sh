@@ -35,9 +35,32 @@ print_info() {
 }
 
 # Main installation
-print_header "Weather Station Installation"
+print_header "Weather Station Installer"
 
-# Check if running on Raspberry Pi
+echo "Select mode:"
+echo "1) Install / Reinstall (Full setup)"
+echo "2) Edit Configuration (Update settings only)"
+read -p "Enter choice [1]: " INSTALL_MODE
+INSTALL_MODE=${INSTALL_MODE:-1}
+
+# Initialize variables
+EXISTING_DEVICE_ID=""
+if [ -f "config.yaml" ]; then
+    # Try to extract existing device ID
+    EXISTING_DEVICE_ID=$(grep "id:" config.yaml | awk -F '"' '{print $2}')
+    if [ -z "$EXISTING_DEVICE_ID" ]; then
+        # Try without quotes
+        EXISTING_DEVICE_ID=$(grep "id:" config.yaml | awk '{print $2}')
+    fi
+fi
+
+if [ "$INSTALL_MODE" == "1" ]; then
+    # ==========================================
+    # INSTALLATION MODE
+    # ==========================================
+    
+    # Check if running on Raspberry Pi
+
 if [ -f /proc/device-tree/model ]; then
     PI_MODEL=$(tr -d '\0' < /proc/device-tree/model 2>/dev/null || echo "Unknown")
     if [[ $PI_MODEL == *"Raspberry Pi"* ]]; then
@@ -78,6 +101,7 @@ if [ "$IS_RASPBERRY_PI" = true ]; then
         i2c-tools \
         libatlas-base-dev \
         mosquitto \
+        uuid-runtime \
         mosquitto-clients > /dev/null 2>&1
 
     print_success "System dependencies installed"
@@ -158,29 +182,66 @@ if [ "$MISSING_PACKAGES" = true ]; then
     echo "  You may need to install them manually"
 fi
 
+else
+    # ==========================================
+    # EDIT CONFIG MODE
+    # ==========================================
+    print_info "Skipping installation steps..."
+    
+    # Check if virtual environment exists
+    if [ ! -d ".venv" ]; then
+        print_warning "Virtual environment not found. You may need to run Install mode first."
+    fi
+fi
+
+
 # Interactive configuration
 echo ""
 print_header "Configuration Setup"
 
-# Generate device ID
-HOSTNAME=$(hostname)
-TIMESTAMP=$(date +%s)
-DEFAULT_DEVICE_ID="weather_station_${HOSTNAME}_${TIMESTAMP: -6}"
+# Generate device ID or use existing
+if [ -n "$EXISTING_DEVICE_ID" ]; then
+    print_info "Found existing Device ID: $EXISTING_DEVICE_ID"
+    DEFAULT_DEVICE_ID="$EXISTING_DEVICE_ID"
+else
+    # Generate UUID
+    if command -v uuidgen &>/dev/null; then
+        DEFAULT_DEVICE_ID=$(uuidgen)
+    else
+        # Fallback if uuidgen not available
+        HOSTNAME=$(hostname)
+        TIMESTAMP=$(date +%s)
+        DEFAULT_DEVICE_ID="weather_station_${HOSTNAME}_${TIMESTAMP: -6}"
+    fi
+fi
 
 echo ""
 print_info "Device Configuration"
-read -p "Enter device ID [${DEFAULT_DEVICE_ID}]: " DEVICE_ID
-DEVICE_ID=${DEVICE_ID:-$DEFAULT_DEVICE_ID}
+if [ -n "$EXISTING_DEVICE_ID" ]; then
+    print_info "Preserving Device ID: $EXISTING_DEVICE_ID"
+    DEVICE_ID=$EXISTING_DEVICE_ID
+else
+    # Auto-generate ID without prompt
+    DEVICE_ID=${DEFAULT_DEVICE_ID}
+    print_info "Auto-generated Device ID: $DEVICE_ID"
+fi
 print_success "Device ID: $DEVICE_ID"
 
 read -p "Enter location (e.g., Garden, Backyard, Balcony) [Garden]: " LOCATION
 LOCATION=${LOCATION:-"Garden"}
 print_success "Location: $LOCATION"
 
+# MQTT Configuration
+echo ""
+print_info "MQTT Configuration"
+read -p "Enter MQTT Broker IP (e.g., 192.168.1.100) [localhost]: " MQTT_BROKER_HOST
+MQTT_BROKER_HOST=${MQTT_BROKER_HOST:-"localhost"}
+print_success "MQTT Broker: $MQTT_BROKER_HOST"
+
 # Data collection interval
 echo ""
 print_info "Data Collection Settings"
-read -p "Enter collection interval in seconds [300]: " COLLECTION_INTERVAL
+read -p "Enter collection interval (seconds) [300]: " COLLECTION_INTERVAL
 COLLECTION_INTERVAL=${COLLECTION_INTERVAL:-300}
 
 # Sensor configuration
@@ -202,7 +263,12 @@ LTR390_ENABLED=$([[ ! $REPLY =~ ^[Nn]$ ]] && echo "true" || echo "false")
 
 # Create configuration file
 echo ""
-print_info "Creating configuration file..."
+print_info "Updating configuration file..."
+
+# Remove read-only permission if exists
+if [ -f config.yaml ]; then
+    chmod u+w config.yaml
+fi
 
 cat > config.yaml << EOF
 # Weather Station Configuration
@@ -223,7 +289,7 @@ collection:
 
 # MQTT Configuration
 mqtt:
-  broker_host: "localhost"
+  broker_host: "${MQTT_BROKER_HOST}"
   broker_port: 1883
   topic: "weather/data"
   status_topic: "weather/status"
@@ -254,7 +320,8 @@ sensors:
 EOF
 
 print_success "Configuration file created: config.yaml"
-print_info "Edit config.yaml to customize MQTT settings"
+chmod 444 config.yaml
+print_success "Configuration file is now read-only (chmod 444)"
 
 # Create setup_env.sh
 echo ""
@@ -595,7 +662,8 @@ echo "  Sensors: BME280=$BME280_ENABLED, VEML6030=$VEML6030_ENABLED, LTR390=$LTR
 echo ""
 
 print_info "Next steps:"
-echo -e "  1. Edit config.yaml to configure MQTT settings"
+echo -e "  1. ${YELLOW}IMPORTANT:${NC} Register this device in your Sentio account using ID: ${GREEN}${DEVICE_ID}${NC}"
+echo -e "  2. Edit config.yaml to configure MQTT settings"
 if [ "$IS_RASPBERRY_PI" = true ]; then
     echo -e "  2. Reboot your Raspberry Pi: ${BLUE}sudo reboot${NC}"
     echo -e "  3. After reboot, test the system: ${BLUE}./test_system.sh${NC}"

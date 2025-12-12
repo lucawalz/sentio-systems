@@ -35,9 +35,32 @@ print_info() {
 }
 
 # Main installation
-print_header "Animal Detector Installation"
+print_header "Animal Detector Installer"
 
-# Check if running on Raspberry Pi
+echo "Select mode:"
+echo "1) Install / Reinstall (Full setup)"
+echo "2) Edit Configuration (Update settings only)"
+read -p "Enter choice [1]: " INSTALL_MODE
+INSTALL_MODE=${INSTALL_MODE:-1}
+
+# Initialize variables
+EXISTING_DEVICE_ID=""
+if [ -f "config.yaml" ]; then
+    # Try to extract existing device ID
+    EXISTING_DEVICE_ID=$(grep "device_id:" config.yaml | awk -F '"' '{print $2}')
+    if [ -z "$EXISTING_DEVICE_ID" ]; then
+        # Try without quotes
+        EXISTING_DEVICE_ID=$(grep "device_id:" config.yaml | awk '{print $2}')
+    fi
+fi
+
+if [ "$INSTALL_MODE" == "1" ]; then
+    # ==========================================
+    # INSTALLATION MODE
+    # ==========================================
+    
+    # Check if running on Raspberry Pi
+
 if [ -f /proc/device-tree/model ]; then
     PI_MODEL=$(tr -d '\0' < /proc/device-tree/model 2>/dev/null || echo "Unknown")
     if [[ $PI_MODEL == *"Raspberry Pi"* ]]; then
@@ -95,6 +118,7 @@ if [ "$IS_RASPBERRY_PI" = true ]; then
         mosquitto \
         mosquitto-clients \
         libopencv-dev \
+        uuid-runtime \
         v4l-utils > /dev/null 2>&1
 
     print_success "System dependencies installed"
@@ -115,6 +139,7 @@ print_success "pip and setuptools upgraded"
 # Install Python dependencies
 echo ""
 print_info "Installing Python dependencies..."
+echo "  This may take a few minutes on Raspberry Pi..."
 
 # Check if requirements.txt exists, if not create it
 if [ ! -f requirements.txt ]; then
@@ -136,6 +161,11 @@ fi
 
 pip install -r requirements.txt -q
 print_success "Python dependencies installed"
+
+print_info "Fixing numpy binary compatibility..."
+pip uninstall -y numpy
+pip install numpy
+print_success "Numpy fixed"
 
 # Verify installations
 echo ""
@@ -162,10 +192,20 @@ if [ "$MISSING_PACKAGES" = true ]; then
     echo "  You may need to install them manually"
 fi
 
-# Fix numpy compatibility for Hailo/picamera2
-print_info "Fixing numpy compatibility for Hailo SDK..."
-pip uninstall numpy -y > /dev/null 2>&1 || true
-print_success "Using system numpy (required for Hailo/picamera2 compatibility)"
+    print_success "Using system numpy (required for Hailo/picamera2 compatibility)"
+
+else
+    # ==========================================
+    # EDIT CONFIG MODE
+    # ==========================================
+    print_info "Skipping installation steps..."
+    
+    # Check if virtual environment exists
+    if [ ! -d ".venv" ]; then
+        print_warning "Virtual environment not found. You may need to run Install mode first."
+    fi
+fi
+
 
 
 # Interactive configuration
@@ -173,19 +213,44 @@ echo ""
 print_header "Configuration Setup"
 
 # Generate device ID
-HOSTNAME=$(hostname)
-TIMESTAMP=$(date +%s)
-DEFAULT_DEVICE_ID="animal_detector_${HOSTNAME}_${TIMESTAMP: -6}"
+# Generate device ID or use existing
+if [ -n "$EXISTING_DEVICE_ID" ]; then
+    print_info "Found existing Device ID: $EXISTING_DEVICE_ID"
+    DEFAULT_DEVICE_ID="$EXISTING_DEVICE_ID"
+else
+    # Generate UUID
+    if command -v uuidgen &>/dev/null; then
+        DEFAULT_DEVICE_ID=$(uuidgen)
+    else
+        # Fallback if uuidgen not available
+        HOSTNAME=$(hostname)
+        TIMESTAMP=$(date +%s)
+        DEFAULT_DEVICE_ID="animal_detector_${HOSTNAME}_${TIMESTAMP: -6}"
+    fi
+fi
 
 echo ""
 print_info "Device Configuration"
-read -p "Enter device ID [${DEFAULT_DEVICE_ID}]: " DEVICE_ID
-DEVICE_ID=${DEVICE_ID:-$DEFAULT_DEVICE_ID}
+if [ -n "$EXISTING_DEVICE_ID" ]; then
+    print_info "Preserving Device ID: $EXISTING_DEVICE_ID"
+    DEVICE_ID=$EXISTING_DEVICE_ID
+else
+    # Auto-generate ID without prompt
+    DEVICE_ID=${DEFAULT_DEVICE_ID}
+    print_info "Auto-generated Device ID: $DEVICE_ID"
+fi
 print_success "Device ID: $DEVICE_ID"
 
 read -p "Enter location (e.g., Garden Camera, Front Yard, Backyard) [Garden Camera]: " LOCATION
 LOCATION=${LOCATION:-"Garden Camera"}
 print_success "Location: $LOCATION"
+
+# MQTT Configuration
+echo ""
+print_info "MQTT Configuration"
+read -p "Enter MQTT Broker IP (e.g., 192.168.1.100) [localhost]: " MQTT_BROKER_HOST
+MQTT_BROKER_HOST=${MQTT_BROKER_HOST:-"localhost"}
+print_success "MQTT Broker: $MQTT_BROKER_HOST"
 
 # Detection configuration
 echo ""
@@ -226,7 +291,14 @@ fi
 
 # Create configuration file
 echo ""
-print_info "Creating configuration file..."
+# Create configuration file
+echo ""
+print_info "Updating configuration file..."
+
+# Remove read-only permission if exists
+if [ -f config.yaml ]; then
+    chmod u+w config.yaml
+fi
 
 cat > config.yaml << EOF
 # Animal Detector Configuration
@@ -258,7 +330,7 @@ ${ANIMALS_YAML}
 
 # MQTT settings
 mqtt:
-  broker_host: "localhost"
+  broker_host: "${MQTT_BROKER_HOST}"  # Updated by install script
   broker_port: 1883
   topic: "animal_detection/events"
   status_topic: "animal_detection/status"
@@ -269,7 +341,8 @@ mqtt:
 EOF
 
 print_success "Configuration file created: config.yaml"
-print_info "Edit config.yaml to customize camera and MQTT settings"
+chmod 444 config.yaml
+print_success "Configuration file is now read-only (chmod 444)"
 
 # Create setup_env.sh
 echo ""
@@ -648,8 +721,8 @@ echo "  Target Animals: $(echo $TARGET_ANIMALS | tr ' ' ', ')"
 echo ""
 
 print_info "Next steps:"
-echo -e "  1. Edit config.yaml to configure camera and MQTT settings"
-echo -e "  2. Test the system: ${BLUE}./test_system.sh${NC}"
+echo -e "  1. ${YELLOW}IMPORTANT:${NC} Register this device in your Sentio account using ID: ${GREEN}${DEVICE_ID}${NC}"
+echo -e "  2. Edit config.yaml to configure camera and MQTT settings"
 echo -e "  3. Start the animal detector: ${BLUE}./start_animal_detector.sh${NC}"
 echo -e "  4. View logs: ${BLUE}tail -f logs/animal_detector.log${NC}"
 echo ""

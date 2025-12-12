@@ -24,7 +24,8 @@ class MQTTPublisher:
         # MQTT settings
         self.broker_host = self.mqtt_config.get("broker_host", "localhost")
         self.broker_port = self.mqtt_config.get("broker_port", 1883)
-        self.topic = self.mqtt_config.get("topic", "animal_detection/events")
+        # Support unified config with specific key, fallback to generic
+        self.topic = self.mqtt_config.get("animal_topic", self.mqtt_config.get("topic", "animal_detection/events"))
         self.device_id = self.device_config.get("device_id", "pi_detector_001")
         self.location = self.device_config.get("location", "Unknown")
 

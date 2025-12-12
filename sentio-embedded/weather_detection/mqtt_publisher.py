@@ -25,8 +25,9 @@ class WeatherMQTTPublisher:
         # MQTT settings
         self.broker_host = self.mqtt_config.get("broker_host", "localhost")
         self.broker_port = self.mqtt_config.get("broker_port", 1883)
-        self.data_topic = self.mqtt_config.get("topic", "weather/data")
-        self.status_topic = self.mqtt_config.get("status_topic", "weather/status")
+        # Support unified config with specific key, fallback to generic
+        self.data_topic = self.mqtt_config.get("weather_topic", self.mqtt_config.get("topic", "weather/data"))
+        self.status_topic = self.mqtt_config.get("weather_status_topic", self.mqtt_config.get("status_topic", "weather/status"))
         self.username = self.mqtt_config.get("username")
         self.password = self.mqtt_config.get("password")
         self.qos = self.mqtt_config.get("qos", 1)
