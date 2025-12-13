@@ -26,7 +26,7 @@ class MQTTPublisher:
         self.broker_port = self.mqtt_config.get("broker_port", 1883)
         # Support unified config with specific key, fallback to generic
         self.topic = self.mqtt_config.get("animal_topic", self.mqtt_config.get("topic", "animal_detection/events"))
-        self.device_id = self.device_config.get("device_id", "pi_detector_001")
+        self.device_id = self.device_config.get("id", "animal_detector")
         self.location = self.device_config.get("location", "Unknown")
 
         # Queue for detection events

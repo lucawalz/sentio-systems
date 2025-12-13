@@ -20,29 +20,29 @@ export interface WikipediaSearchResult {
 
 const WIKIPEDIA_API_BASE = 'https://en.wikipedia.org/api/rest_v1';
 
-// Cache for search results to avoid repeated API calls
 const searchCache = new Map<string, WikipediaSearchResult | null>();
 
 export const wikipediaService = {
-    // Search for a bird species and get basic info with image
-    searchBirdSpecies: async (speciesName: string): Promise<WikipediaSearchResult | null> => {
+    searchAnimalSpecies: async (speciesName: string): Promise<WikipediaSearchResult | null> => {
         // Check cache first
         if (searchCache.has(speciesName)) {
             return searchCache.get(speciesName) || null;
         }
 
         try {
-            // Clean the species name (remove common suffixes that might interfere)
             const cleanedName = speciesName
-                .replace(/\s+bird$/i, '') // Remove "bird" if already present
-                .replace(/\s+species$/i, '') // Remove "species" if present
+                .replace(/\s+bird$/i, '')
+                .replace(/\s+animal$/i, '')
+                .replace(/\s+species$/i, '')
                 .trim();
 
-            // Try multiple search strategies in order of preference
+
             const searchStrategies = [
-                cleanedName, // Try exact species name first
-                `${cleanedName} bird`, // Then with "bird" appended
-                cleanedName.split(' ')[0], // Try just the genus name as fallback
+                cleanedName,
+                `${cleanedName} animal`,
+                `${cleanedName} bird`,
+                `${cleanedName} mammal`,
+                cleanedName.split(' ')[0],
             ];
 
             for (const searchTerm of searchStrategies) {
@@ -59,26 +59,25 @@ export const wikipediaService = {
                     if (response.ok) {
                         const result = await response.json();
 
-                        // Check if this looks like a bird-related page
-                        const isLikelyBirdPage = (
+                        const isLikelyAnimalPage = (
+                            result.extract?.toLowerCase().includes('animal') ||
                             result.extract?.toLowerCase().includes('bird') ||
+                            result.extract?.toLowerCase().includes('mammal') ||
                             result.extract?.toLowerCase().includes('species') ||
-                            result.title?.toLowerCase().includes('bird') ||
+                            result.title?.toLowerCase().includes('animal') ||
                             result.title?.toLowerCase().includes(cleanedName.toLowerCase())
                         );
 
-                        if (isLikelyBirdPage && (result.thumbnail || result.originalimage)) {
+                        if (isLikelyAnimalPage && (result.thumbnail || result.originalimage)) {
                             searchCache.set(speciesName, result);
                             return result;
                         }
                     }
                 } catch (error) {
-                    // Continue to next strategy
                     continue;
                 }
             }
 
-            // If no results found, cache null to avoid repeated requests
             searchCache.set(speciesName, null);
             return null;
 
@@ -89,10 +88,9 @@ export const wikipediaService = {
         }
     },
 
-    // Get bird image URL with fallbacks
-    getBirdImageUrl: async (speciesName: string): Promise<string | null> => {
+    getAnimalImageUrl: async (speciesName: string): Promise<string | null> => {
         try {
-            const result = await wikipediaService.searchBirdSpecies(speciesName);
+            const result = await wikipediaService.searchAnimalSpecies(speciesName);
 
             if (result?.thumbnail?.source) {
                 return result.thumbnail.source;
@@ -104,7 +102,7 @@ export const wikipediaService = {
 
             return null;
         } catch (error) {
-            console.error('Error fetching bird image:', error);
+            console.error('Error fetching animal image:', error);
             return null;
         }
     },

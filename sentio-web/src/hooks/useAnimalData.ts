@@ -1,28 +1,26 @@
-
 import { useState, useEffect, useRef } from 'react';
-import { birdService, type BirdDetectionDTO, type BirdDetectionSummary } from '../services/birdService';
+import { animalService, type AnimalDetectionDTO, type AnimalDetectionSummary } from '../services/animalService';
 
-export const useBirdData = (refreshInterval: number = 300000) => {
-    const [latestDetections, setLatestDetections] = useState<BirdDetectionDTO[]>([]);
-    const [recentDetections, setRecentDetections] = useState<BirdDetectionDTO[]>([]);
-    const [detectionSummary, setDetectionSummary] = useState<BirdDetectionSummary | null>(null);
+export const useAnimalData = (refreshInterval: number = 300000) => {
+    const [latestDetections, setLatestDetections] = useState<AnimalDetectionDTO[]>([]);
+    const [recentDetections, setRecentDetections] = useState<AnimalDetectionDTO[]>([]);
+    const [detectionSummary, setDetectionSummary] = useState<AnimalDetectionSummary | null>(null);
     const [speciesCount, setSpeciesCount] = useState<Record<string, number>>({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    // Use ref to store the current interval ID (browser environment)
     const intervalRef = useRef<number | null>(null);
 
-    const fetchBirdData = async () => {
+    const fetchAnimalData = async () => {
         try {
             setLoading(true);
             setError(null);
 
             const [latest, recent, summary, species] = await Promise.all([
-                birdService.getLatestDetections(10),
-                birdService.getRecentDetections(24),
-                birdService.getDetectionSummary(),
-                birdService.getSpeciesCount(),
+                animalService.getLatestDetections(10),
+                animalService.getRecentDetections(24),
+                animalService.getDetectionSummary(),
+                animalService.getSpeciesCount(),
             ]);
 
             setLatestDetections(latest);
@@ -30,25 +28,22 @@ export const useBirdData = (refreshInterval: number = 300000) => {
             setDetectionSummary(summary);
             setSpeciesCount(species);
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to fetch bird data');
+            setError(err instanceof Error ? err.message : 'Failed to fetch animal data');
         } finally {
             setLoading(false);
         }
     };
 
     useEffect(() => {
-        // Clear existing interval first
+
         if (intervalRef.current !== null) {
             clearInterval(intervalRef.current);
         }
 
-        // Fetch data immediately
-        fetchBirdData();
+        fetchAnimalData();
 
-        // Set up new interval
-        intervalRef.current = setInterval(fetchBirdData, refreshInterval);
+        intervalRef.current = setInterval(fetchAnimalData, refreshInterval);
 
-        // Cleanup function
         return () => {
             if (intervalRef.current !== null) {
                 clearInterval(intervalRef.current);
@@ -57,7 +52,6 @@ export const useBirdData = (refreshInterval: number = 300000) => {
         };
     }, [refreshInterval]);
 
-    // Cleanup on unmount
     useEffect(() => {
         return () => {
             if (intervalRef.current !== null) {
@@ -73,6 +67,6 @@ export const useBirdData = (refreshInterval: number = 300000) => {
         speciesCount,
         loading,
         error,
-        refetch: fetchBirdData,
+        refetch: fetchAnimalData,
     };
 };

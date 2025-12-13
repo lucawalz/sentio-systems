@@ -78,15 +78,33 @@ if [ "$ACTION_MODE" == "1" ]; then
     
     # Check for Hailo SDK (Animal Detector requirement)
     if [ "$INSTALL_ANIMAL" = true ]; then
-        print_info "Checking for Hailo SDK..."
-        if [ -d "/home/$USER/hailo-apps-infra" ] || [ -d "/opt/hailo" ]; then
-            print_success "Hailo SDK detected"
+        print_info "Checking for Hailo Apps Infra..."
+        HAILO_APPS_PATH="/home/$USER/hailo-apps-infra"
+        
+        if [ -d "$HAILO_APPS_PATH" ]; then
+            print_success "Hailo Apps Infra found at $HAILO_APPS_PATH"
         else
-            print_warning "Hailo SDK not found at standard locations."
-            print_info "Please ensure Hailo SDK is installed for AI acceleration."
-            read -p "Continue anyway? (y/N): " -n 1 -r
-            echo
-            if [[ ! $REPLY =~ ^[Yy]$ ]]; then exit 1; fi
+            print_warning "Hailo Apps Infra not found. Cloning repository..."
+            git clone https://github.com/hailo-ai/hailo-apps-infra.git "$HAILO_APPS_PATH"
+            if [ $? -eq 0 ]; then
+                print_success "Hailo Apps Infra cloned successfully"
+            else
+                print_error "Failed to clone hailo-apps-infra. Check your internet connection."
+                read -p "Continue anyway? (y/N): " -n 1 -r
+                echo
+                if [[ ! $REPLY =~ ^[Yy]$ ]]; then exit 1; fi
+            fi
+        fi
+        
+        # Check for hailo-all package (Hailo runtime)
+        if dpkg -l | grep -q "hailo-all"; then
+            print_success "Hailo runtime (hailo-all) is installed"
+        else
+            print_warning "Hailo runtime not found. Installing hailo-all..."
+            sudo apt install -y hailo-all 2>/dev/null || {
+                print_warning "Could not install hailo-all. You may need to add Hailo's apt repository."
+                print_info "Visit: https://hailo.ai/developer-zone/ for Hailo SDK installation"
+            }
         fi
     fi
 
@@ -136,6 +154,7 @@ EOF
         cat >> requirements.txt << EOF
 opencv-python
 setproctitle
+flask
 EOF
     fi
 
@@ -154,6 +173,16 @@ EOF
 
     pip install -r requirements.txt -q
     print_success "Python dependencies installed"
+
+    # Install hailo-apps-infra for Animal Detector
+    if [ "$INSTALL_ANIMAL" = true ]; then
+        HAILO_APPS_PATH="/home/$USER/hailo-apps-infra"
+        if [ -d "$HAILO_APPS_PATH" ]; then
+            print_info "Installing hailo-apps-infra into virtual environment..."
+            pip install -e "$HAILO_APPS_PATH" -q
+            print_success "Hailo Apps Infra installed"
+        fi
+    fi
 
     # 4. Numpy Fix for RPi (Binary Incompatibility)
     if [ "$INSTALL_ANIMAL" = true ] && [ "$IS_RASPBERRY_PI" = true ]; then
@@ -267,6 +296,20 @@ if [ "$INSTALL_ANIMAL" = true ]; then
         done
         ANIMALS_LIST=${ANIMALS_LIST%$'\n'}
     fi
+    
+    # Streaming settings
+    echo ""
+    print_info "Web Streaming Settings"
+    read -p "Enable web streaming? [Y/n]: " -n 1 -r; echo
+    if [[ $REPLY =~ ^[Nn]$ ]]; then
+        STREAM_ENABLED=false
+    else
+        STREAM_ENABLED=true
+        read -p "Streaming Port [8080]: " STREAM_PORT
+        STREAM_PORT=${STREAM_PORT:-8080}
+        read -p "JPEG Quality (1-100) [80]: " STREAM_QUALITY
+        STREAM_QUALITY=${STREAM_QUALITY:-80}
+    fi
 fi
 
 if [ "$INSTALL_WEATHER" = true ]; then
@@ -329,6 +372,12 @@ detection:
   cooldown_period: 3.0
   target_animals:
 ${ANIMALS_LIST}
+
+# Web Streaming Configuration
+streaming:
+  enabled: ${STREAM_ENABLED:-false}
+  port: ${STREAM_PORT:-8080}
+  quality: ${STREAM_QUALITY:-80}
 EOF
 fi
 
