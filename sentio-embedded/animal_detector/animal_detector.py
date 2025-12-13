@@ -211,6 +211,25 @@ class AnimalDetectorData(app_callback_class):
         """Start MQTT and frame capture services"""
         self.mqtt_publisher.start()
         self.frame_capture.start()
+        
+        # Publish initial status
+        self._publish_device_status()
+        
+        # Schedule periodic status updates (every 60 seconds)
+        GLib.timeout_add_seconds(60, self._publish_device_status_wrapper)
+
+    def _publish_device_status_wrapper(self):
+        """Wrapper for GLib callback (which requires boolean return)"""
+        self._publish_device_status()
+        return True # Continue calling
+
+    def _publish_device_status(self):
+        """Get local IP and publish device status"""
+        try:
+            ip = get_local_ip()
+            self.mqtt_publisher.publish_status(ip)
+        except Exception as e:
+            self.logger.error(f"Failed to publish status: {e}")
 
     def stop_services(self):
         """Stop MQTT and frame capture services"""
@@ -427,6 +446,21 @@ def main():
     finally:
         user_data.stop_services()
         logger.info("Application shutdown complete")
+
+
+def get_local_ip():
+    """Get local IP address"""
+    import socket
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        # Doesn't need to be reachable
+        s.connect(('10.255.255.255', 1))
+        IP = s.getsockname()[0]
+    except Exception:
+        IP = '127.0.0.1'
+    finally:
+        s.close()
+    return IP
 
 
 if __name__ == "__main__":

@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from "react"
 import { gsap } from "gsap"
 import { Brain, Sparkles, Target, Clock, Users, ChevronDown, ChevronUp } from "lucide-react"
-import { AiSummaryService, type AISummary } from "../../services/aiSummaryService"
+import { useAiSummary } from '../../hooks/useAiSummary';
 
 export function EnhancedAISummary() {
     const cardRef = useRef<HTMLDivElement>(null)
     const iconRef = useRef<HTMLDivElement>(null)
-    const [aiSummary, setAiSummary] = useState<AISummary | null>(null)
-    const [loading, setLoading] = useState(true)
     const [isExpanded, setIsExpanded] = useState(false)
+
+    const { summary: aiSummary, loading } = useAiSummary();
 
     useEffect(() => {
         gsap.fromTo(
@@ -25,26 +25,6 @@ export function EnhancedAISummary() {
             yoyo: true,
             repeat: -1,
         })
-    }, [])
-
-    useEffect(() => {
-        const fetchAiSummary = async () => {
-            setLoading(true)
-            try {
-                const summary = await AiSummaryService.getCurrentSummary()
-                setAiSummary(summary)
-            } catch (error) {
-                console.error('Failed to fetch AI summary:', error)
-            } finally {
-                setLoading(false)
-            }
-        }
-
-        fetchAiSummary()
-
-        // Refresh every 5 minutes
-        const interval = setInterval(fetchAiSummary, 5 * 60 * 1000)
-        return () => clearInterval(interval)
     }, [])
 
     // Helper function to format time
@@ -107,7 +87,7 @@ export function EnhancedAISummary() {
             ref={cardRef}
             className="dashboard-card bg-card/80 backdrop-blur-sm border border-border rounded-3xl p-4 md:p-5 h-full relative overflow-hidden hover:shadow-xl transition-shadow duration-300"
         >
-        <div className="absolute inset-0 bg-gradient-to-br from-[#B5FFE9]/5 to-[#87B3FF]/5 pointer-events-none" />
+            <div className="absolute inset-0 bg-gradient-to-br from-[#B5FFE9]/5 to-[#87B3FF]/5 pointer-events-none" />
 
             <div className="relative z-10 h-full flex flex-col">
                 <div className="flex items-center space-x-3 mb-3">
@@ -122,8 +102,8 @@ export function EnhancedAISummary() {
                         <div className="flex items-center space-x-1">
                             <Sparkles className="w-3 h-3 text-primary/60" />
                             <span className="text-xs text-muted-foreground font-medium">
-                            {loading ? "Loading..." : "AI-Powered Insights"}
-                          </span>
+                                {loading ? "Loading..." : "AI-Powered Insights"}
+                            </span>
                         </div>
                     </div>
                 </div>

@@ -3,6 +3,7 @@ package org.example.backend.config;
 import lombok.RequiredArgsConstructor;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.example.backend.mqtt.AnimalDetectionHandler;
+import org.example.backend.mqtt.DeviceStatusHandler;
 import org.example.backend.mqtt.RaspiWeatherDataHandler;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -25,6 +26,7 @@ public class MqttConfig {
 
     private final RaspiWeatherDataHandler raspiWeatherDataHandler;
     private final AnimalDetectionHandler animalDetectionHandler;
+    private final DeviceStatusHandler deviceStatusHandler;
 
     @Value("${mqtt.broker}")
     private String mqttBroker;
@@ -115,11 +117,13 @@ public class MqttConfig {
                 if (topic.equals("weather/data") || topic.equals("weather")) {
                     raspiWeatherDataHandler.processWeatherData(payload);
                 } else if (topic.equals("weather/status")) {
+                    deviceStatusHandler.processStatusUpdate(payload);
                     System.out.println("Weather status: " + payload);
                 } else if (topic.equals("animal_detection/events")) {
                     animalDetectionHandler.processAnimalDetection(payload);
-                } else if (topic.equals("animal_detection/status")) {
-                    System.out.println("Animal detector status: " + payload);
+                } else if (topic.equals("animal_detection/status") || topic.endsWith("/status")) {
+                    deviceStatusHandler.processStatusUpdate(payload);
+                    System.out.println("Device status: " + payload);
                 } else if (topic.equals("camera")) {
                     System.out.println(
                             "Camera data received: " + payload.substring(0, Math.min(100, payload.length())) + "...");

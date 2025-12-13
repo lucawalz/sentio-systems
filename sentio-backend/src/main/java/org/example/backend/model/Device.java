@@ -43,8 +43,31 @@ public class Device {
     @Column(name = "user_id")
     private Set<String> owners = new HashSet<>();
 
+    /**
+     * Set of active services running on this device (e.g. "animal_detector",
+     * "weather_station").
+     * Updated via MQTT status messages.
+     */
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "device_services", joinColumns = @JoinColumn(name = "device_id"))
+    @Column(name = "service_name")
+    private Set<String> activeServices = new HashSet<>();
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    /**
+     * Last known local IP address of the device.
+     * Updated via MQTT status messages.
+     */
+    @Column(name = "ip_address")
+    private String ipAddress;
+
+    /**
+     * Timestamp when the device was last seen/reported status.
+     */
+    @Column(name = "last_seen")
+    private LocalDateTime lastSeen;
 
     @PrePersist
     protected void onCreate() {

@@ -1,7 +1,8 @@
 import { Thermometer, Droplets, Gauge, CloudDrizzle, Umbrella, Wind } from "lucide-react"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef } from "react"
 import { gsap } from "gsap"
-import { forecastService, type WeatherForecast } from "../../services/forecastService"
+import { type WeatherForecast } from "../../services/forecastService"
+import { useForecastData } from "../../hooks/useForecastData"
 
 // Function to find the current weather entry closest to current date and hour
 function findCurrentWeatherEntry(forecasts: WeatherForecast[]): WeatherForecast | null {
@@ -68,7 +69,7 @@ function getWindDirection(degree: number | null): string {
     return directions[index]
 }
 
-// Function to predict wind direction shift
+// Function to predict wind shift
 function predictWindShift(currentDir: number | null, nextDirections: (number | null)[]): string {
     if (!currentDir || nextDirections.length === 0) return "No data"
 
@@ -128,8 +129,7 @@ function getTrendIcon(trend: 'rising' | 'falling' | 'stable'): { symbol: string,
 
 export function MicroCards() {
     const cardRef = useRef<HTMLDivElement>(null)
-    const [forecasts, setForecasts] = useState<WeatherForecast[]>([])
-    const [loading, setLoading] = useState(true)
+    const { upcomingForecasts: forecasts, loading } = useForecastData();
 
     useEffect(() => {
         if (cardRef.current) {
@@ -141,24 +141,6 @@ export function MicroCards() {
         }
     }, [])
 
-    useEffect(() => {
-        const fetchForecasts = async () => {
-            try {
-                setLoading(true)
-                const data = await forecastService.getUpcomingForecasts()
-                setForecasts(data)
-            } catch (error) {
-                console.error('Failed to fetch weather forecasts:', error)
-            } finally {
-                setLoading(false)
-            }
-        }
-
-        fetchForecasts()
-        // Refresh every 5 minutes
-        const interval = setInterval(fetchForecasts, 5 * 60 * 1000)
-        return () => clearInterval(interval)
-    }, [])
 
     // Get the current weather entry for current date and hour
     const currentWeather = findCurrentWeatherEntry(forecasts)

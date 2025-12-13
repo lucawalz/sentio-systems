@@ -128,10 +128,32 @@ class MQTTPublisher:
             self.event_queue.put_nowait(event)
             self.logger.debug(f"Queued detection: {animal_type} ({confidence:.2f}) bbox: {bbox}")
 
-        except queue.Full:
-            self.logger.warning("Detection queue full, dropping event")
         except Exception as e:
             self.logger.error(f"Error queuing detection: {e}")
+
+    def publish_status(self, ip_address: str, status: str = "online"):
+        """
+        Publish device status including IP address
+        """
+        if not self.client:
+            return
+
+        try:
+            payload = {
+                "device_id": self.device_id,
+                "ip": ip_address,
+                "status": status,
+                "service": "animal_detector",
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            topic = f"{self.topic.split('/')[0]}/status" # e.g. animal_detection/status
+            
+            self.client.publish(topic, json.dumps(payload), retain=True)
+            self.logger.info(f"Published status: IP={ip_address}, Status={status}")
+            
+        except Exception as e:
+            self.logger.error(f"Error publishing status: {e}")
 
     def _worker_loop(self):
         """Worker thread that processes queued detection events"""

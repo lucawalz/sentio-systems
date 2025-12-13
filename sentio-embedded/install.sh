@@ -305,8 +305,8 @@ if [ "$INSTALL_ANIMAL" = true ]; then
         STREAM_ENABLED=false
     else
         STREAM_ENABLED=true
-        read -p "Streaming Port [8080]: " STREAM_PORT
-        STREAM_PORT=${STREAM_PORT:-8080}
+        print_info "Using default Streaming Port: 8080"
+        STREAM_PORT=8080
         read -p "JPEG Quality (1-100) [80]: " STREAM_QUALITY
         STREAM_QUALITY=${STREAM_QUALITY:-80}
     fi

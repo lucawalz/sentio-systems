@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { Volume2, Maximize, Camera, AlertCircle, Loader2, Signal } from "lucide-react"
 import { Button } from "../ui/button"
+import { useDevices } from "../../hooks/useDevices"
 
 export function AnimalLivestream() {
   const [isLoading, setIsLoading] = useState(true)
@@ -9,8 +10,19 @@ export function AnimalLivestream() {
   const [aspectRatio, setAspectRatio] = useState(16 / 9)
   const imgRef = useRef<HTMLImageElement>(null)
 
-  const streamUrl = import.meta.env.VITE_PI_STREAM_URL || 'http://192.168.2.194:8080/video_feed'
-  const webInterface = import.meta.env.VITE_PI_WEB_INTERFACE || 'http://192.168.2.224:8080'
+  const { devices, loading: devicesLoading } = useDevices()
+
+  const activeDevice = useMemo(() => {
+    return devices.find(d => d.ipAddress)
+  }, [devices])
+
+  const streamUrl = activeDevice
+    ? `http://${activeDevice.ipAddress}:8080/video_feed`
+    : undefined
+
+  const webInterface = activeDevice
+    ? `http://${activeDevice.ipAddress}:8080`
+    : undefined
 
   const handleImageLoad = () => {
     setIsLoading(false)
@@ -32,14 +44,18 @@ export function AnimalLivestream() {
   }
 
   const openFullscreen = () => {
-    window.open(webInterface, '_blank')
+    if (webInterface) {
+      window.open(webInterface, '_blank')
+    }
   }
 
   useEffect(() => {
-    setIsLoading(true)
-    setHasError(false)
-    setIsPlaying(false)
-    setAspectRatio(16 / 9)
+    if (streamUrl) {
+      setIsLoading(true)
+      setHasError(false)
+      setIsPlaying(false)
+      setAspectRatio(16 / 9)
+    }
   }, [streamUrl])
 
   // Cleanup effect to prevent memory leaks
@@ -64,6 +80,14 @@ export function AnimalLivestream() {
     }
   }, [streamUrl])
 
+  if (devicesLoading) {
+    return (
+      <div className="dashboard-card bg-card/80 backdrop-blur-sm border border-border rounded-3xl p-6 md:p-8 min-h-[400px] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    )
+  }
+
   return (
     <div className="dashboard-card bg-card/80 backdrop-blur-sm border border-border rounded-3xl p-6 md:p-8 min-h-[400px] relative overflow-hidden hover:shadow-lg transition-shadow duration-300">
       {/* Background gradient */}
@@ -75,7 +99,7 @@ export function AnimalLivestream() {
           <div className="flex items-center space-x-3">
             <Camera className="w-6 h-6 text-primary" />
             <h2 className="text-2xl md:text-3xl font-bold text-foreground">
-              Animal Livestream
+              {activeDevice ? activeDevice.name : "Animal Livestream"}
             </h2>
           </div>
           <div className="flex items-center space-x-2">
@@ -115,29 +139,55 @@ export function AnimalLivestream() {
             className="relative bg-secondary/20 rounded-2xl overflow-hidden h-full"
             style={{ aspectRatio }}
           >
-            {isLoading && (
+            {(!activeDevice) && (
               <div className="absolute inset-0 flex items-center justify-center bg-card/60 backdrop-blur-sm">
-                <div className="flex flex-col items-center space-y-4">
-                  <Loader2 className="w-12 h-12 animate-spin text-primary" />
-                  <div className="text-center">
-                    <div className="text-lg font-semibold text-foreground mb-1">Loading Stream</div>
-                    <div className="text-sm text-muted-foreground">Connecting to camera...</div>
+                <div className="flex flex-col items-center space-y-4 text-center p-6">
+                  <AlertCircle className="w-16 h-16 text-muted-foreground" />
+                  <div>
+                    <div className="text-xl font-semibold text-muted-foreground mb-2">No Active Device</div>
+                    <div className="text-sm text-muted-foreground mb-1">Register a device or ensure it is online</div>
                   </div>
                 </div>
               </div>
             )}
 
-            {hasError && (
+            {activeDevice && isLoading && (
+              <div className="absolute inset-0 flex items-center justify-center bg-card/60 backdrop-blur-sm">
+                <div className="flex flex-col items-center space-y-4">
+                  <Loader2 className="w-12 h-12 animate-spin text-primary" />
+                  <div className="text-center">
+                    <div className="text-lg font-semibold text-foreground mb-1">Loading Stream</div>
+                    <div className="text-sm text-muted-foreground">Connecting to {activeDevice.ipAddress}...</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeDevice && hasError && (
               <div className="absolute inset-0 flex items-center justify-center bg-card/60 backdrop-blur-sm">
                 <div className="flex flex-col items-center space-y-4 text-center p-6">
                   <AlertCircle className="w-16 h-16 text-destructive" />
                   <div>
                     <div className="text-xl font-semibold text-destructive mb-2">Stream Unavailable</div>
-                    <div className="text-sm text-muted-foreground mb-1">Unable to connect to camera</div>
+                    <div className="text-sm text-muted-foreground mb-1">Unable to connect to {activeDevice.ipAddress}</div>
                     <div className="text-xs text-muted-foreground opacity-60">Check camera connection and network</div>
                   </div>
                 </div>
               </div>
+            )}
+
+            {streamUrl && (
+              <img
+                ref={imgRef}
+                src={streamUrl}
+                alt="Animal livestream"
+                className="w-full h-full object-cover"
+                onLoad={handleImageLoad}
+                onError={handleImageError}
+                style={{ display: hasError ? 'none' : 'block' }}
+                loading="lazy"
+                decoding="async"
+              />
             )}
 
             <img
