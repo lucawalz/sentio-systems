@@ -14,6 +14,7 @@ from datetime import datetime
 import yaml
 from pathlib import Path
 
+import socket
 from weather_sensors import WeatherSensorManager
 from mqtt_publisher import WeatherMQTTPublisher
 
@@ -113,6 +114,20 @@ class WeatherStation:
             print("System running in background...")
         else:
             print("Starting Weather Station System...")
+
+    @staticmethod
+    def get_local_ip():
+        """Get local IP address"""
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.settimeout(0.1)
+            # Doesn't need to be reachable
+            s.connect(('10.255.255.255', 1))
+            ip = s.getsockname()[0]
+            s.close()
+            return ip
+        except Exception:
+            return '127.0.0.1'
 
     def load_config(self, config_path: str) -> dict:
         """Load configuration from YAML file with fallback"""
@@ -351,7 +366,12 @@ class WeatherStation:
                 self.collect_and_publish_data()
 
                 status_frequency = 60 if self.quiet_mode else 12
-                if loop_count % status_frequency == 0:
+                if loop_count % status_frequency == 0 or loop_count == 1:
+                    # Publish status with IP
+                    if self.mqtt_publisher:
+                        local_ip = self.get_local_ip()
+                        self.mqtt_publisher.publish_status(local_ip, "online")
+
                     success_rate = (self.publish_count / self.reading_count * 100) if self.reading_count > 0 else 0
                     self.logger.info(
                         f"Status: {loop_count} loops, {self.publish_count}/{self.reading_count} published ({success_rate:.1f}%)")

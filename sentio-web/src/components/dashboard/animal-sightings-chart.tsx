@@ -1,8 +1,8 @@
 
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell } from "recharts"
-import { useBirdData } from "../../hooks/useBirdData"
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell, Tooltip } from "recharts"
+import { useAnimalData } from "../../hooks/useAnimalData"
 import { useMemo } from "react"
-import { BarChart3, Bird, TrendingUp } from "lucide-react"
+import { BarChart3, PawPrint, TrendingUp } from "lucide-react"
 
 // Color palette for species-based gradients
 const getSpeciesColors = (species: string): { from: string; to: string } => {
@@ -26,15 +26,15 @@ const getSpeciesColors = (species: string): { from: string; to: string } => {
     return colorPalettes[Math.abs(hash) % colorPalettes.length];
 };
 
-export function BirdSightingsChart() {
-    const { latestDetections, loading, error } = useBirdData();
+export function AnimalSightingsChart() {
+    const { latestDetections, loading, error } = useAnimalData();
 
-    // Process the data to count species using speciesAiClassified with fallback to species
+    // Process the data to count species
     const chartData = useMemo(() => {
         if (!latestDetections.length) return [];
 
         const speciesCount = latestDetections.reduce((acc, detection) => {
-            const species = detection.speciesAiClassified || detection.species || "Unknown";
+            const species = detection.species || "Unknown";
             acc[species] = (acc[species] || 0) + 1;
             return acc;
         }, {} as Record<string, number>);
@@ -55,7 +55,7 @@ export function BirdSightingsChart() {
             <div className="dashboard-card bg-card/80 backdrop-blur-sm border border-border rounded-3xl p-6 md:p-8 h-[696.48px] min-h-[400px] relative overflow-hidden shadow-xl">
                 <div className="flex items-center justify-center h-full flex-col space-y-4">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-                    <div className="text-sm text-muted-foreground">Loading bird sightings chart...</div>
+                    <div className="text-sm text-muted-foreground">Loading animal sightings chart...</div>
                 </div>
             </div>
         );
@@ -77,10 +77,10 @@ export function BirdSightingsChart() {
         return (
             <div className="dashboard-card bg-card/80 backdrop-blur-sm border border-border rounded-3xl p-6 md:p-8 h-[696.48px] min-h-[400px] relative overflow-hidden shadow-xl">
                 <div className="flex flex-col items-center justify-center h-full text-center">
-                    <Bird className="w-16 h-16 text-muted-foreground mb-4" />
-                    <div className="text-xl font-semibold mb-2 text-foreground">No Bird Sightings Data</div>
+                    <PawPrint className="w-16 h-16 text-muted-foreground mb-4" />
+                    <div className="text-xl font-semibold mb-2 text-foreground">No Animal Sightings Data</div>
                     <div className="text-sm text-muted-foreground mb-6 max-w-md">
-                        No bird sightings data available to display in the chart.
+                        No animal sightings data available to display in the chart.
                     </div>
                 </div>
             </div>
@@ -98,7 +98,7 @@ export function BirdSightingsChart() {
                     <div className="flex items-center space-x-3">
                         <BarChart3 className="w-6 h-6 text-primary" />
                         <h2 className="text-2xl md:text-3xl font-bold text-foreground">
-                            Bird Sightings Chart
+                            Animal Sightings Chart
                         </h2>
                     </div>
                     <div className="flex items-center space-x-2 text-xs text-muted-foreground">
@@ -118,7 +118,7 @@ export function BirdSightingsChart() {
                     </div>
                     <div className="bg-card/60 backdrop-blur-sm rounded-xl border border-border/50 p-4 flex-1">
                         <div className="flex items-center space-x-2 mb-1">
-                            <Bird className="w-4 h-4 text-primary" />
+                            <PawPrint className="w-4 h-4 text-primary" />
                             <span className="text-sm font-medium text-muted-foreground">Unique Species</span>
                         </div>
                         <div className="text-2xl font-bold text-foreground">{uniqueSpecies}</div>
@@ -142,6 +142,10 @@ export function BirdSightingsChart() {
                                 axisLine={false}
                                 tickLine={false}
                                 tick={{ fontSize: 12, fill: "var(--muted-foreground)" }}
+                            />
+                            <Tooltip
+                                cursor={{ fill: 'rgba(0,0,0,0.1)' }}
+                                contentStyle={{ borderRadius: '8px', border: '1px solid var(--border)', backgroundColor: 'var(--card)' }}
                             />
                             <Bar dataKey="count" radius={[8, 8, 0, 0]}>
                                 {chartData.map((entry, index) => (
@@ -167,7 +171,7 @@ export function BirdSightingsChart() {
                 {/* Footer Info */}
                 <div className="pt-4 border-t border-border/20 flex-shrink-0">
                     <div className="text-xs text-muted-foreground opacity-60 text-center">
-                        Top 10 most frequently detected bird species
+                        Top 10 most frequently detected detected animal species
                     </div>
                 </div>
             </div>

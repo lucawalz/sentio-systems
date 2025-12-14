@@ -247,4 +247,32 @@ public class KeycloakAuthService implements AuthService {
             throw new RuntimeException("Failed to parse token", e);
         }
     }
+
+    @Override
+    public AuthDTOs.UserInfo getCurrentUser() {
+        org.springframework.security.core.Authentication authentication = org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication();
+
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new RuntimeException("No authenticated user found");
+        }
+
+        if (authentication.getPrincipal() instanceof org.springframework.security.oauth2.jwt.Jwt) {
+            org.springframework.security.oauth2.jwt.Jwt jwt = (org.springframework.security.oauth2.jwt.Jwt) authentication
+                    .getPrincipal();
+            String username = jwt.getClaimAsString("preferred_username");
+            String email = jwt.getClaimAsString("email");
+
+            java.util.List<String> roles = new java.util.ArrayList<>();
+            Map<String, Object> realmAccess = jwt.getClaim("realm_access");
+            if (realmAccess != null && realmAccess.containsKey("roles")) {
+                ((java.util.List<?>) realmAccess.get("roles")).forEach(role -> roles.add(role.toString()));
+            }
+
+            return new AuthDTOs.UserInfo(username, email, roles);
+        }
+
+        throw new RuntimeException(
+                "Unsupported authentication authentication type: " + authentication.getClass().getName());
+    }
 }

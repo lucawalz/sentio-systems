@@ -24,10 +24,154 @@ from hailo_apps.hailo_app_python.core.gstreamer.gstreamer_app import (
 from hailo_apps.hailo_app_python.apps.detection.detection_pipeline import (
     GStreamerDetectionApp
 )
+from hailo_apps.hailo_app_python.core.gstreamer.gstreamer_helper_pipelines import (
+    SOURCE_PIPELINE, INFERENCE_PIPELINE, INFERENCE_PIPELINE_WRAPPER,
+    TRACKER_PIPELINE, USER_CALLBACK_PIPELINE, DISPLAY_PIPELINE
+)
+from hailo_apps.hailo_app_python.core.common.core import get_resource_path
+from hailo_apps.hailo_app_python.core.common.defines import (
+    DETECTION_PIPELINE, RESOURCES_MODELS_DIR_NAME,
+    RESOURCES_SO_DIR_NAME, DETECTION_POSTPROCESS_SO_FILENAME, DETECTION_POSTPROCESS_FUNCTION
+)
 
 # Import MQTT modules
 from mqtt_publisher import MQTTPublisher
 from frame_capture import FrameCapture
+from http_stream import HTTPStreamServer
+
+
+class StreamingDetectionApp(GStreamerDetectionApp):
+    """
+    Custom detection app that adds MJPEG web streaming capability.
+    
+    Extends the base pipeline by inserting a 'tee' element after hailooverlay,
+    with one branch going to display and another to an appsink that feeds
+    an HTTP MJPEG server for browser streaming.
+    """
+    
+    def __init__(self, app_callback, user_data, streaming_config=None, http_server=None):
+        self.streaming_config = streaming_config or {}
+        self.stream_enabled = self.streaming_config.get("enabled", False)
+        self.stream_port = self.streaming_config.get("port", 8080)
+        self.stream_quality = self.streaming_config.get("quality", 80)
+        self.http_server = http_server
+        super().__init__(app_callback, user_data)
+        
+        # Connect to appsink after pipeline is created
+        if self.stream_enabled and self.http_server:
+            self._connect_appsink()
+    
+    def _connect_appsink(self):
+        """Connect appsink signals to HTTP server"""
+        try:
+            appsink = self.pipeline.get_by_name("stream_sink")
+            if appsink:
+                appsink.connect("new-sample", self._on_new_sample)
+                logger.info("Connected appsink to HTTP stream server")
+            else:
+                logger.warning("Could not find stream_sink in pipeline")
+        except Exception as e:
+            logger.error(f"Failed to connect appsink: {e}")
+    
+    def _on_new_sample(self, sink):
+        """Callback when new frame is available from appsink"""
+        sample = sink.emit("pull-sample")
+        if sample:
+            buffer = sample.get_buffer()
+            if buffer:
+                success, map_info = buffer.map(Gst.MapFlags.READ)
+                if success:
+                    try:
+                        # Pass JPEG data to HTTP server
+                        if self.http_server:
+                            self.http_server.update_frame(bytes(map_info.data))
+                    finally:
+                        buffer.unmap(map_info)
+        return Gst.FlowReturn.OK
+    
+    def get_pipeline_string(self):
+        """
+        Override to add streaming branch via tee element.
+        
+        Pipeline structure:
+        SOURCE → INFERENCE → TRACKER → USER_CALLBACK → hailooverlay → tee
+            ├─ branch1 → fpsdisplaysink (display)
+            └─ branch2 → jpegenc → appsink (HTTP stream)
+        """
+        source_pipeline = SOURCE_PIPELINE(
+            video_source=self.video_source,
+            video_width=self.video_width,
+            video_height=self.video_height,
+            frame_rate=self.frame_rate,
+            sync=self.sync,
+        )
+        detection_pipeline = INFERENCE_PIPELINE(
+            hef_path=self.hef_path,
+            post_process_so=self.post_process_so,
+            post_function_name=self.post_function_name,
+            batch_size=self.batch_size,
+            config_json=self.labels_json,
+            additional_params=self.thresholds_str,
+        )
+        detection_pipeline_wrapper = INFERENCE_PIPELINE_WRAPPER(detection_pipeline)
+        tracker_pipeline = TRACKER_PIPELINE(class_id=1)
+        user_callback_pipeline = USER_CALLBACK_PIPELINE()
+        
+        if self.stream_enabled:
+            # Build streaming pipeline with tee
+            # Overlay draws bounding boxes on frames
+            overlay_pipeline = (
+                f"queue leaky=no max-size-buffers=3 max-size-bytes=0 max-size-time=0 ! "
+                f"hailooverlay ! "
+                f"queue leaky=no max-size-buffers=3 max-size-bytes=0 max-size-time=0 ! "
+                f"videoconvert n-threads=3 ! "
+                f"tee name=stream_tee "
+            )
+            
+            # Display branch
+            display_branch = (
+                f"stream_tee. ! "
+                f"queue leaky=no max-size-buffers=3 max-size-bytes=0 max-size-time=0 ! "
+                f"fpsdisplaysink video-sink={self.video_sink} name=hailo_display "
+                f"sync={self.sync} text-overlay={self.show_fps} signal-fps-measurements=true "
+            )
+            
+            # Streaming branch - MJPEG via HTTP (appsink feeds Flask server)
+            stream_branch = (
+                f"stream_tee. ! "
+                f"queue leaky=downstream max-size-buffers=2 max-size-bytes=0 max-size-time=0 ! "
+                f"videoscale ! video/x-raw,width=640,height=480 ! "
+                f"videoconvert ! "
+                f"jpegenc quality={self.stream_quality} ! "
+                f"appsink name=stream_sink emit-signals=true max-buffers=2 drop=true "
+            )
+            
+            pipeline_string = (
+                f"{source_pipeline} ! "
+                f"{detection_pipeline_wrapper} ! "
+                f"{tracker_pipeline} ! "
+                f"{user_callback_pipeline} ! "
+                f"{overlay_pipeline} "
+                f"{display_branch} "
+                f"{stream_branch}"
+            )
+            
+            logger.info(f"HTTP streaming enabled on port {self.stream_port}")
+        else:
+            # Standard pipeline without streaming
+            display_pipeline = DISPLAY_PIPELINE(
+                video_sink=self.video_sink, sync=self.sync, show_fps=self.show_fps
+            )
+            pipeline_string = (
+                f"{source_pipeline} ! "
+                f"{detection_pipeline_wrapper} ! "
+                f"{tracker_pipeline} ! "
+                f"{user_callback_pipeline} ! "
+                f"{display_pipeline}"
+            )
+        
+        logger.debug(f"Pipeline string: {pipeline_string}")
+        return pipeline_string
 
 # Configure logging
 logging.basicConfig(
@@ -67,6 +211,25 @@ class AnimalDetectorData(app_callback_class):
         """Start MQTT and frame capture services"""
         self.mqtt_publisher.start()
         self.frame_capture.start()
+        
+        # Publish initial status
+        self._publish_device_status()
+        
+        # Schedule periodic status updates (every 60 seconds)
+        GLib.timeout_add_seconds(60, self._publish_device_status_wrapper)
+
+    def _publish_device_status_wrapper(self):
+        """Wrapper for GLib callback (which requires boolean return)"""
+        self._publish_device_status()
+        return True # Continue calling
+
+    def _publish_device_status(self):
+        """Get local IP and publish device status"""
+        try:
+            ip = get_local_ip()
+            self.mqtt_publisher.publish_status(ip)
+        except Exception as e:
+            self.logger.error(f"Failed to publish status: {e}")
 
     def stop_services(self):
         """Stop MQTT and frame capture services"""
@@ -246,10 +409,33 @@ def main():
         cam_config = config["camera"]
         sys.argv.extend(["--frame-rate", str(cam_config["framerate"])])
 
-        app = GStreamerDetectionApp(animal_detector_callback, user_data)
-
-        logger.info("Starting Hailo Animal Detector with MQTT publishing")
+        # Get streaming config (optional)
+        streaming_config = config.get("streaming", {})
+        http_server = None
+        
+        # Use StreamingDetectionApp if streaming is configured
+        if streaming_config.get("enabled", False):
+            # Create and start HTTP streaming server
+            http_server = HTTPStreamServer(config)
+            http_server.start()
+            
+            app = StreamingDetectionApp(
+                animal_detector_callback, 
+                user_data, 
+                streaming_config=streaming_config,
+                http_server=http_server
+            )
+            logger.info(f"Starting Hailo Animal Detector with MQTT and Web Streaming")
+            logger.info(f"Stream available at: http://0.0.0.0:{streaming_config.get('port', 8080)}/video_feed")
+        else:
+            app = GStreamerDetectionApp(animal_detector_callback, user_data)
+            logger.info("Starting Hailo Animal Detector with MQTT publishing")
+        
         app.run()
+        
+        # Stop HTTP server if running
+        if http_server:
+            http_server.stop()
 
         sys.argv = original_argv
 
@@ -260,6 +446,21 @@ def main():
     finally:
         user_data.stop_services()
         logger.info("Application shutdown complete")
+
+
+def get_local_ip():
+    """Get local IP address"""
+    import socket
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        # Doesn't need to be reachable
+        s.connect(('10.255.255.255', 1))
+        IP = s.getsockname()[0]
+    except Exception:
+        IP = '127.0.0.1'
+    finally:
+        s.close()
+    return IP
 
 
 if __name__ == "__main__":

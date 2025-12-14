@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { wikipediaService } from '../services/wikipediaService';
 
-interface BirdImageCache {
+interface AnimalImageCache {
     [species: string]: {
         url: string | null;
         lastAccessed: number;
@@ -10,16 +10,19 @@ interface BirdImageCache {
 }
 
 // Configuration
-const MAX_CACHE_SIZE = 50; // Maximum number of images to cache
-const CACHE_CLEANUP_THRESHOLD = 40; // When to trigger cleanup (keep most recent 40)
+const MAX_CACHE_SIZE = 50;
+const CACHE_CLEANUP_THRESHOLD = 40;
 
-// Species that should not have images fetched
 const INVALID_SPECIES = [
     'unknown',
     'unknown bird',
+    'unknown animal',
     'bird',
+    'mammal',
+    'animal',
     'unidentified',
     'unidentified bird',
+    'unidentified animal',
     'no detection',
     'none',
     'n/a',
@@ -27,7 +30,6 @@ const INVALID_SPECIES = [
     'undefined'
 ];
 
-// Helper function to check if a species is valid for image fetching
 const isValidSpecies = (species: string): boolean => {
     if (!species || typeof species !== 'string') {
         return false;
@@ -35,17 +37,14 @@ const isValidSpecies = (species: string): boolean => {
 
     const normalizedSpecies = species.toLowerCase().trim();
 
-    // Check if it's in the invalid list
     if (INVALID_SPECIES.includes(normalizedSpecies)) {
         return false;
     }
 
-    // Check if it's too short or generic
     if (normalizedSpecies.length < 3) {
         return false;
     }
 
-    // Check if it starts with "unknown" or contains "unidentified"
     if (normalizedSpecies.startsWith('unknown') || normalizedSpecies.includes('unidentified')) {
         return false;
     }
@@ -53,28 +52,26 @@ const isValidSpecies = (species: string): boolean => {
     return true;
 };
 
-export const useBirdImages = (speciesList: string[]) => {
-    const [imageCache, setImageCache] = useState<BirdImageCache>({});
+export const useAnimalImages = (speciesList: string[]) => {
+    const [imageCache, setImageCache] = useState<AnimalImageCache>({});
     const [loading, setLoading] = useState<Set<string>>(new Set());
     const cleanupTimeoutRef = useRef<number | null>(null);
 
     // Clean up old cache entries when cache gets too large
-    const cleanupCache = useCallback((currentCache: BirdImageCache) => {
+    const cleanupCache = useCallback((currentCache: AnimalImageCache) => {
         const cacheEntries = Object.entries(currentCache);
 
         if (cacheEntries.length <= MAX_CACHE_SIZE) {
             return currentCache;
         }
 
-        // Sort by last accessed time (most recent first)
         const sortedEntries = cacheEntries.sort((a, b) =>
             b[1].lastAccessed - a[1].lastAccessed
         );
 
-        // Keep only the most recently accessed entries
         const keepEntries = sortedEntries.slice(0, CACHE_CLEANUP_THRESHOLD);
 
-        const cleanedCache: BirdImageCache = {};
+        const cleanedCache: AnimalImageCache = {};
         keepEntries.forEach(([species, data]) => {
             cleanedCache[species] = data;
         });
@@ -83,7 +80,6 @@ export const useBirdImages = (speciesList: string[]) => {
         return cleanedCache;
     }, []);
 
-    // Debounced cache cleanup to avoid frequent operations
     const scheduleCleanup = useCallback(() => {
         if (cleanupTimeoutRef.current) {
             clearTimeout(cleanupTimeoutRef.current);
@@ -91,15 +87,12 @@ export const useBirdImages = (speciesList: string[]) => {
 
         cleanupTimeoutRef.current = setTimeout(() => {
             setImageCache(currentCache => cleanupCache(currentCache));
-        }, 1000); // Wait 1 second before cleaning up
+        }, 1000);
     }, [cleanupCache]);
 
-    // FIXED: Remove dependencies that cause circular updates
-    const fetchBirdImage = useCallback(async (species: string) => {
-        // Check if species is valid before doing anything
+    const fetchAnimalImage = useCallback(async (species: string) => {
         if (!isValidSpecies(species)) {
             console.log(`Skipping image fetch for invalid species: "${species}"`);
-            // Cache the result as null so we don't keep trying
             setImageCache(prev => ({
                 ...prev,
                 [species]: {
@@ -110,9 +103,7 @@ export const useBirdImages = (speciesList: string[]) => {
             return;
         }
 
-        // Use functional updates to avoid dependencies on current state
         setImageCache(prev => {
-            // Check if already cached or loading
             if (prev[species] !== undefined) {
                 return prev;
             }
@@ -120,7 +111,6 @@ export const useBirdImages = (speciesList: string[]) => {
         });
 
         setLoading(prev => {
-            // Check if already loading
             if (prev.has(species)) {
                 return prev;
             }
@@ -128,7 +118,7 @@ export const useBirdImages = (speciesList: string[]) => {
         });
 
         try {
-            const imageUrl = await wikipediaService.getBirdImageUrl(species);
+            const imageUrl = await wikipediaService.getAnimalImageUrl(species);
             const cacheEntry = {
                 url: imageUrl,
                 lastAccessed: Date.now()
@@ -137,7 +127,6 @@ export const useBirdImages = (speciesList: string[]) => {
             setImageCache(prev => {
                 const newCache = { ...prev, [species]: cacheEntry };
 
-                // Schedule cleanup if cache is getting large
                 if (Object.keys(newCache).length > MAX_CACHE_SIZE) {
                     setTimeout(() => scheduleCleanup(), 0);
                 }
@@ -162,7 +151,6 @@ export const useBirdImages = (speciesList: string[]) => {
         }
     }, [scheduleCleanup]); // Only depend on scheduleCleanup
 
-    // FIXED: Use a ref to track processed species to prevent infinite loops
     const processedSpeciesRef = useRef<Set<string>>(new Set());
 
     useEffect(() => {
@@ -176,11 +164,10 @@ export const useBirdImages = (speciesList: string[]) => {
 
         newSpeciesToProcess.forEach(species => {
             processedSpeciesRef.current.add(species);
-            fetchBirdImage(species);
+            fetchAnimalImage(species);
         });
-    }, [speciesList, fetchBirdImage]);
+    }, [speciesList, fetchAnimalImage]);
 
-    // Cleanup timeout on unmount
     useEffect(() => {
         return () => {
             if (cleanupTimeoutRef.current) {
@@ -189,12 +176,11 @@ export const useBirdImages = (speciesList: string[]) => {
         };
     }, []);
 
-    const getBirdImage = useCallback((species: string): string | null => {
+    const getAnimalImage = useCallback((species: string): string | null => {
         const cacheEntry = imageCache[species];
         return cacheEntry ? cacheEntry.url : null;
     }, [imageCache]);
 
-    // FIXED: Remove imageCache dependency to prevent circular updates
     const markImageAccessed = useCallback((species: string) => {
         setImageCache(prev => {
             if (prev[species]) {
@@ -214,14 +200,12 @@ export const useBirdImages = (speciesList: string[]) => {
         return loading.has(species);
     }, [loading]);
 
-    // Helper function to check if a species is valid (useful for components)
     const isValidSpeciesForImage = useCallback((species: string): boolean => {
         return isValidSpecies(species);
     }, []);
 
-    // FIXED: Remove imageCache dependency
     const getCacheStats = useCallback(() => {
-        return (currentCache: BirdImageCache) => {
+        return (currentCache: AnimalImageCache) => {
             const entries = Object.entries(currentCache);
             return {
                 totalEntries: entries.length,
@@ -229,22 +213,22 @@ export const useBirdImages = (speciesList: string[]) => {
                 failedEntries: entries.filter(([, data]) => data.url === null).length,
                 invalidEntries: entries.filter(([species]) => !isValidSpecies(species)).length,
                 oldestEntry: entries.reduce((oldest, [species, data]) =>
-                        !oldest || data.lastAccessed < oldest.lastAccessed
-                            ? { species, lastAccessed: data.lastAccessed }
-                            : oldest
+                    !oldest || data.lastAccessed < oldest.lastAccessed
+                        ? { species, lastAccessed: data.lastAccessed }
+                        : oldest
                     , null as { species: string; lastAccessed: number } | null)
             };
         };
     }, []);
 
     return {
-        getBirdImage,
+        getAnimalImage,
         markImageAccessed,
         isLoadingImage,
         isValidSpeciesForImage,
         imageCache: Object.fromEntries(
             Object.entries(imageCache).map(([species, data]) => [species, data.url])
         ),
-        getCacheStats: getCacheStats()(imageCache), // Call the function with current cache
+        getCacheStats: getCacheStats()(imageCache),
     };
 };

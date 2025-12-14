@@ -1,6 +1,10 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { ThemeProvider } from './components/shared/theme-context';
 import { AuthProvider } from './context/auth';
+import { AnimalProvider } from './context/AnimalContext';
+import { WeatherProvider } from './context/WeatherContext';
+import { ForecastProvider } from './context/ForecastContext';
+import { AiSummaryProvider } from './context/AiSummaryContext';
 import { Layout } from './components/layout/Layout.tsx';
 import { ProtectedRoute } from './components/auth/protected-route.tsx';
 import Landing from './pages/Landing';
@@ -19,7 +23,17 @@ function App() {
                         <Routes>
                             <Route path="/" element={<Landing />} />
                             <Route element={<ProtectedRoute />}>
-                                <Route path="/dashboard" element={<Dashboard />} />
+                                <Route path="/dashboard" element={
+                                    <AnimalProvider>
+                                        <WeatherProvider>
+                                            <ForecastProvider>
+                                                <AiSummaryProvider>
+                                                    <Dashboard />
+                                                </AiSummaryProvider>
+                                            </ForecastProvider>
+                                        </WeatherProvider>
+                                    </AnimalProvider>
+                                } />
                             </Route>
                             <Route path="/login" element={<LogIn mode="login" />} />
                             <Route path="/create-account" element={<LogIn mode="register" />} />
