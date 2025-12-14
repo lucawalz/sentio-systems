@@ -12,6 +12,8 @@ import { AnimalSightingsChart } from "../components/dashboard/animal-sightings-c
 import { DashboardFooter } from "../components/layout/dashboard-footer"
 import { DashboardHeader } from "../components/layout/dashboard-header"
 import { EnhancedAISummary } from "../components/dashboard/ai-summary.tsx";
+import { WeatherAlerts } from "../components/dashboard/weather-alerts";
+import { WeatherRadar } from "../components/dashboard/weather-radar";
 
 function DashboardContent() {
     useEffect(() => {
@@ -86,6 +88,16 @@ function DashboardContent() {
                 {/* Five Day Forecast */}
                 <div className="flex-1">
                     <FiveDayForecast />
+                </div>
+
+                {/* Weather Alerts and Radar Row */}
+                <div className="flex flex-col lg:flex-row gap-6">
+                    <div className="flex-1">
+                        <WeatherAlerts />
+                    </div>
+                    <div className="flex-1">
+                        <WeatherRadar />
+                    </div>
                 </div>
 
                 {/* Middle Row - Animal Livestream and Recent Sights */}
