@@ -46,22 +46,18 @@ public class DeviceStatusHandler {
                 Device device = deviceOpt.get();
                 boolean needsUpdate = false;
 
-                // Check 1: IP Address changed?
                 if (device.getIpAddress() == null || !device.getIpAddress().equals(ipAddress)) {
                     device.setIpAddress(ipAddress);
                     needsUpdate = true;
                     log.info("Device {} IP changed to {}", deviceId, ipAddress);
                 }
 
-                // Check 2: New Service detected?
                 if (service != null && !device.getActiveServices().contains(service)) {
                     device.getActiveServices().add(service);
                     needsUpdate = true;
                     log.info("New service '{}' detected on device {}", service, deviceId);
                 }
 
-                // Check 3: Throttling (only update LastSeen if > 60s ago, unless other changes
-                // happened)
                 if (needsUpdate || device.getLastSeen() == null ||
                         device.getLastSeen().isBefore(LocalDateTime.now().minusSeconds(60))) {
 

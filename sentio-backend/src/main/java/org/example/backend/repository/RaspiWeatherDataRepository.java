@@ -30,7 +30,6 @@ public interface RaspiWeatherDataRepository extends JpaRepository<RaspiWeatherDa
     @Query("SELECT AVG(w.pressure) FROM RaspiWeatherData w WHERE w.timestamp >= :start")
     Double getAveragePressureSince(LocalDateTime start);
 
-    // Filtered by Device IDs (Privacy)
     RaspiWeatherData findTopByDeviceIdInOrderByTimestampDesc(List<String> deviceIds);
 
     @Query("SELECT w FROM RaspiWeatherData w WHERE w.deviceId IN :deviceIds AND w.timestamp >= :start ORDER BY w.timestamp DESC")

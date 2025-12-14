@@ -265,14 +265,11 @@ public class AnimalClassifierService {
 
         storeOriginalValues(detection);
 
-        // Update primary species and confidence
         String topSpecies = (String) classificationMap.get(TOP_SPECIES_KEY);
         Double topConfidence = ((Number) classificationMap.get(TOP_CONFIDENCE_KEY)).doubleValue();
 
-        // Extract just the common name from the taxonomic format (last segment)
         String displaySpecies = extractCommonName(topSpecies);
 
-        // Check if the top species is "blank" (background) and try to find a better one
         if ("blank".equalsIgnoreCase(displaySpecies)) {
             log.debug("Top species is 'blank', searching for better candidate in predictions...");
 
@@ -302,8 +299,6 @@ public class AnimalClassifierService {
             }
 
             if (!foundBetterCandidate) {
-                // If everything is blank, fallback to original species if available, or keep
-                // blank but log it
                 log.warn("All predictions are 'blank'. Falling back to original species: {}",
                         detection.getOriginalSpecies());
                 displaySpecies = detection.getOriginalSpecies() != null ? detection.getOriginalSpecies()
@@ -317,12 +312,7 @@ public class AnimalClassifierService {
         detection.setSpecies(displaySpecies);
         detection.setConfidence(topConfidence.floatValue());
 
-        // Process alternate species
-        // We need to pass the *actual* top species we selected to avoid listing it as
-        // alternate
         processAlternateSpecies(detection, classificationMap, displaySpecies);
-
-        // Mark as AI processed
         markAsAiProcessed(detection);
 
         log.info("Successfully updated detection ID {} - Type: {}, Primary: {} ({:.2f})",
@@ -403,11 +393,9 @@ public class AnimalClassifierService {
             return UNKNOWN_SPECIES;
         }
 
-        // Split by semicolon and get the last part (common name)
         String[] parts = taxonomicSpecies.split(";");
         if (parts.length > 0) {
             String lastPart = parts[parts.length - 1].trim();
-            // Return the common name if it exists, otherwise the original string
             return lastPart.isEmpty() ? taxonomicSpecies : lastPart;
         }
 

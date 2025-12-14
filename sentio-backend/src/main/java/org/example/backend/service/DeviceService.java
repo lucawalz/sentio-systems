@@ -48,13 +48,6 @@ public class DeviceService {
             log.info("Creating new device entry for {}", deviceId);
         }
 
-        // Update name if provided, or keep existing?
-        // Let's decide: User can update the name if they are registering it.
-        // But if multiple users own it, changing name might affect others.
-        // For simplicity, let's allow updating name or set it if new.
-        // Better approach for shared device: Name might be personal, but Entity has one
-        // name field.
-        // We will just update the name to the latest provided.
         device.setName(name);
 
         device.getOwners().add(username);

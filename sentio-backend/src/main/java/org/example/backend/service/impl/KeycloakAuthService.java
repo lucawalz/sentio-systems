@@ -262,11 +262,6 @@ public class KeycloakAuthService implements AuthService {
                     .getPrincipal();
             String username = jwt.getClaimAsString("preferred_username");
             String email = jwt.getClaimAsString("email");
-            // Roles extraction might depend on your converter, keeping it simple for now or
-            // parsing from claims again
-            // For simplicity, we just return basic info or re-parse if needed.
-            // Let's reuse getUserFromToken logic if we had the raw token string, but here
-            // we have the decoded Jwt object.
 
             java.util.List<String> roles = new java.util.ArrayList<>();
             Map<String, Object> realmAccess = jwt.getClaim("realm_access");
