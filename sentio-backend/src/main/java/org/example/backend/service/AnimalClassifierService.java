@@ -27,7 +27,8 @@ import java.util.Optional;
 
 /**
  * Service for unified animal detection and AI classification.
- * Handles classification for multiple animal types including birds, mammals, and others.
+ * Handles classification for multiple animal types including birds, mammals,
+ * and others.
  * Routes images through preprocessing service before classification.
  */
 @Service
@@ -64,7 +65,8 @@ public class AnimalClassifierService {
 
         // Check if we have a classifier for this animal type
         if (!hasClassifierForAnimalType(detection.getAnimalType())) {
-            log.info("No AI classifier available for animal type '{}' - detection ID: {}. Keeping original classification.",
+            log.info(
+                    "No AI classifier available for animal type '{}' - detection ID: {}. Keeping original classification.",
                     detection.getAnimalType(), detection.getId());
             markAsProcessedWithoutAIClassification(detection);
             return;
@@ -97,7 +99,7 @@ public class AnimalClassifierService {
         }
 
         return switch (animalType.toLowerCase()) {
-            case "bird", "mammal", "human" -> true; //human still for testing
+            case "bird", "mammal", "human" -> true; // human still for testing
             default -> false;
         };
     }
@@ -118,7 +120,8 @@ public class AnimalClassifierService {
     }
 
     /**
-     * Calls the preprocessing service which handles image enhancement and forwarding to classifier
+     * Calls the preprocessing service which handles image enhancement and
+     * forwarding to classifier
      */
     private Map<String, Object> callPreprocessingService(File imageFile, String animalType) {
         try {
@@ -137,8 +140,8 @@ public class AnimalClassifierService {
                     preprocessingServiceUrl,
                     HttpMethod.POST,
                     requestEntity,
-                    new ParameterizedTypeReference<>() {}
-            );
+                    new ParameterizedTypeReference<>() {
+                    });
 
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 Map<String, Object> responseBody = response.getBody();
@@ -162,7 +165,8 @@ public class AnimalClassifierService {
     }
 
     /**
-     * Marks detection as processed without AI classification for unsupported animal types
+     * Marks detection as processed without AI classification for unsupported animal
+     * types
      */
     private void markAsProcessedWithoutAIClassification(AnimalDetection detection) {
         // Keep the original species and confidence as-is
@@ -170,7 +174,8 @@ public class AnimalClassifierService {
         detection.setProcessedAt(LocalDateTime.now());
         animalDetectionRepository.save(detection);
 
-        log.info("Detection ID {} marked as processed without AI classification - keeping original classification: {} ({})",
+        log.info(
+                "Detection ID {} marked as processed without AI classification - keeping original classification: {} ({})",
                 detection.getId(), detection.getSpecies(), detection.getAnimalType());
     }
 
@@ -193,7 +198,8 @@ public class AnimalClassifierService {
     }
 
     /**
-     * Processes bird classification response (backward compatibility with existing API).
+     * Processes bird classification response (backward compatibility with existing
+     * API).
      */
     private void processBirdClassificationResponse(AnimalDetection detection, Map<String, Object> responseBody) {
         try {
@@ -203,7 +209,8 @@ public class AnimalClassifierService {
             Map<String, Object> classificationMap = (Map<String, Object>) responseBody.get(CLASSIFICATION_KEY);
 
             if (detectionMap == null || classificationMap == null) {
-                log.error("Invalid API response structure for detection ID {}: missing required fields", detection.getId());
+                log.error("Invalid API response structure for detection ID {}: missing required fields",
+                        detection.getId());
                 return;
             }
 
@@ -249,7 +256,8 @@ public class AnimalClassifierService {
     }
 
     /**
-     * Updates the detection record with classification results from the generic classifier.
+     * Updates the detection record with classification results from the generic
+     * classifier.
      * Extracts common names from the taxonomic format and cleans up results.
      */
     private void updateGenericClassificationResults(AnimalDetection detection, Map<String, Object> classificationMap)
@@ -264,11 +272,55 @@ public class AnimalClassifierService {
         // Extract just the common name from the taxonomic format (last segment)
         String displaySpecies = extractCommonName(topSpecies);
 
+        // Check if the top species is "blank" (background) and try to find a better one
+        if ("blank".equalsIgnoreCase(displaySpecies)) {
+            log.debug("Top species is 'blank', searching for better candidate in predictions...");
+
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> predictionsList = (List<Map<String, Object>>) classificationMap
+                    .get(PREDICTIONS_KEY);
+
+            boolean foundBetterCandidate = false;
+
+            if (predictionsList != null) {
+                // Iterate through predictions to find first non-blank
+                for (Map<String, Object> pred : predictionsList) {
+                    String predSpecies = (String) pred.get(SPECIES_KEY);
+                    String predCommon = extractCommonName(predSpecies);
+
+                    if (!"blank".equalsIgnoreCase(predCommon)) {
+                        // Found a better candidate
+                        displaySpecies = predCommon;
+                        Double conf = ((Number) pred.get(CONFIDENCE_KEY)).doubleValue();
+                        topConfidence = conf;
+                        topSpecies = predSpecies; // Update for alternate processing check
+                        foundBetterCandidate = true;
+                        log.info("Promoted candidate '{}' ({:.2f}) over 'blank'", displaySpecies, topConfidence);
+                        break;
+                    }
+                }
+            }
+
+            if (!foundBetterCandidate) {
+                // If everything is blank, fallback to original species if available, or keep
+                // blank but log it
+                log.warn("All predictions are 'blank'. Falling back to original species: {}",
+                        detection.getOriginalSpecies());
+                displaySpecies = detection.getOriginalSpecies() != null ? detection.getOriginalSpecies()
+                        : displaySpecies;
+                if (detection.getOriginalConfidence() != null) {
+                    topConfidence = detection.getOriginalConfidence().doubleValue();
+                }
+            }
+        }
+
         detection.setSpecies(displaySpecies);
         detection.setConfidence(topConfidence.floatValue());
 
         // Process alternate species
-        processAlternateSpecies(detection, classificationMap);
+        // We need to pass the *actual* top species we selected to avoid listing it as
+        // alternate
+        processAlternateSpecies(detection, classificationMap, displaySpecies);
 
         // Mark as AI processed
         markAsAiProcessed(detection);
@@ -281,7 +333,8 @@ public class AnimalClassifierService {
      * Process and store alternate species from classification results
      */
     @SuppressWarnings("unchecked")
-    private void processAlternateSpecies(AnimalDetection detection, Map<String, Object> classificationMap)
+    private void processAlternateSpecies(AnimalDetection detection, Map<String, Object> classificationMap,
+            String currentTopSpecies)
             throws JsonProcessingException {
 
         List<Map<String, Object>> predictionsList = (List<Map<String, Object>>) classificationMap.get(PREDICTIONS_KEY);
@@ -291,17 +344,26 @@ public class AnimalClassifierService {
 
         List<AnimalDetectionDTO.AlternateSpeciesDTO> alternateSpeciesList = new ArrayList<>();
 
-        // Skip the first prediction and take the next 4
-        for (int i = 1; i < Math.min(predictionsList.size(), MAX_ALTERNATE_SPECIES + 1); i++) {
-            Map<String, Object> pred = predictionsList.get(i);
+        // Iterate through predictions
+        int count = 0;
+        for (Map<String, Object> pred : predictionsList) {
+            if (count >= MAX_ALTERNATE_SPECIES)
+                break;
+
             String species = (String) pred.get(SPECIES_KEY);
             Double confidence = ((Number) pred.get(CONFIDENCE_KEY)).doubleValue();
 
-            // Extract common name for each alternate species
+            // Extract common name
             String displayAlternate = extractCommonName(species);
+
+            // Skip if it's the same as our selected top species, or if it's "blank"
+            if (displayAlternate.equalsIgnoreCase(currentTopSpecies) || "blank".equalsIgnoreCase(displayAlternate)) {
+                continue;
+            }
 
             alternateSpeciesList.add(new AnimalDetectionDTO.AlternateSpeciesDTO(
                     displayAlternate, confidence.floatValue()));
+            count++;
         }
 
         // Convert to JSON string for storage
@@ -332,7 +394,8 @@ public class AnimalClassifierService {
 
     /**
      * Extracts the common name from a taxonomic species string.
-     * Format example: "990ae9dd-7a59-4344-afcb-1b7b21368000;mammalia;primates;hominidae;homo;sapiens;human"
+     * Format example:
+     * "990ae9dd-7a59-4344-afcb-1b7b21368000;mammalia;primates;hominidae;homo;sapiens;human"
      * Returns: "human"
      */
     private String extractCommonName(String taxonomicSpecies) {
@@ -367,7 +430,7 @@ public class AnimalClassifierService {
         detection.setConfidence(topConfidence.floatValue());
 
         // Process alternate species
-        processAlternateSpecies(detection, classificationMap);
+        processAlternateSpecies(detection, classificationMap, topSpecies);
 
         // Mark as AI processed
         markAsAiProcessed(detection);
@@ -391,7 +454,8 @@ public class AnimalClassifierService {
 
     /**
      * Determines animal type from species name for initial classification.
-     * This method can be used when the initial detection doesn't specify animal type.
+     * This method can be used when the initial detection doesn't specify animal
+     * type.
      */
     public String determineAnimalType(String species) {
         if (species == null) {
