@@ -25,7 +25,7 @@ RUN pip install --no-cache-dir -r requirements.txt && \
 COPY speciesnet_ai.py ./
 
 # Expose the API port
-EXPOSE 8000
+EXPOSE 8081
 
 # Run the application
 CMD ["python", "speciesnet_ai.py"]
