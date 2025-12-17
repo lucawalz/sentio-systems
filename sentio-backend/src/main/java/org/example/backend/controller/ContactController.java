@@ -18,16 +18,24 @@ public class ContactController {
 
     @PostMapping
     public ResponseEntity<Void> send(@RequestBody ContactRequest request) {
-        System.out.println(">>> ContactController reached, mail=" + request.getMail()); //remove if i works out
+        System.out.println(">>> ContactController reached, mail=" + request.getMail()); //remove if it works out
         // easy server validation (add to frontend)
         if (isBlank(request.getMail()) || isBlank(request.getMessage())) {
             return ResponseEntity.badRequest().build();
         }
 
+        System.out.println("Mail would be sent here");
         service.sendContactMail(request);
         return ResponseEntity.ok().build();
     }
 
+    @PostMapping("/test")
+    public void test() {
+        ContactRequest r = new ContactRequest();
+        r.setMail("test@test.de");
+        r.setMessage("Hello");
+        service.sendContactMail(r);
+    }
     private boolean isBlank(String s) {
         return s == null || s.isBlank();
     }

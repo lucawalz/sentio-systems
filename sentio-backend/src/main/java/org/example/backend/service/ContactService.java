@@ -19,6 +19,7 @@ public class ContactService {
 
     public void sendContactMail(ContactRequest request) {
         SimpleMailMessage msg = new SimpleMailMessage();
+        msg.setFrom("SentioSystems@outlook.com");
         msg.setTo(contactTo);
         msg.setSubject("New contact message: " + safe(request.getReference()));
 
@@ -52,4 +53,5 @@ public class ContactService {
     private String safe(String value) {
         return value == null ? "" : value;
     }
+
 }
