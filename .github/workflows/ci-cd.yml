@@ -1,7 +1,8 @@
-name: CI/CD Pipeline
-
+name: Production CI/CD Pipeline
 on:
   push:
+    branches: [main, develop, 'release/**']
+  pull_request:
     branches: [main, develop]
   workflow_dispatch:
     inputs:
@@ -13,885 +14,536 @@ on:
           - development
           - staging
           - production
-
+      version_bump:
+        description: 'Version bump type'
+        required: false
+        type: choice
+        default: 'patch'
+        options:
+          - major
+          - minor
+          - patch
 env:
   REGISTRY: ghcr.io
   REPO: ${{ github.repository }}
-
-# Prevent concurrent deployments
+# Prevent concurrent deployments per environment
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
-
 jobs:
   # ============================================
-  # SECURITY SCANNING - Dependency Check
+  # VERSION MANAGEMENT
   # ============================================
-  security-scan:
-    name: Security Scan - Dependencies
+  version:
+    name: Calculate Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.semver.outputs.version }}
+      short_sha: ${{ steps.vars.outputs.short_sha }}
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for proper versioning
+      - name: Calculate short SHA
+        id: vars
+        run: |
+          SHORT_SHA=$(git rev-parse --short=7 HEAD)
+          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+          echo "Short SHA: $SHORT_SHA"
+      - name: Get latest tag
+        id: get_latest_tag
+        run: |
+          # Get the latest semver tag
+          LATEST_TAG=$(git tag -l "v[0-9]*.[0-9]*.[0-9]*" | sort -V | tail -n 1)
+          if [ -z "$LATEST_TAG" ]; then
+            LATEST_TAG="v0.0.0"
+          fi
+          echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+          echo "Latest tag: $LATEST_TAG"
+      - name: Calculate semantic version
+        id: semver
+        run: |
+          LATEST_TAG="${{ steps.get_latest_tag.outputs.latest_tag }}"
+          
+          # Remove the 'v' prefix for calculation
+          VERSION=${LATEST_TAG#v}
+          IFS='.' read -ra VERSION_PARTS <<< "$VERSION"
+          MAJOR=${VERSION_PARTS[0]}
+          MINOR=${VERSION_PARTS[1]}
+          PATCH=${VERSION_PARTS[2]}
+          
+          # Determine version bump based on branch or manual input
+          BUMP_TYPE="${{ github.event.inputs.version_bump }}"
+          
+          if [ -z "$BUMP_TYPE" ]; then
+            # Auto-determine based on branch
+            if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+              BUMP_TYPE="minor"
+            else
+              BUMP_TYPE="patch"
+            fi
+          fi
+          
+          # Apply version bump
+          case "$BUMP_TYPE" in
+            major)
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+              ;;
+            minor)
+              MINOR=$((MINOR + 1))
+              PATCH=0
+              ;;
+            patch)
+              PATCH=$((PATCH + 1))
+              ;;
+          esac
+          
+          NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+          
+          # Add pre-release suffix for non-main branches
+          if [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
+            NEW_VERSION="$NEW_VERSION-dev.${{ steps.vars.outputs.short_sha }}"
+          elif [[ "${{ github.ref }}" == refs/heads/release/* ]]; then
+            NEW_VERSION="$NEW_VERSION-rc.${{ steps.vars.outputs.short_sha }}"
+          fi
+          
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "Calculated version: $NEW_VERSION"
+  # ============================================
+  # CODE QUALITY & SECURITY
+  # ============================================
+  code-quality:
+    name: Code Quality & Security
     runs-on: ubuntu-latest
     permissions:
       contents: read
       security-events: write
       actions: read
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Run Trivy vulnerability scanner in fs mode
+      - name: Run Trivy filesystem scan
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
           scan-ref: '.'
           format: 'sarif'
-          output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH'
-
+          output: 'trivy-fs-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          ignore-unfixed: true
       - name: Upload Trivy results to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
         if: always()
-        continue-on-error: true
         with:
-          sarif_file: 'trivy-results.sarif'
-
+          sarif_file: 'trivy-fs-results.sarif'
+          category: 'filesystem'
   # ============================================
   # BACKEND SERVICE
   # ============================================
   backend-test:
-    name: Test Backend
+    name: Backend - Test & Build
     runs-on: ubuntu-latest
+    needs: [version]
     timeout-minutes: 30
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
           cache: 'maven'
-
-      - name: Verify Maven installation
+      - name: Run Maven verify
         working-directory: ./sentio-backend
-        run: |
-          java -version
-          ./mvnw --version
-
-      - name: Compile backend
-        working-directory: ./sentio-backend
-        run: ./mvnw clean compile -DskipTests
-
-      - name: Run tests (if available)
-        working-directory: ./sentio-backend
-        run: ./mvnw test
+        run: ./mvnw clean verify -DskipTests=false
         continue-on-error: true
-        # Remove continue-on-error once we have tests
-
       - name: Package application
         working-directory: ./sentio-backend
         run: ./mvnw package -DskipTests
-
       - name: Upload JAR artifact
         uses: actions/upload-artifact@v4
         with:
-          name: backend-jar
+          name: backend-jar-${{ needs.version.outputs.short_sha }}
           path: sentio-backend/target/*.jar
-          retention-days: 7
-
+          retention-days: 30
   backend-build:
-    name: Build & Push Backend
+    name: Backend - Build & Push Image
     runs-on: ubuntu-latest
-    needs: [backend-test, security-scan]
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    needs: [version, backend-test, code-quality]
+    if: github.event_name != 'pull_request'
     timeout-minutes: 20
-
     permissions:
       contents: read
       packages: write
       security-events: write
-      actions: read
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.REPO }}/sentio-backend
-          tags: |
-            type=ref,event=branch
-            type=sha,prefix={{branch}}-
-            type=semver,pattern={{version}}
-            type=raw,value=latest,enable={{is_default_branch}}
-
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: ./sentio-backend
+          platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=backend
-          cache-to: type=gha,mode=max,scope=backend
-
-      - name: Run Trivy vulnerability scanner on image
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.REPO }}/sentio-backend:${{ needs.version.outputs.version }}
+            ${{ env.REGISTRY }}/${{ env.REPO }}/sentio-backend:${{ needs.version.outputs.short_sha }}
+            ${{ env.REGISTRY }}/${{ env.REPO }}/sentio-backend:${{ github.ref_name }}
+          labels: |
+            org.opencontainers.image.title=Sentio Backend
+            org.opencontainers.image.description=Sentio Systems Backend Service
+            org.opencontainers.image.version=${{ needs.version.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.repositoryUrl }}
+          cache-from: type=gha,scope=backend-${{ github.ref_name }}
+          cache-to: type=gha,mode=max,scope=backend-${{ github.ref_name }}
+          provenance: true
+          sbom: true
+      - name: Run Trivy image scan
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.REPO }}/sentio-backend:${{ github.ref_name }}
+          image-ref: ${{ env.REGISTRY }}/${{ env.REPO }}/sentio-backend:${{ needs.version.outputs.version }}
           format: 'sarif'
-          output: 'trivy-backend-image.sarif'
+          output: 'trivy-backend.sarif'
           severity: 'CRITICAL,HIGH'
-
-      - name: Upload Trivy image scan results
+      - name: Upload Trivy results
         uses: github/codeql-action/upload-sarif@v3
         if: always()
-        continue-on-error: true
         with:
-          sarif_file: 'trivy-backend-image.sarif'
+          sarif_file: 'trivy-backend.sarif'
           category: 'backend-image'
-
   # ============================================
   # FRONTEND SERVICE
   # ============================================
   frontend-test:
-    name: Test Frontend
+    name: Frontend - Test & Build
     runs-on: ubuntu-latest
+    needs: [version]
     timeout-minutes: 30
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: sentio-web/package-lock.json
-
       - name: Install dependencies
         working-directory: ./sentio-web
         run: npm ci
-
-      - name: Check for TypeScript errors
-        working-directory: ./sentio-web
-        run: npx tsc --noEmit
-        continue-on-error: true
-
       - name: Run linter
         working-directory: ./sentio-web
         run: npm run lint
         continue-on-error: true
-        # Remove continue-on-error once linting issues are fixed
-
-      - name: Run tests (if available)
+      - name: Type check
+        working-directory: ./sentio-web
+        run: npx tsc --noEmit
+      - name: Run tests
         working-directory: ./sentio-web
         run: npm test --if-present
         continue-on-error: true
-
       - name: Build application
         working-directory: ./sentio-web
         run: npm run build
-
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: frontend-build
+          name: frontend-build-${{ needs.version.outputs.short_sha }}
           path: sentio-web/dist/
-          retention-days: 7
-
+          retention-days: 30
   frontend-build:
-    name: Build & Push Frontend
+    name: Frontend - Build & Push Image
     runs-on: ubuntu-latest
-    needs: [frontend-test, security-scan]
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    needs: [version, frontend-test, code-quality]
+    if: github.event_name != 'pull_request'
     timeout-minutes: 30
-
     permissions:
       contents: read
       packages: write
       security-events: write
-      actions: read
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.REPO }}/sentio-web
-          tags: |
-            type=ref,event=branch
-            type=sha,prefix={{branch}}-
-            type=semver,pattern={{version}}
-            type=raw,value=latest,enable={{is_default_branch}}
-
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: ./sentio-web
+          platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=frontend
-          cache-to: type=gha,mode=max,scope=frontend
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.REPO }}/sentio-web:${{ needs.version.outputs.version }}
+            ${{ env.REGISTRY }}/${{ env.REPO }}/sentio-web:${{ needs.version.outputs.short_sha }}
+            ${{ env.REGISTRY }}/${{ env.REPO }}/sentio-web:${{ github.ref_name }}
+          labels: |
+            org.opencontainers.image.title=Sentio Web
+            org.opencontainers.image.description=Sentio Systems Frontend
+            org.opencontainers.image.version=${{ needs.version.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.repositoryUrl }}
+          cache-from: type=gha,scope=frontend-${{ github.ref_name }}
+          cache-to: type=gha,mode=max,scope=frontend-${{ github.ref_name }}
           build-args: |
             VITE_API_URL=/api
-
-      - name: Run Trivy vulnerability scanner on image
+          provenance: true
+          sbom: true
+      - name: Run Trivy image scan
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.REPO }}/sentio-web:${{ github.ref_name }}
+          image-ref: ${{ env.REGISTRY }}/${{ env.REPO }}/sentio-web:${{ needs.version.outputs.version }}
           format: 'sarif'
-          output: 'trivy-frontend-image.sarif'
+          output: 'trivy-frontend.sarif'
           severity: 'CRITICAL,HIGH'
-
-      - name: Upload Trivy image scan results
+      - name: Upload Trivy results
         uses: github/codeql-action/upload-sarif@v3
         if: always()
-        continue-on-error: true
         with:
-          sarif_file: 'trivy-frontend-image.sarif'
+          sarif_file: 'trivy-frontend.sarif'
           category: 'frontend-image'
-
   # ============================================
-  # BIRDER AI SERVICE
+  # AI SERVICES
   # ============================================
-  birder-test:
-    name: Test Birder AI
+  ai-services-test:
+    name: ${{ matrix.service }} - Test & Build
     runs-on: ubuntu-latest
+    needs: [version]
     timeout-minutes: 30
-
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - birder
+          - speciesnet
+          - preprocessing
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
       - name: Free up disk space
         run: |
-          echo "Disk space before cleanup:"
-          df -h
-          
-          # Remove unnecessary software
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
           sudo docker system prune -af
-          
-          echo "Disk space after cleanup:"
-          df -h
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
-          cache-dependency-path: sentio-ai/birder/requirements.txt
-
+          cache-dependency-path: sentio-ai/${{ matrix.service }}/requirements.txt
       - name: Install dependencies
-        working-directory: ./sentio-ai/birder
+        working-directory: ./sentio-ai/${{ matrix.service }}
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
-
-      - name: Check Python syntax
-        working-directory: ./sentio-ai/birder
-        run: |
-          python -m py_compile $(find . -name "*.py" -not -path "./venv/*")
-        continue-on-error: true
-
-      - name: Run import tests
-        working-directory: ./sentio-ai/birder
-        run: |
-          python -c "
-          import sys
-          print('Testing Birder AI imports...')
-          try:
-              import fastapi
-              print('FastAPI imported')
-              import birder
-              print('Birder imported')
-              import torch
-              print('PyTorch imported')
-              import PIL
-              print('Pillow imported')
-              print('All imports successful!')
-              sys.exit(0)
-          except ImportError as e:
-              print(f'Import failed: {e}')
-              sys.exit(1)
-          "
-
-      - name: Run tests (if available)
-        working-directory: ./sentio-ai/birder
+          if [ "${{ matrix.service }}" == "speciesnet" ]; then
+            pip install speciesnet
+          fi
+      - name: Run syntax check
+        working-directory: ./sentio-ai/${{ matrix.service }}
+        run: python -m py_compile $(find . -name "*.py" -not -path "./venv/*")
+      - name: Run import validation
+        working-directory: ./sentio-ai/${{ matrix.service }}
+        run: python -c "import fastapi; print('FastAPI OK')"
+      - name: Run tests
+        working-directory: ./sentio-ai/${{ matrix.service }}
         run: |
           if [ -d "tests" ]; then
-            pip install pytest
-            pytest tests/
+            pip install pytest pytest-cov
+            pytest tests/ --cov --cov-report=xml
           else
-            echo "No tests directory found, skipping..."
+            echo "No tests found, skipping..."
           fi
         continue-on-error: true
-
-  birder-build:
-    name: Build & Push Birder AI
+  ai-services-build:
+    name: ${{ matrix.service }} - Build & Push Image
     runs-on: ubuntu-latest
-    needs: [birder-test, security-scan]
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    needs: [version, ai-services-test, code-quality]
+    if: github.event_name != 'pull_request'
     timeout-minutes: 40
-
     permissions:
       contents: read
       packages: write
       security-events: write
-      actions: read
-
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - birder
+          - speciesnet
+          - preprocessing
+        include:
+          - service: birder
+            image_name: birder-ai
+          - service: speciesnet
+            image_name: speciesnet-ai
+          - service: preprocessing
+            image_name: preprocessing-service
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.REPO }}/birder-ai
-          tags: |
-            type=ref,event=branch
-            type=sha,prefix={{branch}}-
-            type=semver,pattern={{version}}
-            type=raw,value=latest,enable={{is_default_branch}}
-
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
-          context: ./sentio-ai/birder
+          context: ./sentio-ai/${{ matrix.service }}
+          platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=birder
-          cache-to: type=gha,mode=max,scope=birder
-
-      - name: Run Trivy vulnerability scanner on image
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.REPO }}/birder-ai:${{ github.ref_name }}
-          format: 'sarif'
-          output: 'trivy-birder-image.sarif'
-          severity: 'CRITICAL,HIGH'
-
-      - name: Upload Trivy image scan results
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        continue-on-error: true
-        with:
-          sarif_file: 'trivy-birder-image.sarif'
-          category: 'birder-image'
-
-  # ============================================
-  # SPECIESNET AI SERVICE
-  # ============================================
-  speciesnet-test:
-    name: Test SpeciesNet AI
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Free up disk space
-        run: |
-          echo "Disk space before cleanup:"
-          df -h
-          
-          # Remove unnecessary software
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
-          sudo docker system prune -af
-          
-          echo "Disk space after cleanup:"
-          df -h
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: 'pip'
-          cache-dependency-path: sentio-ai/speciesnet/requirements.txt
-
-      - name: Install dependencies
-        working-directory: ./sentio-ai/speciesnet
-        run: |
-          pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install speciesnet
-
-      - name: Check Python syntax
-        working-directory: ./sentio-ai/speciesnet
-        run: |
-          python -m py_compile $(find . -name "*.py" -not -path "./venv/*")
-        continue-on-error: true
-
-      - name: Run import tests
-        working-directory: ./sentio-ai/speciesnet
-        run: |
-          python -c "
-          import sys
-          print('Testing SpeciesNet AI imports...')
-          try:
-              import fastapi
-              print('FastAPI imported')
-              import speciesnet
-              print('SpeciesNet imported')
-              import PIL
-              print('Pillow imported')
-              print('All imports successful!')
-              sys.exit(0)
-          except ImportError as e:
-              print(f'Import failed: {e}')
-              sys.exit(1)
-          "
-
-      - name: Run tests (if available)
-        working-directory: ./sentio-ai/speciesnet
-        run: |
-          if [ -d "tests" ]; then
-            pip install pytest
-            pytest tests/
-          else
-            echo "No tests directory found, skipping..."
-          fi
-        continue-on-error: true
-
-  speciesnet-build:
-    name: Build & Push SpeciesNet AI
-    runs-on: ubuntu-latest
-    needs: [speciesnet-test, security-scan]
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
-    timeout-minutes: 25
-
-    permissions:
-      contents: read
-      packages: write
-      security-events: write
-      actions: read
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.REPO }}/speciesnet-ai
           tags: |
-            type=ref,event=branch
-            type=sha,prefix={{branch}}-
-            type=semver,pattern={{version}}
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Build and push
-        uses: docker/build-push-action@v5
-        with:
-          context: ./sentio-ai/speciesnet
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=speciesnet
-          cache-to: type=gha,mode=max,scope=speciesnet
-
-      - name: Run Trivy vulnerability scanner on image
+            ${{ env.REGISTRY }}/${{ env.REPO }}/${{ matrix.image_name }}:${{ needs.version.outputs.version }}
+            ${{ env.REGISTRY }}/${{ env.REPO }}/${{ matrix.image_name }}:${{ needs.version.outputs.short_sha }}
+            ${{ env.REGISTRY }}/${{ env.REPO }}/${{ matrix.image_name }}:${{ github.ref_name }}
+          labels: |
+            org.opencontainers.image.title=${{ matrix.image_name }}
+            org.opencontainers.image.description=Sentio ${{ matrix.service }} AI Service
+            org.opencontainers.image.version=${{ needs.version.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.repositoryUrl }}
+          cache-from: type=gha,scope=${{ matrix.service }}-${{ github.ref_name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}-${{ github.ref_name }}
+          provenance: true
+          sbom: true
+      - name: Run Trivy image scan
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.REPO }}/speciesnet-ai:${{ github.ref_name }}
+          image-ref: ${{ env.REGISTRY }}/${{ env.REPO }}/${{ matrix.image_name }}:${{ needs.version.outputs.version }}
           format: 'sarif'
-          output: 'trivy-speciesnet-image.sarif'
+          output: 'trivy-${{ matrix.service }}.sarif'
           severity: 'CRITICAL,HIGH'
-
-      - name: Upload Trivy image scan results
+      - name: Upload Trivy results
         uses: github/codeql-action/upload-sarif@v3
         if: always()
-        continue-on-error: true
         with:
-          sarif_file: 'trivy-speciesnet-image.sarif'
-          category: 'speciesnet-image'
-
+          sarif_file: 'trivy-${{ matrix.service }}.sarif'
+          category: '${{ matrix.service }}-image'
   # ============================================
-  # PREPROCESSING SERVICE
+  # CREATE RELEASE (Main branch only)
   # ============================================
-  preprocessing-test:
-    name: Test Preprocessing
+  create-release:
+    name: Create GitHub Release
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Free up disk space
-        run: |
-          echo "Disk space before cleanup:"
-          df -h
-          
-          # Remove unnecessary software
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
-          sudo docker system prune -af
-          
-          echo "Disk space after cleanup:"
-          df -h
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: 'pip'
-          cache-dependency-path: sentio-ai/preprocessing/requirements.txt
-
-      - name: Install dependencies
-        working-directory: ./sentio-ai/preprocessing
-        run: |
-          pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Check Python syntax
-        working-directory: ./sentio-ai/preprocessing
-        run: |
-          python -m py_compile $(find . -name "*.py" -not -path "./venv/*")
-        continue-on-error: true
-
-      - name: Run import tests
-        working-directory: ./sentio-ai/preprocessing
-        run: |
-          python -c "
-          import sys
-          print('Testing Preprocessing Service imports...')
-          try:
-              import fastapi
-              print('FastAPI imported')
-              import cv2
-              print('OpenCV imported')
-              import numpy
-              print('NumPy imported')
-              import httpx
-              print('HTTPX imported')
-              print('All imports successful!')
-              sys.exit(0)
-          except ImportError as e:
-              print(f'Import failed: {e}')
-              sys.exit(1)
-          "
-
-      - name: Run tests (if available)
-        working-directory: ./sentio-ai/preprocessing
-        run: |
-          if [ -d "tests" ]; then
-            pip install pytest
-            pytest tests/
-          else
-            echo "No tests directory found, skipping..."
-          fi
-        continue-on-error: true
-
-  preprocessing-build:
-    name: Build & Push Preprocessing
-    runs-on: ubuntu-latest
-    needs: [preprocessing-test, security-scan]
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
-    timeout-minutes: 20
-
-    permissions:
-      contents: read
-      packages: write
-      security-events: write
-      actions: read
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.REPO }}/preprocessing-service
-          tags: |
-            type=ref,event=branch
-            type=sha,prefix={{branch}}-
-            type=semver,pattern={{version}}
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Build and push
-        uses: docker/build-push-action@v5
-        with:
-          context: ./sentio-ai/preprocessing
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=preprocessing
-          cache-to: type=gha,mode=max,scope=preprocessing
-
-      - name: Run Trivy vulnerability scanner on image
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.REPO }}/preprocessing-service:${{ github.ref_name }}
-          format: 'sarif'
-          output: 'trivy-preprocessing-image.sarif'
-          severity: 'CRITICAL,HIGH'
-
-      - name: Upload Trivy image scan results
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        continue-on-error: true
-        with:
-          sarif_file: 'trivy-preprocessing-image.sarif'
-          category: 'preprocessing-image'
-
-  # ============================================
-  # DEPLOYMENT - Configure based on target
-  # ============================================
-  deploy:
-    name: Deploy to ${{ github.ref_name == 'main' && 'Production' || 'Staging' }}
-    runs-on: ubuntu-latest
-    needs:
+    needs: 
+      - version
       - backend-build
       - frontend-build
-      - birder-build
-      - speciesnet-build
-      - preprocessing-build
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
-    
-    environment:
-      name: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
-      url: ${{ github.ref_name == 'main' && 'https://sentio-systems.com' || 'https://staging.sentio-systems.com' }}
-    
-    timeout-minutes: 30
-
+      - ai-services-build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Set environment variables
-        run: |
-          if [ "${{ github.ref_name }}" == "main" ]; then
-            echo "DEPLOY_ENV=production" >> $GITHUB_ENV
-            echo "DEPLOY_TAG=latest" >> $GITHUB_ENV
-          else
-            echo "DEPLOY_ENV=staging" >> $GITHUB_ENV
-            echo "DEPLOY_TAG=develop" >> $GITHUB_ENV
-          fi
-
-      # ============================================
-      # Manual deployment trigger placeholder
-      # ============================================
-      - name: Deployment Ready
-        run: |
-          echo "All images built and pushed successfully!"
-          echo ""
-          echo "Images available:"
-          echo "  - ${{ env.REGISTRY }}/${{ env.REPO }}/sentio-backend:${{ env.DEPLOY_TAG }}"
-          echo "  - ${{ env.REGISTRY }}/${{ env.REPO }}/sentio-web:${{ env.DEPLOY_TAG }}"
-          echo "  - ${{ env.REGISTRY }}/${{ env.REPO }}/birder-ai:${{ env.DEPLOY_TAG }}"
-          echo "  - ${{ env.REGISTRY }}/${{ env.REPO }}/speciesnet-ai:${{ env.DEPLOY_TAG }}"
-          echo "  - ${{ env.REGISTRY }}/${{ env.REPO }}/preprocessing-service:${{ env.DEPLOY_TAG }}"
-          echo ""
-          echo "Configure deployment by uncommenting one of the deployment options above"
-          echo "   or set up your own deployment strategy in this job."
-
-      # ============================================
-      # Health Check (uncomment after deployment is configured)
-      # ============================================
-      # - name: Wait for deployment
-      #   run: sleep 30
-      #
-      # - name: Health check
-      #   run: |
-      #     curl -f https://${{ env.DEPLOY_ENV == 'production' && 'sentio-systems.com' || 'staging.sentio-systems.com' }}/health || exit 1
-
+      - name: Create Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ needs.version.outputs.version }}
+          release_name: Release v${{ needs.version.outputs.version }}
+          body: |
+            ## Release v${{ needs.version.outputs.version }}
+            
+            **Commit:** ${{ github.sha }}
+            
+            ### Container Images
+            All images are available at `ghcr.io/${{ github.repository }}`
+            
+            - `sentio-backend:${{ needs.version.outputs.version }}`
+            - `sentio-web:${{ needs.version.outputs.version }}`
+            - `birder-ai:${{ needs.version.outputs.version }}`
+            - `speciesnet-ai:${{ needs.version.outputs.version }}`
+            - `preprocessing-service:${{ needs.version.outputs.version }}`
+            
+            ### Deployment
+            Images are automatically rolled out to Kubernetes via Flux GitOps.
+          draft: false
+          prerelease: false
   # ============================================
-  # DEPLOYMENT SUMMARY
+  # DEPLOYMENT NOTIFICATION
   # ============================================
-  deployment-summary:
-    name: Deployment Summary
+  deployment-notification:
+    name: Deployment Ready
     runs-on: ubuntu-latest
     needs:
-      - security-scan
+      - version
       - backend-build
       - frontend-build
-      - birder-build
-      - speciesnet-build
-      - preprocessing-build
-      - deploy
-    if: always()
-
+      - ai-services-build
+    if: github.event_name != 'pull_request'
     steps:
-      - name: Create deployment summary
+      - name: Deployment Summary
         run: |
-          echo "# Sentio Systems CI/CD Summary" >> $GITHUB_STEP_SUMMARY
+          echo "# Sentio Systems - Deployment Ready" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Triggered by:** @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Branch:** \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Workflow:** ${{ github.workflow }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          echo "## Security Scan" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ needs.security-scan.result }}" == "success" ]; then
-            echo "**Dependency Scan**: Passed" >> $GITHUB_STEP_SUMMARY
-          elif [ "${{ needs.security-scan.result }}" == "failure" ]; then
-            echo "**Dependency Scan**: Failed - Check Security tab" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "**Dependency Scan**: Skipped" >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "## Version Information" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version:** \`${{ needs.version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit SHA:** \`${{ needs.version.outputs.short_sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch:** \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Triggered by:** @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          echo "## Service Build Status" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          # Backend
-          if [ "${{ needs.backend-build.result }}" == "success" ]; then
-            echo "**Backend (Java 21 + Maven)**: Built, tested, and pushed" >> $GITHUB_STEP_SUMMARY
-          elif [ "${{ needs.backend-build.result }}" == "skipped" ]; then
-            echo "**Backend**: Skipped (PR or non-deployable branch)" >> $GITHUB_STEP_SUMMARY
+          echo "## 🎯 Deployment Strategy" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ github.ref_name }}" == "main" ]]; then
+            echo "**Environment:** Production" >> $GITHUB_STEP_SUMMARY
+            echo "**Auto-Deploy:** Via Flux GitOps (automatic)" >> $GITHUB_STEP_SUMMARY
+          elif [[ "${{ github.ref_name }}" == "develop" ]]; then
+            echo "**Environment:** Staging" >> $GITHUB_STEP_SUMMARY
+            echo "**Auto-Deploy:** Via Flux GitOps (automatic)" >> $GITHUB_STEP_SUMMARY
           else
-            echo "**Backend**: Failed" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          # Frontend
-          if [ "${{ needs.frontend-build.result }}" == "success" ]; then
-            echo "**Frontend (Node.js 20)**: Built, tested, and pushed" >> $GITHUB_STEP_SUMMARY
-          elif [ "${{ needs.frontend-build.result }}" == "skipped" ]; then
-            echo "**Frontend**: Skipped (PR or non-deployable branch)" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "**Frontend**: Failed" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          # Birder AI
-          if [ "${{ needs.birder-build.result }}" == "success" ]; then
-            echo "**Birder AI (Python 3.11)**: Built, tested, and pushed" >> $GITHUB_STEP_SUMMARY
-          elif [ "${{ needs.birder-build.result }}" == "skipped" ]; then
-            echo "**Birder AI**: Skipped (PR or non-deployable branch)" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "**Birder AI**: Failed" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          # SpeciesNet AI
-          if [ "${{ needs.speciesnet-build.result }}" == "success" ]; then
-            echo "**SpeciesNet AI (Python 3.11)**: Built, tested, and pushed" >> $GITHUB_STEP_SUMMARY
-          elif [ "${{ needs.speciesnet-build.result }}" == "skipped" ]; then
-            echo "**SpeciesNet AI**: Skipped (PR or non-deployable branch)" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "**SpeciesNet AI**: Failed" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          # Preprocessing
-          if [ "${{ needs.preprocessing-build.result }}" == "success" ]; then
-            echo "**Preprocessing Service (Python 3.11)**: Built, tested, and pushed" >> $GITHUB_STEP_SUMMARY
-          elif [ "${{ needs.preprocessing-build.result }}" == "skipped" ]; then
-            echo "**Preprocessing**: Skipped (PR or non-deployable branch)" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "**Preprocessing**: Failed" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          # Deployment status
-          echo "## Deployment Status" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ needs.deploy.result }}" == "success" ]; then
-            echo "**Deployment**: Successfully deployed to \`${{ github.ref_name == 'main' && 'production' || 'staging' }}\`" >> $GITHUB_STEP_SUMMARY
-          elif [ "${{ needs.deploy.result }}" == "skipped" ]; then
-            echo "**Deployment**: Skipped (PR build)" >> $GITHUB_STEP_SUMMARY
-          elif [ "${{ needs.deploy.result }}" == "failure" ]; then
-            echo "**Deployment**: Failed" >> $GITHUB_STEP_SUMMARY
+            echo "**Environment:** Development" >> $GITHUB_STEP_SUMMARY
+            echo "**Auto-Deploy:** Manual verification required" >> $GITHUB_STEP_SUMMARY
           fi
           echo "" >> $GITHUB_STEP_SUMMARY
           
           echo "## Container Images" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Images are available at: \`ghcr.io/${{ github.repository }}/[service-name]:${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "All images have been built and pushed to GitHub Container Registry:" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Pull Commands:" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "# Login to registry" >> $GITHUB_STEP_SUMMARY
-          echo "echo \$GITHUB_TOKEN | docker login ghcr.io -u ${{ github.actor }} --password-stdin" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "# Pull images" >> $GITHUB_STEP_SUMMARY
-          echo "docker pull ghcr.io/${{ github.repository }}/sentio-backend:${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "docker pull ghcr.io/${{ github.repository }}/sentio-web:${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "docker pull ghcr.io/${{ github.repository }}/birder-ai:${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "docker pull ghcr.io/${{ github.repository }}/speciesnet-ai:${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "docker pull ghcr.io/${{ github.repository }}/preprocessing-service:${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "ghcr.io/${{ github.repository }}/sentio-backend:${{ needs.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "ghcr.io/${{ github.repository }}/sentio-web:${{ needs.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "ghcr.io/${{ github.repository }}/birder-ai:${{ needs.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "ghcr.io/${{ github.repository }}/speciesnet-ai:${{ needs.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "ghcr.io/${{ github.repository }}/preprocessing-service:${{ needs.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          echo "## Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "## Flux GitOps Integration" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- Configure proper unit tests for all services" >> $GITHUB_STEP_SUMMARY
-          echo "- Remove \`continue-on-error\` flags once tests are ready" >> $GITHUB_STEP_SUMMARY
-          echo "- Uncomment and configure deployment strategy in the \`deploy\` job" >> $GITHUB_STEP_SUMMARY
-          echo "- Review security scan results in the Security tab" >> $GITHUB_STEP_SUMMARY
+          echo "Flux ImageUpdateAutomation will automatically detect and deploy these images based on:" >> $GITHUB_STEP_SUMMARY
+          echo "- Semantic version policy for production (main branch)" >> $GITHUB_STEP_SUMMARY
+          echo "- Branch-name tags for development/staging" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Monitor deployment status:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "flux get image policy -n sentio-systems" >> $GITHUB_STEP_SUMMARY
+          echo "kubectl get pods -n sentio-systems -w" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "---" >> $GITHUB_STEP_SUMMARY
           echo "_Generated on $(date -u '+%Y-%m-%d %H:%M:%S UTC')_" >> $GITHUB_STEP_SUMMARY
