@@ -24,47 +24,49 @@ public class SchedulingConfig {
     private final BrightSkyService brightSkyService;
 
     /**
-     * Update weather forecasts, historical data, and alerts when the application starts
+     * Update weather on application ready.
+     * Weather updates now happen via scheduled tasks using device locations only.
      */
     @EventListener(ApplicationReadyEvent.class)
     public void onApplicationReady() {
-        log.info("Application ready - updating weather forecasts, historical data, and alerts for current location");
-        weatherForecastService.updateForecastsForCurrentLocation();
-        historicalWeatherService.updateHistoricalWeatherForCurrentLocation();
-        brightSkyService.updateAlertsForCurrentLocation();
+        log.info("Application ready - weather updates will be handled by scheduled tasks for device locations");
+        // Removed immediate updates to avoid API calls before devices are registered
+        // All weather updates now happen via scheduled tasks using device-only
+        // locations
     }
 
     /**
-     * Update weather forecasts daily at midnight (00:00)
+     * Update weather forecasts daily at midnight (00:00) for all device locations
      */
     @Scheduled(cron = "0 0 0 * * *")
     public void updateDailyWeatherForecasts() {
-        log.info("Starting daily weather forecast update");
-        weatherForecastService.updateForecastsForCurrentLocation();
+        log.info("Starting daily weather forecast update for device locations");
+        weatherForecastService.updateForecastsForAllDeviceLocations();
     }
 
     /**
-     * Update historical weather data daily at 1:00 AM
+     * Update historical weather data daily at 1:00 AM for all device locations
      * This ensures we have the latest historical data for comparison
      */
     @Scheduled(cron = "0 0 1 * * *")
     public void updateDailyHistoricalWeather() {
-        log.info("Starting daily historical weather update");
-        historicalWeatherService.updateHistoricalWeatherForCurrentLocation();
+        log.info("Starting daily historical weather update for device locations");
+        historicalWeatherService.updateHistoricalWeatherForAllDeviceLocations();
     }
 
     /**
-     * Update weather alerts every 30 minutes
+     * Update weather alerts every 30 minutes for all device locations
      * Weather alerts can change frequently, so we check more often than forecasts
      */
     @Scheduled(cron = "0 */30 * * * *")
     public void updateWeatherAlerts() {
-        log.info("Starting weather alerts update (every 30 minutes)");
-        brightSkyService.updateAlertsForCurrentLocation();
+        log.info("Starting weather alerts update for device locations (every 30 minutes)");
+        brightSkyService.updateAlertsForAllDeviceLocations();
     }
 
     /**
-     * Clean up old forecast data every day at 2:00 AM (2-day retention for forecasts)
+     * Clean up old forecast data every day at 2:00 AM (2-day retention for
+     * forecasts)
      */
     @Scheduled(cron = "0 0 2 * * *")
     public void cleanupOldForecastData() {
@@ -93,12 +95,13 @@ public class SchedulingConfig {
     }
 
     /**
-     * Additional alert update during peak hours (6 AM, 12 PM, 6 PM)
+     * Additional alert update during peak hours (6 AM, 12 PM, 6 PM) for all device
+     * locations
      * These are times when weather conditions often change
      */
     @Scheduled(cron = "0 0 6,12,18 * * *")
     public void updateAlertsAtPeakHours() {
-        log.info("Starting peak hour weather alerts update (6 AM, 12 PM, 6 PM)");
-        brightSkyService.updateAlertsForCurrentLocation();
+        log.info("Starting peak hour weather alerts update for device locations (6 AM, 12 PM, 6 PM)");
+        brightSkyService.updateAlertsForAllDeviceLocations();
     }
 }
