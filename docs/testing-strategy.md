@@ -79,7 +79,7 @@ Verify API behavior: status codes, request validation, response structure, and e
     - Mockito reset
     - static caches/singletons
     - custom global state
-- If your controller tests require it, use `@AfterEach` to reset mocks/state.
+- If controller tests require it, `@AfterEach` is used to reset mocks and ensure test independence.
 
 ---
 
@@ -120,19 +120,63 @@ Test real component collaboration (service + repository + mapping), close to pro
 
 ---
 
+## Additional Testing Practices Applied
+
+### Comprehensive Controller Coverage
+All REST controllers are covered by slice tests, including endpoints with:
+- Path variables and optional request parameters
+- Cookie-based authentication (`access_token`, `refresh_token`)
+- Conditional logic and branching
+- Explicit error handling using `try/catch`
+
+Each controller includes tests for both successful responses and error scenarios.
+
+---
+
+### Explicit Error and Edge Case Testing
+Controller tests explicitly cover:
+- `404 Not Found` when services return `null` or empty results
+- `401 Unauthorized` for invalid or missing authentication cookies
+- `500 Internal Server Error` when service methods throw exceptions
+- Graceful fallback responses with partial or error JSON structures
+
+This ensures robust and predictable API behavior.
+
+---
+
+### Cookie-Based Endpoint Testing
+Endpoints relying on HTTP cookies are tested using `MockMvc`:
+- Presence and absence of cookies
+- Invalid cookie values
+- Correct behavior during authentication failures and logout
+
+Assertions focus on existence and behavior rather than fragile string comparisons.
+
+---
+
+### Mock Lifecycle Management
+To prevent interaction leakage between tests:
+- Shared mocks are reset after each test using `@AfterEach`
+- This guarantees test independence and deterministic execution
+
+---
+
 ## Test Data & Stability
 
 ### Time-dependent logic
-Some entities/methods use `LocalDateTime.now()` (e.g., `WeatherAlert.isActive()`).
+Some endpoints rely on `LocalDate.now()` or `LocalDateTime.now()`.
+
 To avoid flaky tests:
-- Prefer setting explicit timestamps and asserting deterministic values
-- Avoid asserting “active right now” unless you control time
-- If future refactoring is possible: inject a `Clock` for deterministic tests
+- Tests assert field presence instead of exact timestamps
+- Relative behavior is verified instead of absolute time values
+- No assumptions are made about system timezone or execution time
+
+---
 
 ### Avoid flaky tests
 - No external network calls
-- No dependence on local timezone unless explicitly tested
 - No inter-test ordering dependencies
+- No reliance on system time unless explicitly controlled
 
 ---
 
@@ -158,20 +202,15 @@ To avoid flaky tests:
 ## When to use which test type?
 - **New DTO/entity/mapper fields** → extend mapper unit tests
 - **New business rule** → service unit test + (optional) integration test
-- **New endpoint** → controller slice test (happy + validation/error cases)
+- **New endpoint** → controller slice test (happy path + failure/validation)
 - **New query/constraint** → repository slice test
 
 ---
 
 ## Definition of Done (Testing)
-For each new feature/change:
-- Unit tests updated/added for core logic and mappings
-- Controller tests for new endpoints (happy path + failure/validation)
+For each new feature or change:
+- Unit tests updated or added for core logic and mappings
+- Controller tests implemented for new endpoints
+- Error and edge cases covered
 - All tests pass locally and in CI
 - No new flaky tests introduced
-
-
-
-
-
-
