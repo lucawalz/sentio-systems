@@ -104,11 +104,15 @@ jobs:
           
           NEW_VERSION="$MAJOR.$MINOR.$PATCH"
           
-          # Add pre-release suffix for non-main branches
+          # FIX: Use Unix timestamp for pre-release to ensure proper semver ordering
+          # Commit hash (e.g., dev.c25d939) doesn't sort chronologically
+          # Timestamp (e.g., dev.1703001234) always increases = correct ordering
+          TIMESTAMP=$(date +%s)
+          
           if [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
-            NEW_VERSION="$NEW_VERSION-dev.${{ steps.vars.outputs.short_sha }}"
+            NEW_VERSION="$NEW_VERSION-dev.$TIMESTAMP"
           elif [[ "${{ github.ref }}" == refs/heads/release/* ]]; then
-            NEW_VERSION="$NEW_VERSION-rc.${{ steps.vars.outputs.short_sha }}"
+            NEW_VERSION="$NEW_VERSION-rc.$TIMESTAMP"
           fi
           
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
@@ -523,7 +527,7 @@ jobs:
           echo "- **Triggered by:** @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          echo "## 🎯 Deployment Strategy" >> $GITHUB_STEP_SUMMARY
+          echo "## Deployment Strategy" >> $GITHUB_STEP_SUMMARY
           if [[ "${{ github.ref_name }}" == "main" ]]; then
             echo "**Environment:** Production" >> $GITHUB_STEP_SUMMARY
             echo "**Auto-Deploy:** Via Flux GitOps (automatic)" >> $GITHUB_STEP_SUMMARY
