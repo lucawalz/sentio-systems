@@ -43,7 +43,7 @@
 ## Service Tests (Unit)
 
 ### Purpose
-Validate business logic independently from infrastructure.
+Validate business logic independently of infrastructure.
 
 **Technique:**
 - JUnit 5 + Mockito

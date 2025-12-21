@@ -1,7 +1,6 @@
 package org.example.backend.controller;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.backend.model.AISummary;
 import org.example.backend.service.AISummaryService;
 import org.junit.jupiter.api.AfterEach;
@@ -15,7 +14,6 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
-import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDateTime;
@@ -40,7 +38,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class AISummaryControllerTest {
 
     @Autowired MockMvc mockMvc;
-    @Autowired ObjectMapper objectMapper;
 
     @Autowired AISummaryService aiSummaryService; // Mockito-mock aus TestBeans
 
