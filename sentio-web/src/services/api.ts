@@ -8,6 +8,7 @@ const apiConfig = {
     headers: {
         'Content-Type': 'application/json',
     },
+    credentials: 'include' as RequestCredentials,
 };
 
 // Generic API request function
@@ -19,6 +20,7 @@ export const apiRequest = async <T>(
 
     const config: RequestInit = {
         ...options,
+        credentials: apiConfig.credentials,
         headers: {
             ...apiConfig.headers,
             ...options.headers,

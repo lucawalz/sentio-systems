@@ -25,8 +25,9 @@ class WeatherMQTTPublisher:
         # MQTT settings
         self.broker_host = self.mqtt_config.get("broker_host", "localhost")
         self.broker_port = self.mqtt_config.get("broker_port", 1883)
-        self.data_topic = self.mqtt_config.get("topic", "weather/data")
-        self.status_topic = self.mqtt_config.get("status_topic", "weather/status")
+        # Support unified config with specific key, fallback to generic
+        self.data_topic = self.mqtt_config.get("weather_topic", self.mqtt_config.get("topic", "weather/data"))
+        self.status_topic = self.mqtt_config.get("weather_status_topic", self.mqtt_config.get("status_topic", "weather/status"))
         self.username = self.mqtt_config.get("username")
         self.password = self.mqtt_config.get("password")
         self.qos = self.mqtt_config.get("qos", 1)
@@ -77,7 +78,7 @@ class WeatherMQTTPublisher:
         # Publish offline status
         if self.connected:
             try:
-                self._publish_status("offline")
+                self.publish_status("0.0.0.0", "offline")
             except Exception as e:
                 self.logger.error(f"Error publishing offline status: {e}")
 
@@ -133,7 +134,9 @@ class WeatherMQTTPublisher:
             self.connected = True
             self.logger.info(f"Connected to MQTT broker at {self.broker_host}:{self.broker_port}")
             # Publish online status
-            self._publish_status("online")
+            # Publish online status
+            # Note: Main loop will update with real IP
+            self.publish_status("0.0.0.0", "online")
         else:
             self.logger.error(f"Failed to connect to MQTT broker: {rc}")
 
@@ -183,17 +186,19 @@ class WeatherMQTTPublisher:
             self.failed_messages += 1
             return False
 
-    def _publish_status(self, status: str, additional_data: Optional[Dict] = None):
+    def publish_status(self, ip_address: str, status: str = "online", additional_data: Optional[Dict] = None):
         """Publish system status"""
-        if not self.connected:
-            return
+        if not self.client:
+           return
 
         try:
             status_data = {
                 "status": status,
+                "ip": ip_address,
                 "timestamp": datetime.now().isoformat(),
                 "device_id": self.device_id,
                 "location": self.location,
+                "service": "weather_station",
                 "publish_count": self.publish_count,
                 "error_count": self.error_count
             }

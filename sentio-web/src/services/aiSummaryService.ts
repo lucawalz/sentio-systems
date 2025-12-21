@@ -14,7 +14,7 @@ export interface AISummary {
     peakActivityTime: string | null;
     expectedSpecies: number | null;
     accuracyPercentage: number | null;
-    recentBirdCount: number | null;
+    recentAnimalCount: number | null;
     dominantSpecies: string | null;
     temperatureRange: string | null;
     humidityRange: string | null;

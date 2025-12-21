@@ -5,13 +5,15 @@ import { EnhancedWeatherStation } from "../components/dashboard/weather-station"
 import { EnhancedTemperatureChart } from "../components/dashboard/temperature-chart"
 import { MicroCards } from "../components/dashboard/micro-cards"
 import { FiveDayForecast } from "../components/dashboard/five-day-forecast"
-import { BirdLivestream } from "../components/dashboard/bird-livestream"
-import { RecentBirdSights } from "../components/dashboard/recent-bird-sights"
-import { BirdInformation } from "../components/dashboard/bird-information"
-import { BirdSightingsChart } from "../components/dashboard/bird-sightings-chart"
+import { AnimalLivestream } from "../components/dashboard/animal-livestream"
+import { RecentAnimalSights } from "../components/dashboard/recent-animal-sights"
+import { AnimalInformation } from "../components/dashboard/animal-information"
+import { AnimalSightingsChart } from "../components/dashboard/animal-sightings-chart"
 import { DashboardFooter } from "../components/layout/dashboard-footer"
 import { DashboardHeader } from "../components/layout/dashboard-header"
-import {EnhancedAISummary} from "../components/dashboard/ai-summary.tsx";
+import { EnhancedAISummary } from "../components/dashboard/ai-summary.tsx";
+import { WeatherAlerts } from "../components/dashboard/weather-alerts";
+import { WeatherRadar } from "../components/dashboard/weather-radar";
 
 function DashboardContent() {
     useEffect(() => {
@@ -88,24 +90,34 @@ function DashboardContent() {
                     <FiveDayForecast />
                 </div>
 
-                {/* Middle Row - Bird Livestream and Recent Sights */}
+                {/* Weather Alerts and Radar Row */}
+                <div className="flex flex-col lg:flex-row gap-6">
+                    <div className="flex-1">
+                        <WeatherAlerts />
+                    </div>
+                    <div className="flex-1">
+                        <WeatherRadar />
+                    </div>
+                </div>
+
+                {/* Middle Row - Animal Livestream and Recent Sights */}
                 <div className="flex flex-col lg:flex-row gap-6">
                     <div className="flex-1 lg:flex-[2]">
-                        <BirdLivestream />
+                        <AnimalLivestream />
                     </div>
                     <div className="flex-1 lg:w-96 xl:w-[400px]">
-                        <RecentBirdSights />
+                        <RecentAnimalSights />
                     </div>
                 </div>
 
-                {/* Bird Information Section */}
+                {/* Animal Information Section */}
                 <div className="flex-1">
-                    <BirdInformation />
+                    <AnimalInformation />
                 </div>
 
-                {/* Bird Sightings Chart */}
+                {/* Animal Sightings Chart */}
                 <div className="flex-1">
-                    <BirdSightingsChart />
+                    <AnimalSightingsChart />
                 </div>
             </main>
 

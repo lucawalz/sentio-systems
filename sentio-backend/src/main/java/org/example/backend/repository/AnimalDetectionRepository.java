@@ -17,12 +17,23 @@ public interface AnimalDetectionRepository extends JpaRepository<AnimalDetection
     @Query("SELECT a FROM AnimalDetection a WHERE a.timestamp >= :start ORDER BY a.timestamp DESC")
     List<AnimalDetection> findRecentDetections(@Param("start") LocalDateTime start);
 
+    @Query("SELECT a FROM AnimalDetection a WHERE a.deviceId IN :deviceIds AND a.timestamp >= :start ORDER BY a.timestamp DESC")
+    List<AnimalDetection> findRecentDetectionsByDeviceIds(@Param("deviceIds") List<String> deviceIds,
+            @Param("start") LocalDateTime start);
+
     @Query(value = "SELECT * FROM animal_detections ORDER BY timestamp DESC LIMIT :limit", nativeQuery = true)
     List<AnimalDetection> findTopNByOrderByTimestampDesc(@Param("limit") int limit);
+
+    @Query(value = "SELECT * FROM animal_detections WHERE device_id IN :deviceIds ORDER BY timestamp DESC LIMIT :limit", nativeQuery = true)
+    List<AnimalDetection> findTopNByDeviceIdInOrderByTimestampDesc(@Param("deviceIds") List<String> deviceIds,
+            @Param("limit") int limit);
 
     List<AnimalDetection> findTop10ByOrderByTimestampDesc();
 
     List<AnimalDetection> findByTimestampBetweenOrderByTimestampDesc(LocalDateTime start, LocalDateTime end);
+
+    List<AnimalDetection> findByDeviceIdInAndTimestampBetweenOrderByTimestampDesc(List<String> deviceIds,
+            LocalDateTime start, LocalDateTime end);
 
     List<AnimalDetection> findBySpeciesIgnoreCaseOrderByTimestampDesc(String species, Pageable pageable);
 
@@ -31,7 +42,8 @@ public interface AnimalDetectionRepository extends JpaRepository<AnimalDetection
     List<AnimalDetection> findByDeviceIdOrderByTimestampDesc(String deviceId, Pageable pageable);
 
     @Query("SELECT a FROM AnimalDetection a WHERE a.confidence >= :minConfidence AND a.timestamp >= :start ORDER BY a.timestamp DESC")
-    List<AnimalDetection> findHighConfidenceDetections(@Param("minConfidence") float minConfidence, @Param("start") LocalDateTime start);
+    List<AnimalDetection> findHighConfidenceDetections(@Param("minConfidence") float minConfidence,
+            @Param("start") LocalDateTime start);
 
     @Query("SELECT a FROM AnimalDetection a WHERE a.location = :location ORDER BY a.timestamp DESC")
     List<AnimalDetection> findByLocationOrderByTimestampDesc(@Param("location") String location);
@@ -46,13 +58,16 @@ public interface AnimalDetectionRepository extends JpaRepository<AnimalDetection
     long countActiveDevices();
 
     @Query("SELECT a FROM AnimalDetection a WHERE a.species = :species AND a.timestamp >= :start ORDER BY a.timestamp DESC")
-    List<AnimalDetection> findBySpeciesAndTimestampAfter(@Param("species") String species, @Param("start") LocalDateTime start);
+    List<AnimalDetection> findBySpeciesAndTimestampAfter(@Param("species") String species,
+            @Param("start") LocalDateTime start);
 
     @Query("SELECT a FROM AnimalDetection a WHERE a.animalType = :animalType AND a.timestamp >= :start ORDER BY a.timestamp DESC")
-    List<AnimalDetection> findByAnimalTypeAndTimestampAfter(@Param("animalType") String animalType, @Param("start") LocalDateTime start);
+    List<AnimalDetection> findByAnimalTypeAndTimestampAfter(@Param("animalType") String animalType,
+            @Param("start") LocalDateTime start);
 
     @Query("SELECT a FROM AnimalDetection a WHERE a.deviceId = :deviceId AND a.timestamp >= :start ORDER BY a.timestamp DESC")
-    List<AnimalDetection> findByDeviceIdAndTimestampAfter(@Param("deviceId") String deviceId, @Param("start") LocalDateTime start);
+    List<AnimalDetection> findByDeviceIdAndTimestampAfter(@Param("deviceId") String deviceId,
+            @Param("start") LocalDateTime start);
 
     @Query("SELECT AVG(a.confidence) FROM AnimalDetection a WHERE a.timestamp >= :start")
     Double findAverageConfidenceSince(@Param("start") LocalDateTime start);
@@ -79,7 +94,8 @@ public interface AnimalDetectionRepository extends JpaRepository<AnimalDetection
     long countDetectionsBetween(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
     @Query("SELECT a FROM AnimalDetection a WHERE a.confidence >= :confidence ORDER BY a.timestamp DESC")
-    List<AnimalDetection> findByConfidenceGreaterThanEqualOrderByTimestampDesc(@Param("confidence") float confidence, Pageable pageable);
+    List<AnimalDetection> findByConfidenceGreaterThanEqualOrderByTimestampDesc(@Param("confidence") float confidence,
+            Pageable pageable);
 
     // Bird specific queries
     @Query("SELECT a FROM AnimalDetection a WHERE a.animalType = 'bird' AND a.timestamp >= :start ORDER BY a.timestamp DESC")
@@ -94,4 +110,16 @@ public interface AnimalDetectionRepository extends JpaRepository<AnimalDetection
 
     @Query("SELECT COUNT(a) FROM AnimalDetection a WHERE a.animalType = 'mammal' AND a.timestamp >= :start")
     long countMammalDetectionsSince(@Param("start") LocalDateTime start);
+
+    // Privacy-aware counts and lists
+
+    long countByDeviceIdIn(List<String> deviceIds);
+
+    List<AnimalDetection> findByDeviceIdInOrderByTimestampDesc(List<String> deviceIds, Pageable pageable);
+
+    List<AnimalDetection> findByDeviceIdInAndSpeciesIgnoreCaseOrderByTimestampDesc(List<String> deviceIds,
+            String species, Pageable pageable);
+
+    List<AnimalDetection> findByDeviceIdInAndAnimalTypeIgnoreCaseOrderByTimestampDesc(List<String> deviceIds,
+            String animalType, Pageable pageable);
 }
