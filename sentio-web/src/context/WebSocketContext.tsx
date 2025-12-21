@@ -1,11 +1,19 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { Client, type IMessage } from '@stomp/stompjs';
-import SockJS from 'sockjs-client';
 import { useAuth } from './auth';
 
-// API base URL for WebSocket connection
+// Build WebSocket URL from API base URL
+// Convert http(s):// to ws(s):// for native WebSocket connection
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
-const WS_URL = `${API_BASE_URL}/ws`;
+const getWebSocketUrl = (): string => {
+    if (API_BASE_URL) {
+        // If API_BASE_URL is set, convert protocol
+        return API_BASE_URL.replace(/^http/, 'ws') + '/ws';
+    }
+    // Default: use current page's host with appropriate protocol
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${protocol}//${window.location.host}/ws`;
+};
 
 // Message types from backend
 export type WebSocketMessageType =
@@ -79,9 +87,12 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             return;
         }
 
-        // Create STOMP client
+        const wsUrl = getWebSocketUrl();
+        console.log('[WebSocket] Connecting to:', wsUrl);
+
+        // Create STOMP client with native WebSocket (no SockJS)
         const client = new Client({
-            webSocketFactory: () => new SockJS(WS_URL),
+            brokerURL: wsUrl,
             reconnectDelay: 5000,
             heartbeatIncoming: 4000,
             heartbeatOutgoing: 4000,

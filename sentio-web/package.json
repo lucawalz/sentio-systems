@@ -37,7 +37,6 @@
     "react-leaflet": "^5.0.0",
     "react-router-dom": "^7.6.3",
     "recharts": "^3.0.2",
-    "sockjs-client": "^1.6.1",
     "tailwind-merge": "^3.3.1",
     "tailwindcss": "^4.1.11",
     "three": "^0.179.1"
@@ -46,7 +45,6 @@
     "@eslint/js": "^9.29.0",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
-    "@types/sockjs-client": "^1.5.4",
     "@types/three": "^0.179.0",
     "@vitejs/plugin-react": "^4.5.2",
     "eslint": "^9.29.0",
