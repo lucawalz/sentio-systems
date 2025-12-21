@@ -3,8 +3,11 @@ package org.example.backend.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.backend.dto.AuthDTOs;
+import org.example.backend.event.DeviceRegisteredEvent;
+import org.example.backend.event.DeviceUnregisteredEvent;
 import org.example.backend.model.Device;
 import org.example.backend.repository.DeviceRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,6 +22,7 @@ public class DeviceService {
 
     private final DeviceRepository deviceRepository;
     private final AuthService authService;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * Registers a device to the current user.
@@ -37,21 +41,32 @@ public class DeviceService {
 
         Optional<Device> existingDeviceOpt = deviceRepository.findById(deviceId);
         Device device;
+        boolean isNewRegistration = false;
 
         if (existingDeviceOpt.isPresent()) {
             device = existingDeviceOpt.get();
+            // Check if this is a new owner being added
+            isNewRegistration = !device.getOwners().contains(username);
             log.info("Device {} already exists. Adding user {} as owner.", deviceId, username);
         } else {
             device = new Device();
             device.setId(deviceId);
             device.setCreatedAt(LocalDateTime.now());
+            isNewRegistration = true;
             log.info("Creating new device entry for {}", deviceId);
         }
 
         device.setName(name);
-
         device.getOwners().add(username);
-        return deviceRepository.save(device);
+        Device savedDevice = deviceRepository.save(device);
+
+        // Publish event if this is a new registration for this user
+        if (isNewRegistration) {
+            log.info("Publishing DeviceRegisteredEvent for device {} user {}", deviceId, username);
+            eventPublisher.publishEvent(new DeviceRegisteredEvent(this, savedDevice, username));
+        }
+
+        return savedDevice;
     }
 
     /**
@@ -66,10 +81,14 @@ public class DeviceService {
         log.info("Unregistering device {} for user {}", deviceId, username);
 
         deviceRepository.findById(deviceId).ifPresent(device -> {
-            device.getOwners().remove(username);
+            boolean wasOwner = device.getOwners().remove(username);
             deviceRepository.save(device);
-            // We do not delete the device even if owners is empty, to keep history?
-            // Or maybe we should? For now, keep it.
+
+            // Publish event if user was actually an owner
+            if (wasOwner) {
+                log.info("Publishing DeviceUnregisteredEvent for device {} user {}", deviceId, username);
+                eventPublisher.publishEvent(new DeviceUnregisteredEvent(this, deviceId, username));
+            }
         });
     }
 
@@ -106,5 +125,13 @@ public class DeviceService {
      */
     public List<String> getMyDeviceIds() {
         return getMyDevices().stream().map(Device::getId).toList();
+    }
+
+    /**
+     * Check if the current user has any registered devices.
+     * Used for frontend to determine if weather APIs should be called.
+     */
+    public boolean hasAnyDevices() {
+        return !getMyDevices().isEmpty();
     }
 }

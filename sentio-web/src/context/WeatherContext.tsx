@@ -1,5 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, useRef, type ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, type ReactNode } from 'react';
 import { weatherService, type WeatherData, type WeatherStats } from '../services/weatherService';
+import { useDeviceContext } from './DeviceContext';
+import { useWebSocketSubscription } from './WebSocketContext';
 
 interface WeatherContextType {
     latestWeather: WeatherData | null;
@@ -9,6 +11,7 @@ interface WeatherContextType {
     loading: boolean;
     error: string | null;
     isEmpty: boolean;
+    noDevices: boolean;
     refetch: () => Promise<void>;
 }
 
@@ -28,6 +31,7 @@ interface WeatherProviderProps {
 }
 
 export const WeatherProvider: React.FC<WeatherProviderProps> = ({ children, refreshInterval = 30000 }) => {
+    const { hasDevices, loading: devicesLoading } = useDeviceContext();
     const [latestWeather, setLatestWeather] = useState<WeatherData | null>(null);
     const [recentWeather, setRecentWeather] = useState<WeatherData[]>([]);
     const [allWeather, setAllWeather] = useState<WeatherData[]>([]);
@@ -35,16 +39,26 @@ export const WeatherProvider: React.FC<WeatherProviderProps> = ({ children, refr
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isEmpty, setIsEmpty] = useState(false);
+    const [noDevices, setNoDevices] = useState(false);
 
     const intervalRef = useRef<number | null>(null);
 
-    const fetchWeatherData = async () => {
+    const fetchWeatherData = useCallback(async () => {
+        // Skip API call if user has no devices
+        if (!hasDevices) {
+            setLatestWeather(null);
+            setRecentWeather([]);
+            setAllWeather([]);
+            setWeatherStats(null);
+            setNoDevices(true);
+            setLoading(false);
+            return;
+        }
+
         try {
-            if (!latestWeather) {
-                setLoading(true);
-            }
             setError(null);
             setIsEmpty(false);
+            setNoDevices(false);
 
             const [latest, recent, all, stats] = await Promise.all([
                 weatherService.getLatestWeather(),
@@ -53,7 +67,13 @@ export const WeatherProvider: React.FC<WeatherProviderProps> = ({ children, refr
                 weatherService.getWeatherStats(),
             ]);
 
-            setLatestWeather(latest);
+            setLatestWeather(prev => {
+                // Only show loading on first fetch
+                if (prev === null && latest === null) {
+                    setLoading(false);
+                }
+                return latest;
+            });
             setRecentWeather(recent || []);
             setAllWeather(all || []);
             setWeatherStats(stats);
@@ -76,19 +96,34 @@ export const WeatherProvider: React.FC<WeatherProviderProps> = ({ children, refr
         } finally {
             setLoading(false);
         }
-    };
+    }, [hasDevices]); // Removed latestWeather - was causing infinite loop!
+
+    // Listen for WebSocket weather updates
+    const handleWeatherUpdate = useCallback(() => {
+        console.log('[WeatherContext] Received WEATHER_UPDATED event, refetching...');
+        fetchWeatherData();
+    }, [fetchWeatherData]);
+
+    useWebSocketSubscription('WEATHER_UPDATED', handleWeatherUpdate);
 
     useEffect(() => {
+        // Wait for device check to complete
+        if (devicesLoading) return;
+
         fetchWeatherData();
 
-        intervalRef.current = setInterval(fetchWeatherData, refreshInterval);
+        // Only set up polling if user has devices
+        if (hasDevices) {
+            intervalRef.current = setInterval(fetchWeatherData, refreshInterval);
+        }
 
         return () => {
             if (intervalRef.current !== null) {
                 clearInterval(intervalRef.current);
+                intervalRef.current = null;
             }
         };
-    }, [refreshInterval]);
+    }, [refreshInterval, hasDevices, devicesLoading, fetchWeatherData]);
 
     return (
         <WeatherContext.Provider value={{
@@ -96,9 +131,10 @@ export const WeatherProvider: React.FC<WeatherProviderProps> = ({ children, refr
             recentWeather,
             allWeather,
             weatherStats,
-            loading,
+            loading: loading || devicesLoading,
             error,
             isEmpty,
+            noDevices,
             refetch: fetchWeatherData
         }}>
             {children}

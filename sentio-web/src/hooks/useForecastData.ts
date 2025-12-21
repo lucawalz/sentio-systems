@@ -11,6 +11,7 @@ export function useForecastData(_fallbackRefreshInterval: number = 300000) {
         error,
         lastFetchTime,
         lastUpdateInfo,
+        noDevices,
         refetch,
         updateForecasts
     } = useForecastContext();
@@ -24,6 +25,7 @@ export function useForecastData(_fallbackRefreshInterval: number = 300000) {
         error,
         lastFetchTime,
         lastUpdateInfo,
+        noDevices,
         refetch,
         updateForecasts
     };

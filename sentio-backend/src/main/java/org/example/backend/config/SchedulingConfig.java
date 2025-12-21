@@ -2,6 +2,7 @@ package org.example.backend.config;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.backend.repository.DeviceRepository;
 import org.example.backend.service.BrightSkyService;
 import org.example.backend.service.HistoricalWeatherService;
 import org.example.backend.service.IpLocationService;
@@ -22,6 +23,15 @@ public class SchedulingConfig {
     private final HistoricalWeatherService historicalWeatherService;
     private final IpLocationService ipLocationService;
     private final BrightSkyService brightSkyService;
+    private final DeviceRepository deviceRepository;
+
+    /**
+     * Check if any devices are registered in the system.
+     * We use existsBy instead of count for efficiency.
+     */
+    private boolean hasAnyDevices() {
+        return deviceRepository.count() > 0;
+    }
 
     /**
      * Update weather on application ready.
@@ -40,6 +50,10 @@ public class SchedulingConfig {
      */
     @Scheduled(cron = "0 0 0 * * *")
     public void updateDailyWeatherForecasts() {
+        if (!hasAnyDevices()) {
+            log.debug("Skipping weather forecast update - no devices registered");
+            return;
+        }
         log.info("Starting daily weather forecast update for device locations");
         weatherForecastService.updateForecastsForAllDeviceLocations();
     }
@@ -50,6 +64,10 @@ public class SchedulingConfig {
      */
     @Scheduled(cron = "0 0 1 * * *")
     public void updateDailyHistoricalWeather() {
+        if (!hasAnyDevices()) {
+            log.debug("Skipping historical weather update - no devices registered");
+            return;
+        }
         log.info("Starting daily historical weather update for device locations");
         historicalWeatherService.updateHistoricalWeatherForAllDeviceLocations();
     }
@@ -60,6 +78,10 @@ public class SchedulingConfig {
      */
     @Scheduled(cron = "0 */30 * * * *")
     public void updateWeatherAlerts() {
+        if (!hasAnyDevices()) {
+            log.debug("Skipping weather alerts update - no devices registered");
+            return;
+        }
         log.info("Starting weather alerts update for device locations (every 30 minutes)");
         brightSkyService.updateAlertsForAllDeviceLocations();
     }
@@ -101,6 +123,10 @@ public class SchedulingConfig {
      */
     @Scheduled(cron = "0 0 6,12,18 * * *")
     public void updateAlertsAtPeakHours() {
+        if (!hasAnyDevices()) {
+            log.debug("Skipping peak hour alerts update - no devices registered");
+            return;
+        }
         log.info("Starting peak hour weather alerts update for device locations (6 AM, 12 PM, 6 PM)");
         brightSkyService.updateAlertsForAllDeviceLocations();
     }

@@ -41,4 +41,10 @@ public class DeviceController {
         deviceService.unregisterDevice(deviceId);
         return ResponseEntity.noContent().build();
     }
+
+    @Operation(summary = "Check device registration", description = "Check if user has any registered devices. Use this before calling weather APIs.")
+    @GetMapping("/has-any")
+    public ResponseEntity<Boolean> hasAnyDevices() {
+        return ResponseEntity.ok(deviceService.hasAnyDevices());
+    }
 }

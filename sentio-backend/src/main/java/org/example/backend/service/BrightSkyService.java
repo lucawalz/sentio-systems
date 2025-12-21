@@ -592,16 +592,17 @@ public class BrightSkyService {
     }
 
     /**
-     * Fetches and stores radar metadata for current location.
+     * Fetches and stores radar metadata for current user's device location.
+     * Enforces strict device-only policy.
      */
     @Transactional
     public RadarMetadataDTO fetchAndStoreRadarMetadataForCurrentLocation(Integer distance) {
-        Optional<LocationData> currentLocation = ipLocationService.getCurrentLocation();
-        if (currentLocation.isPresent()) {
-            LocationData location = currentLocation.get();
+        Optional<LocationData> deviceLocation = deviceLocationService.getFirstUserDeviceLocation();
+        if (deviceLocation.isPresent()) {
+            LocationData location = deviceLocation.get();
             return fetchAndStoreRadarMetadata(location.getLatitude(), location.getLongitude(), distance);
         }
-        log.warn("Unable to determine current location for radar metadata fetch");
+        log.warn("User has no registered devices, cannot fetch radar metadata");
         return null;
     }
 

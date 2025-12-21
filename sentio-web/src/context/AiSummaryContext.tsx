@@ -1,10 +1,12 @@
-import React, { createContext, useContext, useState, useEffect, useRef, type ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, type ReactNode } from 'react';
 import { AiSummaryService, type AISummary } from '../services/aiSummaryService';
+import { useDeviceContext } from './DeviceContext';
 
 interface AiSummaryContextType {
     summary: AISummary | null;
     loading: boolean;
     error: string | null;
+    noDevices: boolean;
     refetch: () => Promise<void>;
 }
 
@@ -24,18 +26,26 @@ interface AiSummaryProviderProps {
 }
 
 export const AiSummaryProvider: React.FC<AiSummaryProviderProps> = ({ children, refreshInterval = 300000 }) => {
+    const { hasDevices, loading: devicesLoading } = useDeviceContext();
     const [summary, setSummary] = useState<AISummary | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [noDevices, setNoDevices] = useState(false);
 
     const intervalRef = useRef<number | null>(null);
 
-    const fetchSummary = async () => {
+    const fetchSummary = useCallback(async () => {
+        // Skip API call if user has no devices
+        if (!hasDevices) {
+            setSummary(null);
+            setNoDevices(true);
+            setLoading(false);
+            return;
+        }
+
         try {
-            if (!summary) {
-                setLoading(true);
-            }
             setError(null);
+            setNoDevices(false);
             const data = await AiSummaryService.getCurrentSummary();
             setSummary(data);
         } catch (err) {
@@ -44,25 +54,33 @@ export const AiSummaryProvider: React.FC<AiSummaryProviderProps> = ({ children, 
         } finally {
             setLoading(false);
         }
-    };
+    }, [hasDevices]); // Removed summary - was causing infinite loop!
 
     useEffect(() => {
+        // Wait for device check to complete
+        if (devicesLoading) return;
+
         fetchSummary();
 
-        intervalRef.current = setInterval(fetchSummary, refreshInterval);
+        // Only set up polling if user has devices
+        if (hasDevices) {
+            intervalRef.current = setInterval(fetchSummary, refreshInterval);
+        }
 
         return () => {
             if (intervalRef.current !== null) {
                 clearInterval(intervalRef.current);
+                intervalRef.current = null;
             }
         };
-    }, [refreshInterval]);
+    }, [refreshInterval, hasDevices, devicesLoading, fetchSummary]);
 
     return (
         <AiSummaryContext.Provider value={{
             summary,
-            loading,
+            loading: loading || devicesLoading,
             error,
+            noDevices,
             refetch: fetchSummary
         }}>
             {children}

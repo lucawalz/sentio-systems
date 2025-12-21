@@ -20,6 +20,10 @@ export const deviceService = {
     getMyDevices: (): Promise<Device[]> =>
         get<Device[]>(`${DEVICES_ENDPOINT}`),
 
+    // Check if user has any registered devices
+    hasAnyDevices: (): Promise<boolean> =>
+        get<boolean>(`${DEVICES_ENDPOINT}/has-any`),
+
     // Unregister a device
     unregisterDevice: (deviceId: string): Promise<void> =>
         del(`${DEVICES_ENDPOINT}/${deviceId}`),
