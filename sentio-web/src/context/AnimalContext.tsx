@@ -1,5 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, useRef, type ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, type ReactNode } from 'react';
 import { animalService, type AnimalDetectionDTO, type AnimalDetectionSummary } from '../services/animalService';
+import { useDeviceContext } from './DeviceContext';
+import { useWebSocketSubscription } from './WebSocketContext';
 
 interface AnimalContextType {
     latestDetections: AnimalDetectionDTO[];
@@ -8,6 +10,7 @@ interface AnimalContextType {
     speciesCount: Record<string, number>;
     loading: boolean;
     error: string | null;
+    noDevices: boolean;
     refetch: () => Promise<void>;
 }
 
@@ -27,22 +30,32 @@ interface AnimalProviderProps {
 }
 
 export const AnimalProvider: React.FC<AnimalProviderProps> = ({ children, refreshInterval = 30000 }) => {
+    const { hasDevices, loading: devicesLoading } = useDeviceContext();
     const [latestDetections, setLatestDetections] = useState<AnimalDetectionDTO[]>([]);
     const [recentDetections, setRecentDetections] = useState<AnimalDetectionDTO[]>([]);
     const [detectionSummary, setDetectionSummary] = useState<AnimalDetectionSummary | null>(null);
     const [speciesCount, setSpeciesCount] = useState<Record<string, number>>({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [noDevices, setNoDevices] = useState(false);
 
     const intervalRef = useRef<number | null>(null);
 
-    const fetchAnimalData = async () => {
+    const fetchAnimalData = useCallback(async () => {
+        // Skip API call if user has no devices
+        if (!hasDevices) {
+            setLatestDetections([]);
+            setRecentDetections([]);
+            setDetectionSummary(null);
+            setSpeciesCount({});
+            setNoDevices(true);
+            setLoading(false);
+            return;
+        }
+
         try {
-            // Don't set loading to true on background refreshes to avoid UI flickering
-            if (latestDetections.length === 0) {
-                setLoading(true);
-            }
             setError(null);
+            setNoDevices(false);
 
             const [latest, recent, summary, species] = await Promise.all([
                 animalService.getLatestDetections(10),
@@ -61,19 +74,35 @@ export const AnimalProvider: React.FC<AnimalProviderProps> = ({ children, refres
         } finally {
             setLoading(false);
         }
-    };
+    }, [hasDevices]); // Removed latestDetections.length - was causing infinite loop!
+
+    // Listen for WebSocket updates (could add ANIMAL_DETECTED event later)
+    const handleWeatherUpdate = useCallback(() => {
+        // Animal detections often correlate with weather station data updates
+        console.log('[AnimalContext] Received WEATHER_UPDATED event, refetching...');
+        fetchAnimalData();
+    }, [fetchAnimalData]);
+
+    useWebSocketSubscription('WEATHER_UPDATED', handleWeatherUpdate);
 
     useEffect(() => {
+        // Wait for device check to complete
+        if (devicesLoading) return;
+
         fetchAnimalData();
 
-        intervalRef.current = setInterval(fetchAnimalData, refreshInterval);
+        // Only set up polling if user has devices
+        if (hasDevices) {
+            intervalRef.current = setInterval(fetchAnimalData, refreshInterval);
+        }
 
         return () => {
             if (intervalRef.current !== null) {
                 clearInterval(intervalRef.current);
+                intervalRef.current = null;
             }
         };
-    }, [refreshInterval]);
+    }, [refreshInterval, hasDevices, devicesLoading, fetchAnimalData]);
 
     return (
         <AnimalContext.Provider value={{
@@ -81,8 +110,9 @@ export const AnimalProvider: React.FC<AnimalProviderProps> = ({ children, refres
             recentDetections,
             detectionSummary,
             speciesCount,
-            loading,
+            loading: loading || devicesLoading,
             error,
+            noDevices,
             refetch: fetchAnimalData
         }}>
             {children}

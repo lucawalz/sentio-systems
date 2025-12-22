@@ -46,6 +46,7 @@ public class BrightSkyService {
     private final WeatherAlertRepository weatherAlertRepository;
     private final WeatherRadarMetadataRepository weatherRadarMetadataRepository;
     private final IpLocationService ipLocationService;
+    private final DeviceLocationService deviceLocationService;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private volatile boolean isUpdating = false;
@@ -54,20 +55,21 @@ public class BrightSkyService {
     private String baseUrl;
 
     /**
-     * Retrieves weather alerts for the current user's location based on IP
-     * geolocation.
+     * Retrieves weather alerts for the current user's device location.
+     * Uses the first registered device's location.
+     * Enforces strict device-only policy - never uses server or browser IP.
      *
-     * @return List of weather alerts for current location, empty list if location
-     *         cannot be determined
+     * @return List of weather alerts for user's device location, empty list if user
+     *         has no devices
      */
     public List<WeatherAlert> getAlertsForCurrentLocation() {
-        log.debug("Retrieving alerts for current location");
-        Optional<LocationData> currentLocation = ipLocationService.getCurrentLocation();
-        if (currentLocation.isPresent()) {
-            return getAlertsForLocation(currentLocation.get().getLatitude(),
-                    currentLocation.get().getLongitude());
+        log.debug("Retrieving alerts for current user's device location");
+        Optional<LocationData> deviceLocation = deviceLocationService.getFirstUserDeviceLocation();
+        if (deviceLocation.isPresent()) {
+            return getAlertsForLocation(deviceLocation.get().getLatitude(),
+                    deviceLocation.get().getLongitude());
         }
-        log.warn("Unable to determine current location for alert retrieval");
+        log.warn("User has no registered devices, cannot retrieve weather alerts");
         return new ArrayList<>();
     }
 
@@ -311,6 +313,62 @@ public class BrightSkyService {
     }
 
     /**
+     * Updates weather alerts for all registered device locations.
+     * This is the new method used by scheduled tasks to update alerts only for
+     * device locations.
+     * Replaces updateAlertsForCurrentLocation() for scheduled background updates.
+     * <p>
+     * Enforces strict device-only policy:
+     * - Only updates weather for registered device locations
+     * - Never uses server or browser IP
+     * - Skips gracefully if no devices are registered
+     * </p>
+     */
+    @Transactional
+    public void updateAlertsForAllDeviceLocations() {
+        if (isUpdating) {
+            log.warn("Alert update already in progress, skipping concurrent update request");
+            return;
+        }
+
+        isUpdating = true;
+        log.info("Starting alert update for all device locations");
+
+        try {
+            // Get all unique device locations
+            List<LocationData> deviceLocations = deviceLocationService.getAllUniqueDeviceLocations();
+
+            if (deviceLocations.isEmpty()) {
+                log.debug("No registered devices found, skipping weather alert update");
+                return;
+            }
+
+            log.info("Updating weather alerts for {} unique device locations", deviceLocations.size());
+
+            // Update alerts for each unique device location
+            int successCount = 0;
+            for (LocationData location : deviceLocations) {
+                try {
+                    getAlertsForLocation(location.getLatitude(), location.getLongitude());
+                    log.debug("Updated alerts for device location: {}, {}",
+                            location.getCity(), location.getCountry());
+                    successCount++;
+                } catch (Exception e) {
+                    log.error("Failed to update alerts for location: {}, {} - {}",
+                            location.getCity(), location.getCountry(), e.getMessage());
+                }
+            }
+
+            log.info("Successfully updated alerts for {}/{} device locations",
+                    successCount, deviceLocations.size());
+        } catch (Exception e) {
+            log.error("Error occurred during alert update for device locations", e);
+        } finally {
+            isUpdating = false;
+        }
+    }
+
+    /**
      * Performs cleanup of expired weather alerts.
      */
     @Transactional
@@ -360,14 +418,20 @@ public class BrightSkyService {
     }
 
     /**
-     * Provides radar data endpoint configuration for current location.
+     * Provides radar data endpoint configuration for current user's device
+     * location.
+     * Enforces strict device-only policy.
+     * 
+     * @return Radar endpoint URL for user's device location, null if user has no
+     *         devices
      */
     public String getRadarEndpointUrlForCurrentLocation(Integer distance, String format) {
-        Optional<LocationData> currentLocation = ipLocationService.getCurrentLocation();
-        if (currentLocation.isPresent()) {
-            LocationData location = currentLocation.get();
+        Optional<LocationData> deviceLocation = deviceLocationService.getFirstUserDeviceLocation();
+        if (deviceLocation.isPresent()) {
+            LocationData location = deviceLocation.get();
             return getRadarEndpointUrl(location.getLatitude(), location.getLongitude(), distance, format);
         }
+        log.warn("User has no registered devices, cannot generate radar endpoint URL");
         return null;
     }
 
@@ -528,16 +592,17 @@ public class BrightSkyService {
     }
 
     /**
-     * Fetches and stores radar metadata for current location.
+     * Fetches and stores radar metadata for current user's device location.
+     * Enforces strict device-only policy.
      */
     @Transactional
     public RadarMetadataDTO fetchAndStoreRadarMetadataForCurrentLocation(Integer distance) {
-        Optional<LocationData> currentLocation = ipLocationService.getCurrentLocation();
-        if (currentLocation.isPresent()) {
-            LocationData location = currentLocation.get();
+        Optional<LocationData> deviceLocation = deviceLocationService.getFirstUserDeviceLocation();
+        if (deviceLocation.isPresent()) {
+            LocationData location = deviceLocation.get();
             return fetchAndStoreRadarMetadata(location.getLatitude(), location.getLongitude(), distance);
         }
-        log.warn("Unable to determine current location for radar metadata fetch");
+        log.warn("User has no registered devices, cannot fetch radar metadata");
         return null;
     }
 

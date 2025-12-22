@@ -319,6 +319,32 @@ class WeatherStation:
 
         self.logger.info("Statistics monitoring thread stopped")
 
+    def health_ping_thread(self):
+        """Thread for periodic health status pings"""
+        ping_interval = 60  # Publish status every 60 seconds
+
+        self.logger.info("Health ping thread started")
+
+        while self.running and not self._shutdown_event.is_set():
+            try:
+                if self.mqtt_publisher and self.mqtt_publisher.is_connected():
+                    local_ip = self.get_local_ip()
+                    self.mqtt_publisher.publish_status(local_ip, "online")
+                    self.logger.debug(f"Health ping sent (IP: {local_ip})")
+                else:
+                    self.logger.debug("MQTT not connected, skipping health ping")
+
+                # Wait for next ping interval
+                if self._shutdown_event.wait(ping_interval):
+                    break
+
+            except Exception as e:
+                self.logger.error(f"Error in health ping: {e}")
+                if self._shutdown_event.wait(10):
+                    break
+
+        self.logger.info("Health ping thread stopped")
+
     def run_monitoring_loop(self):
         """Main monitoring loop with comprehensive logging"""
         collection_config = self.config.get('collection', {})
@@ -354,6 +380,15 @@ class WeatherStation:
         health_thread.daemon = True
         health_thread.start()
         self.threads.append(health_thread)
+
+        # Start health ping thread (publishes status every 30s like animal_detector)
+        ping_thread = threading.Thread(
+            target=self.health_ping_thread,
+            name="HealthPing"
+        )
+        ping_thread.daemon = True
+        ping_thread.start()
+        self.threads.append(ping_thread)
 
         try:
             while self.running and not self._shutdown_event.is_set():

@@ -1,5 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, useRef, type ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, type ReactNode } from 'react';
 import { forecastService, type WeatherForecast, type DailyForecast, type LastUpdateInfo } from '../services/forecastService';
+import { useDeviceContext } from './DeviceContext';
+import { useWebSocketSubscription, type WebSocketMessage } from './WebSocketContext';
 
 interface ForecastContextType {
     currentLocationForecast: WeatherForecast[];
@@ -10,6 +12,7 @@ interface ForecastContextType {
     error: string | null;
     lastFetchTime: Date | null;
     lastUpdateInfo: LastUpdateInfo | null;
+    noDevices: boolean;
     refetch: () => Promise<void>;
     updateForecasts: () => Promise<boolean>;
     // Pass-through helper methods if needed, though usually direct service calls are fine if stateless
@@ -32,6 +35,7 @@ interface ForecastProviderProps {
 }
 
 export const ForecastProvider: React.FC<ForecastProviderProps> = ({ children, fallbackRefreshInterval = 300000 }) => {
+    const { hasDevices, loading: devicesLoading } = useDeviceContext();
     const [currentLocationForecast, setCurrentLocationForecast] = useState<WeatherForecast[]>([]);
     const [upcomingForecasts, setUpcomingForecasts] = useState<WeatherForecast[]>([]);
     const [dailyForecasts, setDailyForecasts] = useState<DailyForecast[]>([]);
@@ -40,6 +44,7 @@ export const ForecastProvider: React.FC<ForecastProviderProps> = ({ children, fa
     const [error, setError] = useState<string | null>(null);
     const [lastFetchTime, setLastFetchTime] = useState<Date | null>(null);
     const [lastUpdateInfo, setLastUpdateInfo] = useState<LastUpdateInfo | null>(null);
+    const [noDevices, setNoDevices] = useState(false);
 
     const intervalRef = useRef<number | null>(null);
 
@@ -212,9 +217,21 @@ export const ForecastProvider: React.FC<ForecastProviderProps> = ({ children, fa
     };
 
     const fetchForecastData = async () => {
+        // Skip API call if user has no devices
+        if (!hasDevices) {
+            setCurrentLocationForecast([]);
+            setUpcomingForecasts([]);
+            setDailyForecasts([]);
+            setAvailableCities([]);
+            setNoDevices(true);
+            setLoading(false);
+            return;
+        }
+
         try {
             if (currentLocationForecast.length === 0) setLoading(true);
             setError(null);
+            setNoDevices(false);
 
             const [currentLocation, upcoming, cities] = await Promise.all([
                 forecastService.getCurrentLocationForecast(),
@@ -265,9 +282,27 @@ export const ForecastProvider: React.FC<ForecastProviderProps> = ({ children, fa
         }
     };
 
+    // Listen for WebSocket weather updates to auto-refetch
+    const handleWeatherUpdate = useCallback((message: WebSocketMessage) => {
+        const dataType = message.payload?.dataType as string;
+        if (dataType === 'FORECAST') {
+            console.log('[ForecastContext] Received WEATHER_UPDATED event, refetching...');
+            fetchForecastData();
+        }
+    }, []);
+
+    useWebSocketSubscription('WEATHER_UPDATED', handleWeatherUpdate);
+
     useEffect(() => {
+        // Wait for device check to complete
+        if (devicesLoading) return;
+
         fetchForecastData();
-        scheduleNextFetch();
+
+        // Only schedule smart refresh if user has devices
+        if (hasDevices) {
+            scheduleNextFetch();
+        }
 
         return () => {
             if (intervalRef.current !== null) {
@@ -275,7 +310,7 @@ export const ForecastProvider: React.FC<ForecastProviderProps> = ({ children, fa
                 intervalRef.current = null;
             }
         };
-    }, [fallbackRefreshInterval]);
+    }, [fallbackRefreshInterval, hasDevices, devicesLoading]);
 
     return (
         <ForecastContext.Provider value={{
@@ -283,10 +318,11 @@ export const ForecastProvider: React.FC<ForecastProviderProps> = ({ children, fa
             upcomingForecasts,
             dailyForecasts,
             availableCities,
-            loading,
+            loading: loading || devicesLoading,
             error,
             lastFetchTime,
             lastUpdateInfo,
+            noDevices,
             refetch: fetchForecastData,
             updateForecasts
         }}>

@@ -28,6 +28,7 @@ public class WeatherForecastService {
 
     private final WeatherForecastRepository weatherForecastRepository;
     private final IpLocationService ipLocationService;
+    private final DeviceLocationService deviceLocationService;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private volatile boolean isUpdating = false;
@@ -36,22 +37,25 @@ public class WeatherForecastService {
     private String baseUrl;
 
     /**
-     * Retrieves weather forecasts for the current user's location based on IP geolocation.
+     * Retrieves weather forecasts for the current user's device location.
+     * Uses the first registered device's location.
+     * Enforces strict device-only policy - never uses server or browser IP.
      */
     public List<WeatherForecast> getForecastForCurrentLocation() {
-        log.debug("Retrieving forecast for current location");
-        Optional<LocationData> currentLocation = ipLocationService.getCurrentLocation();
-        if (currentLocation.isPresent()) {
-            return getForecastForLocation(currentLocation.get().getLatitude(),
-                    currentLocation.get().getLongitude(),
-                    currentLocation.get());
+        log.debug("Retrieving forecast for current user's device location");
+        Optional<LocationData> deviceLocation = deviceLocationService.getFirstUserDeviceLocation();
+        if (deviceLocation.isPresent()) {
+            return getForecastForLocation(deviceLocation.get().getLatitude(),
+                    deviceLocation.get().getLongitude(),
+                    deviceLocation.get());
         }
-        log.warn("Unable to determine current location for forecast retrieval");
+        log.warn("User has no registered devices, cannot retrieve weather forecast");
         return new ArrayList<>();
     }
 
     /**
-     * Fetches and processes hourly weather forecasts for a specific geographic location.
+     * Fetches and processes hourly weather forecasts for a specific geographic
+     * location.
      * Uses the new Open-Meteo hourly API parameters.
      */
     @Transactional
@@ -110,7 +114,7 @@ public class WeatherForecastService {
      * Processes hourly forecast data from Open-Meteo API response.
      */
     private List<WeatherForecast> processHourlyForecast(JsonNode hourlyNode, LocationData locationData,
-                                                        Map<LocalDateTime, WeatherForecast> existingMap) {
+            Map<LocalDateTime, WeatherForecast> existingMap) {
 
         List<WeatherForecast> forecasts = new ArrayList<>();
         JsonNode timeArray = hourlyNode.get("time");
@@ -161,7 +165,8 @@ public class WeatherForecastService {
 
             // Extract weather code and map to description
             JsonNode weatherCodeArray = hourlyNode.get("weather_code");
-            if (weatherCodeArray != null && weatherCodeArray.isArray() && i < weatherCodeArray.size() && !weatherCodeArray.get(i).isNull()) {
+            if (weatherCodeArray != null && weatherCodeArray.isArray() && i < weatherCodeArray.size()
+                    && !weatherCodeArray.get(i).isNull()) {
                 int weatherCode = weatherCodeArray.get(i).asInt();
                 forecast.setWeatherCode(weatherCode);
 
@@ -184,7 +189,8 @@ public class WeatherForecastService {
     /**
      * Extracts an hourly value from the JSON node safely.
      */
-    private void extractHourlyValue(JsonNode hourlyNode, String fieldName, int index, java.util.function.Consumer<Float> setter) {
+    private void extractHourlyValue(JsonNode hourlyNode, String fieldName, int index,
+            java.util.function.Consumer<Float> setter) {
         JsonNode array = hourlyNode.get(fieldName);
         if (array != null && array.isArray() && index < array.size() && !array.get(index).isNull()) {
             setter.accept(array.get(index).floatValue());
@@ -211,35 +217,35 @@ public class WeatherForecastService {
      */
     private String[] mapWeatherCode(int code) {
         return switch (code) {
-            case 0 -> new String[]{"Clear", "Clear sky", "01d"};
-            case 1 -> new String[]{"Clouds", "Mainly clear", "02d"};
-            case 2 -> new String[]{"Clouds", "Partly cloudy", "03d"};
-            case 3 -> new String[]{"Clouds", "Overcast", "04d"};
-            case 45 -> new String[]{"Mist", "Fog", "50d"};
-            case 48 -> new String[]{"Mist", "Depositing rime fog", "50d"};
-            case 51 -> new String[]{"Drizzle", "Light drizzle", "09d"};
-            case 53 -> new String[]{"Drizzle", "Moderate drizzle", "09d"};
-            case 55 -> new String[]{"Drizzle", "Dense drizzle", "09d"};
-            case 56 -> new String[]{"Drizzle", "Light freezing drizzle", "09d"};
-            case 57 -> new String[]{"Drizzle", "Dense freezing drizzle", "09d"};
-            case 61 -> new String[]{"Rain", "Slight rain", "10d"};
-            case 63 -> new String[]{"Rain", "Moderate rain", "10d"};
-            case 65 -> new String[]{"Rain", "Heavy rain", "10d"};
-            case 66 -> new String[]{"Rain", "Light freezing rain", "10d"};
-            case 67 -> new String[]{"Rain", "Heavy freezing rain", "10d"};
-            case 71 -> new String[]{"Snow", "Slight snow fall", "13d"};
-            case 73 -> new String[]{"Snow", "Moderate snow fall", "13d"};
-            case 75 -> new String[]{"Snow", "Heavy snow fall", "13d"};
-            case 77 -> new String[]{"Snow", "Snow grains", "13d"};
-            case 80 -> new String[]{"Rain", "Slight rain showers", "09d"};
-            case 81 -> new String[]{"Rain", "Moderate rain showers", "09d"};
-            case 82 -> new String[]{"Rain", "Violent rain showers", "09d"};
-            case 85 -> new String[]{"Snow", "Slight snow showers", "13d"};
-            case 86 -> new String[]{"Snow", "Heavy snow showers", "13d"};
-            case 95 -> new String[]{"Thunderstorm", "Thunderstorm", "11d"};
-            case 96 -> new String[]{"Thunderstorm", "Thunderstorm with slight hail", "11d"};
-            case 99 -> new String[]{"Thunderstorm", "Thunderstorm with heavy hail", "11d"};
-            default -> new String[]{"Unknown", "Unknown weather condition", "01d"};
+            case 0 -> new String[] { "Clear", "Clear sky", "01d" };
+            case 1 -> new String[] { "Clouds", "Mainly clear", "02d" };
+            case 2 -> new String[] { "Clouds", "Partly cloudy", "03d" };
+            case 3 -> new String[] { "Clouds", "Overcast", "04d" };
+            case 45 -> new String[] { "Mist", "Fog", "50d" };
+            case 48 -> new String[] { "Mist", "Depositing rime fog", "50d" };
+            case 51 -> new String[] { "Drizzle", "Light drizzle", "09d" };
+            case 53 -> new String[] { "Drizzle", "Moderate drizzle", "09d" };
+            case 55 -> new String[] { "Drizzle", "Dense drizzle", "09d" };
+            case 56 -> new String[] { "Drizzle", "Light freezing drizzle", "09d" };
+            case 57 -> new String[] { "Drizzle", "Dense freezing drizzle", "09d" };
+            case 61 -> new String[] { "Rain", "Slight rain", "10d" };
+            case 63 -> new String[] { "Rain", "Moderate rain", "10d" };
+            case 65 -> new String[] { "Rain", "Heavy rain", "10d" };
+            case 66 -> new String[] { "Rain", "Light freezing rain", "10d" };
+            case 67 -> new String[] { "Rain", "Heavy freezing rain", "10d" };
+            case 71 -> new String[] { "Snow", "Slight snow fall", "13d" };
+            case 73 -> new String[] { "Snow", "Moderate snow fall", "13d" };
+            case 75 -> new String[] { "Snow", "Heavy snow fall", "13d" };
+            case 77 -> new String[] { "Snow", "Snow grains", "13d" };
+            case 80 -> new String[] { "Rain", "Slight rain showers", "09d" };
+            case 81 -> new String[] { "Rain", "Moderate rain showers", "09d" };
+            case 82 -> new String[] { "Rain", "Violent rain showers", "09d" };
+            case 85 -> new String[] { "Snow", "Slight snow showers", "13d" };
+            case 86 -> new String[] { "Snow", "Heavy snow showers", "13d" };
+            case 95 -> new String[] { "Thunderstorm", "Thunderstorm", "11d" };
+            case 96 -> new String[] { "Thunderstorm", "Thunderstorm with slight hail", "11d" };
+            case 99 -> new String[] { "Thunderstorm", "Thunderstorm with heavy hail", "11d" };
+            default -> new String[] { "Unknown", "Unknown weather condition", "01d" };
         };
     }
 
@@ -312,6 +318,65 @@ public class WeatherForecastService {
             }
         } catch (Exception e) {
             log.error("Error occurred during forecast update for current location", e);
+        } finally {
+            isUpdating = false;
+        }
+    }
+
+    /**
+     * Updates weather forecasts for all registered device locations.
+     * This is the new method used by scheduled tasks to update forecasts only for
+     * device locations.
+     * Replaces updateForecastsForCurrentLocation() for scheduled background
+     * updates.
+     * <p>
+     * Enforces strict device-only policy:
+     * - Only updates weather for registered device locations
+     * - Never uses server or browser IP
+     * - Skips gracefully if no devices are registered
+     * </p>
+     */
+    @Transactional
+    public void updateForecastsForAllDeviceLocations() {
+        if (isUpdating) {
+            log.warn("Forecast update already in progress, skipping concurrent update request");
+            return;
+        }
+
+        isUpdating = true;
+        log.info("Starting forecast update for all device locations");
+
+        try {
+            cleanupOldForecasts();
+
+            // Get all unique device locations
+            List<LocationData> deviceLocations = deviceLocationService.getAllUniqueDeviceLocations();
+
+            if (deviceLocations.isEmpty()) {
+                log.debug("No registered devices found, skipping weather forecast update");
+                return;
+            }
+
+            log.info("Updating weather forecasts for {} unique device locations", deviceLocations.size());
+
+            // Update forecasts for each unique device location
+            int successCount = 0;
+            for (LocationData location : deviceLocations) {
+                try {
+                    getForecastForLocation(location.getLatitude(), location.getLongitude(), location);
+                    log.debug("Updated forecasts for device location: {}, {}",
+                            location.getCity(), location.getCountry());
+                    successCount++;
+                } catch (Exception e) {
+                    log.error("Failed to update forecasts for location: {}, {} - {}",
+                            location.getCity(), location.getCountry(), e.getMessage());
+                }
+            }
+
+            log.info("Successfully updated forecasts for {}/{} device locations",
+                    successCount, deviceLocations.size());
+        } catch (Exception e) {
+            log.error("Error occurred during forecast update for device locations", e);
         } finally {
             isUpdating = false;
         }

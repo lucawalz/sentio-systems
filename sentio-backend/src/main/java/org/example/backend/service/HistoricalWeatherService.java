@@ -22,11 +22,13 @@ import java.util.stream.Collectors;
 
 /**
  * Service responsible for managing historical weather data operations.
- * Handles fetching historical weather from OpenMeteo Historical API and database persistence.
+ * Handles fetching historical weather from OpenMeteo Historical API and
+ * database persistence.
  * <p>
  * This service integrates with the OpenMeteo Historical/Archive API to retrieve
  * past weather data for comparison with forecasts and trend analysis.
- * It implements intelligent caching and automatic daily updates for historical data.
+ * It implements intelligent caching and automatic daily updates for historical
+ * data.
  * </p>
  *
  * @author Sentio Team
@@ -40,6 +42,7 @@ public class HistoricalWeatherService {
 
     private final HistoricalWeatherRepository historicalWeatherRepository;
     private final IpLocationService ipLocationService;
+    private final DeviceLocationService deviceLocationService;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private volatile boolean isUpdating = false;
@@ -48,20 +51,23 @@ public class HistoricalWeatherService {
     private String archiveBaseUrl;
 
     /**
-     * Retrieves historical weather for the current user's location based on IP geolocation.
-     * Fetches data for predefined intervals: 3 days ago, 2 weeks ago, 1 month ago, 3 months ago, 1 year ago.
+     * Retrieves historical weather for the current user's device location.
+     * Uses the first registered device's location.
+     * Enforces strict device-only policy - never uses server or browser IP.
+     * Fetches data for predefined intervals: 3 days ago, 2 weeks ago, 1 month ago,
+     * 3 months ago, 1 year ago.
      *
-     * @return List of historical weather data for current location
+     * @return List of historical weather data for user's device location
      */
     public List<HistoricalWeather> getHistoricalWeatherForCurrentLocation() {
-        log.debug("Retrieving historical weather for current location");
-        Optional<LocationData> currentLocation = ipLocationService.getCurrentLocation();
-        if (currentLocation.isPresent()) {
-            return getHistoricalWeatherForLocation(currentLocation.get().getLatitude(),
-                    currentLocation.get().getLongitude(),
-                    currentLocation.get());
+        log.debug("Retrieving historical weather for current user's device location");
+        Optional<LocationData> deviceLocation = deviceLocationService.getFirstUserDeviceLocation();
+        if (deviceLocation.isPresent()) {
+            return getHistoricalWeatherForLocation(deviceLocation.get().getLatitude(),
+                    deviceLocation.get().getLongitude(),
+                    deviceLocation.get());
         }
-        log.warn("Unable to determine current location for historical weather retrieval");
+        log.warn("User has no registered devices, cannot retrieve historical weather");
         return new ArrayList<>();
     }
 
@@ -75,7 +81,8 @@ public class HistoricalWeatherService {
      * @return List of processed historical weather records
      */
     @Transactional
-    public List<HistoricalWeather> getHistoricalWeatherForLocation(Float latitude, Float longitude, LocationData locationData) {
+    public List<HistoricalWeather> getHistoricalWeatherForLocation(Float latitude, Float longitude,
+            LocationData locationData) {
         log.info("Processing historical weather for location: {}, {} (lat: {}, lon: {})",
                 locationData.getCity(), locationData.getCountry(), latitude, longitude);
 
@@ -91,7 +98,8 @@ public class HistoricalWeatherService {
                 historicalDates.get(0) // newest date
         );
 
-        // Filter out dates we already have (unless they're very old records that need updating)
+        // Filter out dates we already have (unless they're very old records that need
+        // updating)
         LocalDateTime oneWeekAgo = LocalDateTime.now().minusWeeks(1);
         List<LocalDate> datesToFetch = historicalDates.stream()
                 .filter(date -> !existingDates.contains(date) || needsUpdate(date, locationData, oneWeekAgo))
@@ -106,7 +114,8 @@ public class HistoricalWeatherService {
 
         log.info("Fetching historical weather for {} dates", datesToFetch.size());
 
-        // Group dates by month-year to minimize API calls (OpenMeteo allows date ranges)
+        // Group dates by month-year to minimize API calls (OpenMeteo allows date
+        // ranges)
         Map<String, List<LocalDate>> dateGroups = groupDatesByMonthYear(datesToFetch);
 
         for (Map.Entry<String, List<LocalDate>> group : dateGroups.entrySet()) {
@@ -135,16 +144,17 @@ public class HistoricalWeatherService {
     }
 
     /**
-     * Defines the historical dates to fetch: 3 days ago, 2 weeks ago, 1 month ago, 3 months ago, 1 year ago.
+     * Defines the historical dates to fetch: 3 days ago, 2 weeks ago, 1 month ago,
+     * 3 months ago, 1 year ago.
      */
     private List<LocalDate> getHistoricalDates() {
         LocalDate now = LocalDate.now();
         return Arrays.asList(
-                now.minusDays(3),      // 3 days ago
-                now.minusWeeks(2),     // 2 weeks ago (was 1 week)
-                now.minusMonths(1),    // 1 month ago
-                now.minusMonths(3),    // 3 months ago
-                now.minusYears(1)      // 1 year ago
+                now.minusDays(3), // 3 days ago
+                now.minusWeeks(2), // 2 weeks ago (was 1 week)
+                now.minusMonths(1), // 1 month ago
+                now.minusMonths(3), // 3 months ago
+                now.minusYears(1) // 1 year ago
         );
     }
 
@@ -153,7 +163,8 @@ public class HistoricalWeatherService {
      */
     private Map<String, List<LocalDate>> groupDatesByMonthYear(List<LocalDate> dates) {
         return dates.stream()
-                .collect(Collectors.groupingBy(date -> date.getYear() + "-" + String.format("%02d", date.getMonthValue())));
+                .collect(Collectors
+                        .groupingBy(date -> date.getYear() + "-" + String.format("%02d", date.getMonthValue())));
     }
 
     /**
@@ -167,12 +178,13 @@ public class HistoricalWeatherService {
     }
 
     /**
-     * Fetches historical weather data from OpenMeteo Archive API for a specific date range.
+     * Fetches historical weather data from OpenMeteo Archive API for a specific
+     * date range.
      */
     private List<HistoricalWeather> fetchHistoricalWeatherForDateRange(Float latitude, Float longitude,
-                                                                       LocalDate startDate, LocalDate endDate,
-                                                                       LocationData locationData,
-                                                                       List<LocalDate> targetDates) {
+            LocalDate startDate, LocalDate endDate,
+            LocationData locationData,
+            List<LocalDate> targetDates) {
 
         // OpenMeteo Historical API URL with the parameters you specified
         String url = String.format(
@@ -199,8 +211,8 @@ public class HistoricalWeatherService {
      * Processes the JSON response from OpenMeteo Archive API.
      */
     private List<HistoricalWeather> processHistoricalWeatherResponse(JsonNode jsonNode,
-                                                                     LocationData locationData,
-                                                                     List<LocalDate> targetDates) {
+            LocationData locationData,
+            List<LocalDate> targetDates) {
         List<HistoricalWeather> historicalData = new ArrayList<>();
 
         JsonNode dailyNode = jsonNode.get("daily");
@@ -219,7 +231,7 @@ public class HistoricalWeatherService {
         Map<LocalDate, HistoricalWeather> existingMap = new HashMap<>();
         for (LocalDate date : targetDates) {
             historicalWeatherRepository.findByWeatherDateAndLocation(
-                            date, locationData.getCity(), locationData.getCountry())
+                    date, locationData.getCity(), locationData.getCountry())
                     .ifPresent(existing -> existingMap.put(date, existing));
         }
 
@@ -251,7 +263,8 @@ public class HistoricalWeatherService {
 
                 // Extract weather data using direct method calls instead of lambdas
                 JsonNode weatherCodeArray = dailyNode.get("weather_code");
-                if (weatherCodeArray != null && weatherCodeArray.isArray() && i < weatherCodeArray.size() && !weatherCodeArray.get(i).isNull()) {
+                if (weatherCodeArray != null && weatherCodeArray.isArray() && i < weatherCodeArray.size()
+                        && !weatherCodeArray.get(i).isNull()) {
                     historical.setWeatherCode(weatherCodeArray.get(i).intValue());
                 }
 
@@ -299,7 +312,8 @@ public class HistoricalWeatherService {
     /**
      * Safely extracts a numeric value from the JSON response.
      */
-    private void extractValue(JsonNode dailyNode, String fieldName, int index, java.util.function.Consumer<Float> setter) {
+    private void extractValue(JsonNode dailyNode, String fieldName, int index,
+            java.util.function.Consumer<Float> setter) {
         JsonNode array = dailyNode.get(fieldName);
         if (array != null && array.isArray() && index < array.size() && !array.get(index).isNull()) {
             setter.accept(array.get(index).floatValue());
@@ -309,7 +323,8 @@ public class HistoricalWeatherService {
     /**
      * Safely extracts a time value and converts it to LocalDateTime.
      */
-    private void extractTimeValue(JsonNode dailyNode, String fieldName, int index, java.util.function.Consumer<LocalDateTime> setter) {
+    private void extractTimeValue(JsonNode dailyNode, String fieldName, int index,
+            java.util.function.Consumer<LocalDateTime> setter) {
         JsonNode array = dailyNode.get(fieldName);
         if (array != null && array.isArray() && index < array.size() && !array.get(index).isNull()) {
             try {
@@ -337,39 +352,40 @@ public class HistoricalWeatherService {
     }
 
     /**
-     * Maps weather codes to human-readable descriptions using the same logic as forecasts.
+     * Maps weather codes to human-readable descriptions using the same logic as
+     * forecasts.
      */
     private String[] mapWeatherCode(int code) {
         return switch (code) {
-            case 0 -> new String[]{"Clear", "Clear sky", "01d"};
-            case 1 -> new String[]{"Clouds", "Mainly clear", "02d"};
-            case 2 -> new String[]{"Clouds", "Partly cloudy", "03d"};
-            case 3 -> new String[]{"Clouds", "Overcast", "04d"};
-            case 45 -> new String[]{"Mist", "Fog", "50d"};
-            case 48 -> new String[]{"Mist", "Depositing rime fog", "50d"};
-            case 51 -> new String[]{"Drizzle", "Light drizzle", "09d"};
-            case 53 -> new String[]{"Drizzle", "Moderate drizzle", "09d"};
-            case 55 -> new String[]{"Drizzle", "Dense drizzle", "09d"};
-            case 56 -> new String[]{"Drizzle", "Light freezing drizzle", "09d"};
-            case 57 -> new String[]{"Drizzle", "Dense freezing drizzle", "09d"};
-            case 61 -> new String[]{"Rain", "Slight rain", "10d"};
-            case 63 -> new String[]{"Rain", "Moderate rain", "10d"};
-            case 65 -> new String[]{"Rain", "Heavy rain", "10d"};
-            case 66 -> new String[]{"Rain", "Light freezing rain", "10d"};
-            case 67 -> new String[]{"Rain", "Heavy freezing rain", "10d"};
-            case 71 -> new String[]{"Snow", "Slight snow fall", "13d"};
-            case 73 -> new String[]{"Snow", "Moderate snow fall", "13d"};
-            case 75 -> new String[]{"Snow", "Heavy snow fall", "13d"};
-            case 77 -> new String[]{"Snow", "Snow grains", "13d"};
-            case 80 -> new String[]{"Rain", "Slight rain showers", "09d"};
-            case 81 -> new String[]{"Rain", "Moderate rain showers", "09d"};
-            case 82 -> new String[]{"Rain", "Violent rain showers", "09d"};
-            case 85 -> new String[]{"Snow", "Slight snow showers", "13d"};
-            case 86 -> new String[]{"Snow", "Heavy snow showers", "13d"};
-            case 95 -> new String[]{"Thunderstorm", "Thunderstorm", "11d"};
-            case 96 -> new String[]{"Thunderstorm", "Thunderstorm with slight hail", "11d"};
-            case 99 -> new String[]{"Thunderstorm", "Thunderstorm with heavy hail", "11d"};
-            default -> new String[]{"Unknown", "Unknown weather condition", "01d"};
+            case 0 -> new String[] { "Clear", "Clear sky", "01d" };
+            case 1 -> new String[] { "Clouds", "Mainly clear", "02d" };
+            case 2 -> new String[] { "Clouds", "Partly cloudy", "03d" };
+            case 3 -> new String[] { "Clouds", "Overcast", "04d" };
+            case 45 -> new String[] { "Mist", "Fog", "50d" };
+            case 48 -> new String[] { "Mist", "Depositing rime fog", "50d" };
+            case 51 -> new String[] { "Drizzle", "Light drizzle", "09d" };
+            case 53 -> new String[] { "Drizzle", "Moderate drizzle", "09d" };
+            case 55 -> new String[] { "Drizzle", "Dense drizzle", "09d" };
+            case 56 -> new String[] { "Drizzle", "Light freezing drizzle", "09d" };
+            case 57 -> new String[] { "Drizzle", "Dense freezing drizzle", "09d" };
+            case 61 -> new String[] { "Rain", "Slight rain", "10d" };
+            case 63 -> new String[] { "Rain", "Moderate rain", "10d" };
+            case 65 -> new String[] { "Rain", "Heavy rain", "10d" };
+            case 66 -> new String[] { "Rain", "Light freezing rain", "10d" };
+            case 67 -> new String[] { "Rain", "Heavy freezing rain", "10d" };
+            case 71 -> new String[] { "Snow", "Slight snow fall", "13d" };
+            case 73 -> new String[] { "Snow", "Moderate snow fall", "13d" };
+            case 75 -> new String[] { "Snow", "Heavy snow fall", "13d" };
+            case 77 -> new String[] { "Snow", "Snow grains", "13d" };
+            case 80 -> new String[] { "Rain", "Slight rain showers", "09d" };
+            case 81 -> new String[] { "Rain", "Moderate rain showers", "09d" };
+            case 82 -> new String[] { "Rain", "Violent rain showers", "09d" };
+            case 85 -> new String[] { "Snow", "Slight snow showers", "13d" };
+            case 86 -> new String[] { "Snow", "Heavy snow showers", "13d" };
+            case 95 -> new String[] { "Thunderstorm", "Thunderstorm", "11d" };
+            case 96 -> new String[] { "Thunderstorm", "Thunderstorm with slight hail", "11d" };
+            case 99 -> new String[] { "Thunderstorm", "Thunderstorm with heavy hail", "11d" };
+            default -> new String[] { "Unknown", "Unknown weather condition", "01d" };
         };
     }
 
@@ -403,6 +419,65 @@ public class HistoricalWeatherService {
             }
         } catch (Exception e) {
             log.error("Error occurred during historical weather update for current location", e);
+        } finally {
+            isUpdating = false;
+        }
+    }
+
+    /**
+     * Updates historical weather for all registered device locations.
+     * This is the new method used by scheduled tasks to update historical data only
+     * for device locations.
+     * Replaces updateHistoricalWeatherForCurrentLocation() for scheduled background
+     * updates.
+     * <p>
+     * Enforces strict device-only policy:
+     * - Only updates weather for registered device locations
+     * - Never uses server or browser IP
+     * - Skips gracefully if no devices are registered
+     * </p>
+     */
+    @Transactional
+    public void updateHistoricalWeatherForAllDeviceLocations() {
+        if (isUpdating) {
+            log.warn("Historical weather update already in progress, skipping concurrent update request");
+            return;
+        }
+
+        isUpdating = true;
+        log.info("Starting historical weather update for all device locations");
+
+        try {
+            cleanupOldHistoricalWeather();
+
+            // Get all unique device locations
+            List<LocationData> deviceLocations = deviceLocationService.getAllUniqueDeviceLocations();
+
+            if (deviceLocations.isEmpty()) {
+                log.debug("No registered devices found, skipping historical weather update");
+                return;
+            }
+
+            log.info("Updating historical weather for {} unique device locations", deviceLocations.size());
+
+            // Update historical weather for each unique device location
+            int successCount = 0;
+            for (LocationData location : deviceLocations) {
+                try {
+                    getHistoricalWeatherForLocation(location.getLatitude(), location.getLongitude(), location);
+                    log.debug("Updated historical weather for device location: {}, {}",
+                            location.getCity(), location.getCountry());
+                    successCount++;
+                } catch (Exception e) {
+                    log.error("Failed to update historical weather for location: {}, {} - {}",
+                            location.getCity(), location.getCountry(), e.getMessage());
+                }
+            }
+
+            log.info("Successfully updated historical weather for {}/{} device locations",
+                    successCount, deviceLocations.size());
+        } catch (Exception e) {
+            log.error("Error occurred during historical weather update for device locations", e);
         } finally {
             isUpdating = false;
         }

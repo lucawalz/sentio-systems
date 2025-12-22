@@ -19,7 +19,8 @@ import {
     Minus,
     TrendingUp,
     TrendingDown,
-    Gauge
+    Gauge,
+    MapPin
 } from "lucide-react"
 import { useForecastData } from '../../hooks/useForecastData'
 import { formatForecastDate, formatWindSpeed, getWindDirection } from '../../utils/forecastUtils'
@@ -133,7 +134,7 @@ const getTrendColor = (trend: string) => {
 
 export function FiveDayForecast() {
     const cardRef = useRef<HTMLDivElement>(null)
-    const { dailyForecasts, loading, error, refetch } = useForecastData()
+    const { dailyForecasts, loading, error, noDevices, refetch } = useForecastData()
 
     useEffect(() => {
         if (cardRef.current) {
@@ -212,6 +213,29 @@ export function FiveDayForecast() {
                 <div className="flex items-center justify-center h-full flex-col space-y-4">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
                     <div className="text-sm text-muted-foreground">Loading forecast data...</div>
+                </div>
+            </div>
+        )
+    }
+
+    if (noDevices) {
+        return (
+            <div className="dashboard-card bg-card/80 backdrop-blur-sm border border-border rounded-3xl p-6 h-[500px] relative overflow-hidden shadow-xl">
+                <div className="flex flex-col items-center justify-center h-full text-center">
+                    <div className="w-16 h-16 rounded-full bg-blue-500/10 flex items-center justify-center mb-4">
+                        <MapPin className="w-8 h-8 text-blue-500" />
+                    </div>
+                    <div className="text-xl font-semibold mb-2 text-foreground">No Devices Registered</div>
+                    <p className="text-sm text-muted-foreground max-w-xs mb-4">
+                        Register a device to see weather forecasts for your location.
+                    </p>
+                    <a
+                        href="/dashboard#devices"
+                        className="px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors font-medium flex items-center gap-2"
+                    >
+                        <MapPin className="w-4 h-4" />
+                        Register Device
+                    </a>
                 </div>
             </div>
         )

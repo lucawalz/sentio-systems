@@ -5,6 +5,8 @@ import { AnimalProvider } from './context/AnimalContext';
 import { WeatherProvider } from './context/WeatherContext';
 import { ForecastProvider } from './context/ForecastContext';
 import { AiSummaryProvider } from './context/AiSummaryContext';
+import { DeviceProvider } from './context/DeviceContext';
+import { WebSocketProvider } from './context/WebSocketContext';
 import { Layout } from './components/layout/Layout.tsx';
 import { ProtectedRoute } from './components/auth/protected-route.tsx';
 import Landing from './pages/Landing';
@@ -24,15 +26,19 @@ function App() {
                             <Route path="/" element={<Landing />} />
                             <Route element={<ProtectedRoute />}>
                                 <Route path="/dashboard" element={
-                                    <AnimalProvider>
-                                        <WeatherProvider>
-                                            <ForecastProvider>
-                                                <AiSummaryProvider>
-                                                    <Dashboard />
-                                                </AiSummaryProvider>
-                                            </ForecastProvider>
-                                        </WeatherProvider>
-                                    </AnimalProvider>
+                                    <WebSocketProvider>
+                                        <DeviceProvider>
+                                            <AnimalProvider>
+                                                <WeatherProvider>
+                                                    <ForecastProvider>
+                                                        <AiSummaryProvider>
+                                                            <Dashboard />
+                                                        </AiSummaryProvider>
+                                                    </ForecastProvider>
+                                                </WeatherProvider>
+                                            </AnimalProvider>
+                                        </DeviceProvider>
+                                    </WebSocketProvider>
                                 } />
                             </Route>
                             <Route path="/login" element={<LogIn mode="login" />} />

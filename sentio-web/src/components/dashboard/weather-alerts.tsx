@@ -150,7 +150,7 @@ const AlertCard = ({ alert, isExpanded, onToggle }: {
 
 export function WeatherAlerts() {
     const cardRef = useRef<HTMLDivElement>(null)
-    const { alerts, loading, error, refetch, hasAlerts } = useAlerts(300000) // 5 min refresh
+    const { alerts, loading, error, refetch, hasAlerts, noDevices } = useAlerts(300000) // 5 min refresh
     const [expandedAlertId, setExpandedAlertId] = useState<string | null>(null)
 
     useEffect(() => {
@@ -169,6 +169,29 @@ export function WeatherAlerts() {
                 <div className="flex items-center justify-center h-full flex-col space-y-4">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
                     <div className="text-sm text-muted-foreground">Loading weather alerts...</div>
+                </div>
+            </div>
+        )
+    }
+
+    if (noDevices) {
+        return (
+            <div className="dashboard-card bg-card/80 backdrop-blur-sm border border-border rounded-3xl p-6 min-h-[300px] relative overflow-hidden shadow-xl">
+                <div className="flex flex-col items-center justify-center h-full text-center">
+                    <div className="w-16 h-16 rounded-full bg-blue-500/10 flex items-center justify-center mb-4">
+                        <MapPin className="w-8 h-8 text-blue-500" />
+                    </div>
+                    <div className="text-lg font-semibold mb-2 text-foreground">No Devices Registered</div>
+                    <p className="text-sm text-muted-foreground max-w-xs mb-4">
+                        Register a device to see weather alerts for your location.
+                    </p>
+                    <a
+                        href="/dashboard#devices"
+                        className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors flex items-center gap-2"
+                    >
+                        <MapPin className="w-4 h-4" />
+                        Register Device
+                    </a>
                 </div>
             </div>
         )
