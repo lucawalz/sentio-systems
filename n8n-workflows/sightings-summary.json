@@ -1,0 +1,335 @@
+{
+  "name": "Sentio Sightings Summary",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sentio-sightings-summary",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 200],
+      "webhookId": "sentio-sightings-summary"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, species, animal_type, confidence, device_id, timestamp, location, image_url FROM animal_detections WHERE timestamp > NOW() - INTERVAL '24 hours' ORDER BY timestamp DESC LIMIT 100",
+        "options": {}
+      },
+      "id": "get-recent",
+      "name": "Get Recent Sightings",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [220, 100],
+      "credentials": {
+        "postgres": {
+          "id": "POSTGRES_CREDENTIAL_ID",
+          "name": "Sentio PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT species, COUNT(*) as count FROM animal_detections WHERE timestamp > NOW() - INTERVAL '7 days' GROUP BY species ORDER BY count DESC LIMIT 20",
+        "options": {}
+      },
+      "id": "get-species",
+      "name": "Get Species Count",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [220, 300],
+      "credentials": {
+        "postgres": {
+          "id": "POSTGRES_CREDENTIAL_ID",
+          "name": "Sentio PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT EXTRACT(HOUR FROM timestamp) as hour, COUNT(*) as count FROM animal_detections WHERE timestamp > NOW() - INTERVAL '7 days' GROUP BY hour ORDER BY hour",
+        "options": {}
+      },
+      "id": "get-activity",
+      "name": "Get Hourly Activity",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [220, 500],
+      "credentials": {
+        "postgres": {
+          "id": "POSTGRES_CREDENTIAL_ID",
+          "name": "Sentio PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "append"
+      },
+      "id": "merge-1",
+      "name": "Merge Sightings & Species",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [440, 200]
+    },
+    {
+      "parameters": {
+        "mode": "append"
+      },
+      "id": "merge-2",
+      "name": "Merge All",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [600, 350]
+    },
+    {
+      "parameters": {
+        "model": "models/gemini-2.0-flash",
+        "options": {
+          "temperature": 0.7,
+          "maxOutputTokens": 1024
+        }
+      },
+      "id": "gemini-model",
+      "name": "Gemini Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [900, 450],
+      "credentials": {
+        "googleGeminiApi": {
+          "id": "GEMINI_CREDENTIAL_ID",
+          "name": "Google Gemini API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a wildlife analyst for Sentio, a biodiversity monitoring system.\n\n## Recent Wildlife Detections (Last 24h)\n{{ JSON.stringify($('Get Recent Sightings').all().map(i => i.json), null, 2) }}\n\n## Species Diversity (Last 7 days)\n{{ JSON.stringify($('Get Species Count').all().map(i => i.json), null, 2) }}\n\n## Hourly Activity Patterns (Last 7 days)\n{{ JSON.stringify($('Get Hourly Activity').all().map(i => i.json), null, 2) }}\n\n## User Context\nUser ID: {{ $('Webhook').item.json.body.userId || 'anonymous' }}\n\n## Instructions\nCreate a wildlife sightings summary that includes:\n1. Overview of recent detection activity (count, notable species)\n2. Species diversity analysis (most common, rare sightings)\n3. Activity pattern insights (peak times, trends)\n4. Tips for optimal wildlife observation based on patterns\n\nIf data is empty/minimal, acknowledge and provide helpful context.\nBe concise (2-3 paragraphs max). Use friendly, engaging tone.\nHighlight any exciting or unusual sightings."
+      },
+      "id": "llm-chain",
+      "name": "Generate Summary",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [800, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "analysisText",
+              "name": "analysisText",
+              "value": "={{ $json.text }}",
+              "type": "string"
+            },
+            {
+              "id": "userId",
+              "name": "userId",
+              "value": "={{ $('Webhook').item.json.body.userId || null }}",
+              "type": "string"
+            },
+            {
+              "id": "workflowType",
+              "name": "workflowType",
+              "value": "SIGHTINGS_SUMMARY",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "prepare-payload",
+      "name": "Prepare Payload",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1020, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=INSERT INTO workflow_results (workflow_type, user_id, analysis_text, data_confidence, timestamp, last_updated) VALUES ('{{ $json.workflowType }}', {{ $json.userId ? \"'\" + $json.userId + \"'\" : 'NULL' }}, '{{ $json.analysisText.replace(/'/g, \"''\") }}', 0.85, NOW(), NOW()) RETURNING id",
+        "options": {}
+      },
+      "id": "save-to-db",
+      "name": "Save Summary to DB",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1240, 300],
+      "credentials": {
+        "postgres": {
+          "id": "POSTGRES_CREDENTIAL_ID",
+          "name": "Sentio PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "success",
+              "name": "success",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "message",
+              "name": "message",
+              "value": "Sightings summary generated successfully",
+              "type": "string"
+            },
+            {
+              "id": "summaryId",
+              "name": "summaryId",
+              "value": "={{ $json.id }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "format-response",
+      "name": "Format Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1460, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get Recent Sightings",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Species Count",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Hourly Activity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Recent Sightings": {
+      "main": [
+        [
+          {
+            "node": "Merge Sightings & Species",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Species Count": {
+      "main": [
+        [
+          {
+            "node": "Merge Sightings & Species",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Sightings & Species": {
+      "main": [
+        [
+          {
+            "node": "Merge All",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Hourly Activity": {
+      "main": [
+        [
+          {
+            "node": "Merge All",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge All": {
+      "main": [
+        [
+          {
+            "node": "Generate Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Generate Summary",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Summary": {
+      "main": [
+        [
+          {
+            "node": "Prepare Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Payload": {
+      "main": [
+        [
+          {
+            "node": "Save Summary to DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Summary to DB": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [{"name": "sentio"}, {"name": "sightings"}],
+  "triggerCount": 1,
+  "pinData": {}
+}

@@ -6,13 +6,16 @@ import lombok.extern.slf4j.Slf4j;
 import java.time.LocalDateTime;
 
 /**
- * JPA entity representing AI-generated summaries of weather and bird activity data.
- * Stores comprehensive analysis combining weather conditions, bird detection patterns,
- * and environmental insights to provide meaningful context for biodiversity monitoring.
+ * JPA entity representing results from n8n workflow executions.
+ * Stores AI-generated content including summaries of weather and bird activity
+ * data,
+ * as well as AI agent responses to user queries.
  * <p>
- * This entity captures AI-powered interpretations of collected sensor data,
- * including weather patterns, bird activity trends, and predictive insights.
- * Each summary represents a snapshot in time with actionable information for
+ * This entity captures outputs from n8n workflows that use Gemini AI to
+ * generate
+ * insights, including weather patterns, bird activity trends, and predictive
+ * insights.
+ * Each result represents a snapshot in time with actionable information for
  * both casual users and citizen science contributors.
  * </p>
  */
@@ -21,12 +24,25 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Slf4j
-@Table(name = "ai_summaries")
-public class AISummary {
+@Table(name = "workflow_results", indexes = {
+        @Index(name = "idx_workflow_user_type", columnList = "user_id, workflow_type")
+})
+public class WorkflowResult {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    /** Type of workflow that generated this result */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "workflow_type", nullable = false)
+    private WorkflowType workflowType = WorkflowType.SUMMARY;
+
+    /**
+     * User ID (Keycloak subject) who owns this result. Null for global summaries.
+     */
+    @Column(name = "user_id")
+    private String userId;
 
     /** AI-generated comprehensive analysis text */
     @Column(columnDefinition = "TEXT", name = "analysis_text")
@@ -44,7 +60,7 @@ public class AISummary {
     @Column(columnDefinition = "TEXT")
     private String metadata;
 
-    /** Timestamp when the summary was generated */
+    /** Timestamp when the result was generated */
     @Column(nullable = false)
     private LocalDateTime timestamp;
 
@@ -97,16 +113,19 @@ public class AISummary {
         if (timestamp == null) {
             timestamp = LocalDateTime.now();
         }
+        if (workflowType == null) {
+            workflowType = WorkflowType.SUMMARY;
+        }
         lastUpdated = LocalDateTime.now();
 
-        log.debug("AISummary entity created - Confidence: {}, Analysis length: {}",
-                dataConfidence, analysisText != null ? analysisText.length() : 0);
+        log.debug("WorkflowResult entity created - Type: {}, Confidence: {}, Analysis length: {}",
+                workflowType, dataConfidence, analysisText != null ? analysisText.length() : 0);
     }
 
     @PreUpdate
     protected void onUpdate() {
         lastUpdated = LocalDateTime.now();
 
-        log.debug("AISummary entity updated - ID: {}", id);
+        log.debug("WorkflowResult entity updated - ID: {}, Type: {}", id, workflowType);
     }
 }

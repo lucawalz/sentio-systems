@@ -78,6 +78,32 @@
         "offline_access",
         "microprofile-jwt"
       ]
+    },
+    {
+      "clientId": "n8n-workflow",
+      "name": "n8n Workflow Service",
+      "description": "Service account for n8n workflows to call Sentio APIs",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "N8N_CLIENT_SECRET_PLACEHOLDER",
+      "publicClient": false,
+      "bearerOnly": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "protocol": "openid-connect",
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "offline_access"
+      ]
     }
   ],
   "roles": {
@@ -112,6 +138,12 @@
           "query-users"
         ]
       }
+    },
+    {
+      "username": "service-account-n8n-workflow",
+      "enabled": true,
+      "serviceAccountClientId": "n8n-workflow",
+      "realmRoles": ["user"]
     }
   ],
   "browserSecurityHeaders": {

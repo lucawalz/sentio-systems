@@ -1,0 +1,375 @@
+{
+    "name": "Sentio Weather Summary",
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "sentio-weather-summary",
+                "responseMode": "lastNode",
+                "options": {}
+            },
+            "id": "webhook-trigger",
+            "name": "Webhook",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2,
+            "position": [
+                0,
+                200
+            ],
+            "webhookId": "sentio-weather-summary"
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT id, device_id, temperature, humidity, pressure, lux, uvi, location, timestamp FROM raspi_weather_data WHERE timestamp > NOW() - INTERVAL '24 hours' ORDER BY timestamp DESC LIMIT 50",
+                "options": {}
+            },
+            "id": "get-weather",
+            "name": "Get Weather Data",
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.5,
+            "position": [
+                220,
+                100
+            ],
+            "credentials": {
+                "postgres": {
+                    "id": "POSTGRES_CREDENTIAL_ID",
+                    "name": "Sentio PostgreSQL"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT AVG(temperature) as avg_temp, MIN(temperature) as min_temp, MAX(temperature) as max_temp, AVG(humidity) as avg_humidity, MIN(humidity) as min_humidity, MAX(humidity) as max_humidity, AVG(pressure) as avg_pressure FROM raspi_weather_data WHERE timestamp > NOW() - INTERVAL '24 hours'",
+                "options": {}
+            },
+            "id": "get-stats",
+            "name": "Get Weather Stats",
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.5,
+            "position": [
+                220,
+                300
+            ],
+            "credentials": {
+                "postgres": {
+                    "id": "POSTGRES_CREDENTIAL_ID",
+                    "name": "Sentio PostgreSQL"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT event_name, severity, headline, description, onset_at, expires_at FROM weather_alerts WHERE expires_at > NOW() ORDER BY onset_at DESC LIMIT 5",
+                "options": {}
+            },
+            "id": "get-alerts",
+            "name": "Get Weather Alerts",
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.5,
+            "position": [
+                220,
+                500
+            ],
+            "credentials": {
+                "postgres": {
+                    "id": "POSTGRES_CREDENTIAL_ID",
+                    "name": "Sentio PostgreSQL"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "mode": "append"
+            },
+            "id": "merge-1",
+            "name": "Merge Weather & Stats",
+            "type": "n8n-nodes-base.merge",
+            "typeVersion": 3,
+            "position": [
+                440,
+                200
+            ]
+        },
+        {
+            "parameters": {
+                "mode": "append"
+            },
+            "id": "merge-2",
+            "name": "Merge All",
+            "type": "n8n-nodes-base.merge",
+            "typeVersion": 3,
+            "position": [
+                600,
+                350
+            ]
+        },
+        {
+            "parameters": {
+                "model": "models/gemini-2.0-flash",
+                "options": {
+                    "temperature": 0.7,
+                    "maxOutputTokens": 1024
+                }
+            },
+            "id": "gemini-model",
+            "name": "Gemini Model",
+            "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+            "typeVersion": 1,
+            "position": [
+                900,
+                450
+            ],
+            "credentials": {
+                "googleGeminiApi": {
+                    "id": "GEMINI_CREDENTIAL_ID",
+                    "name": "Google Gemini API"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "promptType": "define",
+                "text": "=You are a weather analyst for Sentio, a biodiversity monitoring system.\n\n## Recent Weather Readings (Last 24h)\n{{ JSON.stringify($('Get Weather Data').all().map(i => i.json), null, 2) }}\n\n## Weather Statistics (Last 24h)\n{{ JSON.stringify($('Get Weather Stats').all().map(i => i.json), null, 2) }}\n\n## Active Weather Alerts\n{{ JSON.stringify($('Get Weather Alerts').all().map(i => i.json), null, 2) }}\n\n## User Context\nUser ID: {{ $('Webhook').item.json.body.userId || 'anonymous' }}\n\n## Instructions\nCreate a weather summary that includes:\n1. Current conditions overview (temperature, humidity, pressure trends)\n2. Notable weather patterns or changes\n3. Active alerts summary (if any)\n4. Wildlife observation recommendations based on weather\n\nIf data is empty/minimal, acknowledge and provide helpful context.\nBe concise (2-3 paragraphs max). Use friendly, engaging tone.\nHighlight any significant weather events."
+            },
+            "id": "llm-chain",
+            "name": "Generate Summary",
+            "type": "@n8n/n8n-nodes-langchain.chainLlm",
+            "typeVersion": 1.4,
+            "position": [
+                800,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "assignments": {
+                    "assignments": [
+                        {
+                            "id": "analysisText",
+                            "name": "analysisText",
+                            "value": "={{ $json.text }}",
+                            "type": "string"
+                        },
+                        {
+                            "id": "userId",
+                            "name": "userId",
+                            "value": "={{ $('Webhook').item.json.body.userId || null }}",
+                            "type": "string"
+                        },
+                        {
+                            "id": "workflowType",
+                            "name": "workflowType",
+                            "value": "WEATHER_SUMMARY",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "prepare-payload",
+            "name": "Prepare Payload",
+            "type": "n8n-nodes-base.set",
+            "typeVersion": 3.4,
+            "position": [
+                1020,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "=INSERT INTO workflow_results (workflow_type, user_id, analysis_text, data_confidence, timestamp, last_updated) VALUES ('{{ $json.workflowType }}', {{ $json.userId ? \"'\" + $json.userId + \"'\" : 'NULL' }}, '{{ $json.analysisText.replace(/'/g, \"''\") }}', 0.85, NOW(), NOW()) RETURNING id",
+                "options": {}
+            },
+            "id": "save-to-db",
+            "name": "Save Summary to DB",
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.5,
+            "position": [
+                1240,
+                300
+            ],
+            "credentials": {
+                "postgres": {
+                    "id": "POSTGRES_CREDENTIAL_ID",
+                    "name": "Sentio PostgreSQL"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "assignments": {
+                    "assignments": [
+                        {
+                            "id": "success",
+                            "name": "success",
+                            "value": true,
+                            "type": "boolean"
+                        },
+                        {
+                            "id": "message",
+                            "name": "message",
+                            "value": "Weather summary generated successfully",
+                            "type": "string"
+                        },
+                        {
+                            "id": "summaryId",
+                            "name": "summaryId",
+                            "value": "={{ $json.id }}",
+                            "type": "number"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "format-response",
+            "name": "Format Response",
+            "type": "n8n-nodes-base.set",
+            "typeVersion": 3.4,
+            "position": [
+                1460,
+                300
+            ]
+        }
+    ],
+    "connections": {
+        "Webhook": {
+            "main": [
+                [
+                    {
+                        "node": "Get Weather Data",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "Get Weather Stats",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "Get Weather Alerts",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Get Weather Data": {
+            "main": [
+                [
+                    {
+                        "node": "Merge Weather & Stats",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Get Weather Stats": {
+            "main": [
+                [
+                    {
+                        "node": "Merge Weather & Stats",
+                        "type": "main",
+                        "index": 1
+                    }
+                ]
+            ]
+        },
+        "Merge Weather & Stats": {
+            "main": [
+                [
+                    {
+                        "node": "Merge All",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Get Weather Alerts": {
+            "main": [
+                [
+                    {
+                        "node": "Merge All",
+                        "type": "main",
+                        "index": 1
+                    }
+                ]
+            ]
+        },
+        "Merge All": {
+            "main": [
+                [
+                    {
+                        "node": "Generate Summary",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Gemini Model": {
+            "ai_languageModel": [
+                [
+                    {
+                        "node": "Generate Summary",
+                        "type": "ai_languageModel",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Generate Summary": {
+            "main": [
+                [
+                    {
+                        "node": "Prepare Payload",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Prepare Payload": {
+            "main": [
+                [
+                    {
+                        "node": "Save Summary to DB",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Save Summary to DB": {
+            "main": [
+                [
+                    {
+                        "node": "Format Response",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "settings": {
+        "executionOrder": "v1"
+    },
+    "staticData": null,
+    "tags": [
+        {
+            "name": "sentio"
+        },
+        {
+            "name": "weather"
+        }
+    ],
+    "triggerCount": 1,
+    "pinData": {}
+}

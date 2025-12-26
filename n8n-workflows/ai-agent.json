@@ -1,0 +1,309 @@
+{
+    "name": "Sentio AI Agent",
+    "nodes": [
+        {
+            "id": "webhook-trigger",
+            "name": "Webhook",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2,
+            "position": [
+                0,
+                200
+            ],
+            "webhookId": "sentio-ai-agent",
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "sentio-ai-agent",
+                "responseMode": "lastNode",
+                "options": {}
+            }
+        },
+        {
+            "id": "ai-agent",
+            "name": "Sentio AI Agent",
+            "type": "@n8n/n8n-nodes-langchain.agent",
+            "typeVersion": 2.2,
+            "position": [
+                300,
+                200
+            ],
+            "parameters": {
+                "promptType": "define",
+                "text": "={{ $json.body.query }}",
+                "options": {
+                    "systemMessage": "You are Sentio AI, an intelligent assistant for a biodiversity monitoring system.\n\nYou help users understand:\n- Wildlife observations and animal detections from their cameras\n- Weather conditions from their environmental sensors\n- Patterns and trends in their data\n\nYou have access to tools that query the Sentio database. Use them to answer user questions with real data.\n\nBe helpful, concise, and engaging. If data is limited, acknowledge this and provide helpful context.\n\nCurrent Date: {{ $now.format('YYYY-MM-DD') }}"
+                }
+            }
+        },
+        {
+            "id": "gemini-model",
+            "name": "Gemini Model",
+            "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+            "typeVersion": 1,
+            "position": [
+                0,
+                400
+            ],
+            "credentials": {
+                "googleGeminiApi": {
+                    "id": "GEMINI_CREDENTIAL_ID",
+                    "name": "Google Gemini API"
+                }
+            },
+            "parameters": {
+                "model": "models/gemini-2.0-flash",
+                "options": {
+                    "temperature": 0.7
+                }
+            }
+        },
+        {
+            "id": "memory",
+            "name": "Conversation Memory",
+            "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+            "typeVersion": 1.3,
+            "position": [
+                150,
+                400
+            ],
+            "parameters": {
+                "contextWindowLength": 10
+            }
+        },
+        {
+            "id": "tool-sightings",
+            "name": "Get Recent Sightings",
+            "type": "n8n-nodes-base.httpRequestTool",
+            "typeVersion": 4.2,
+            "position": [
+                450,
+                400
+            ],
+            "parameters": {
+                "url": "={{ $('Webhook').item.json.body.apiUrl || 'http://host.docker.internal:8083/api' }}/animal-detection/recent",
+                "options": {
+                    "response": {
+                        "response": {
+                            "responseFormat": "json"
+                        }
+                    }
+                },
+                "sendQuery": true,
+                "queryParameters": {
+                    "parameters": [
+                        {
+                            "name": "limit",
+                            "value": "20"
+                        }
+                    ]
+                },
+                "toolDescription": "Get recent animal/wildlife sightings detected by the monitoring system. Returns species, confidence scores, timestamps, and locations. Use this when users ask about recent detections, what animals were seen, or wildlife activity."
+            }
+        },
+        {
+            "id": "tool-species",
+            "name": "Get Species Summary",
+            "type": "n8n-nodes-base.httpRequestTool",
+            "typeVersion": 4.2,
+            "position": [
+                600,
+                400
+            ],
+            "parameters": {
+                "url": "={{ $('Webhook').item.json.body.apiUrl || 'http://host.docker.internal:8083/api' }}/animal-detection/summary/species",
+                "options": {
+                    "response": {
+                        "response": {
+                            "responseFormat": "json"
+                        }
+                    }
+                },
+                "toolDescription": "Get a summary of species diversity - counts of each species detected. Use this when users ask about which species are most common, biodiversity, or species variety."
+            }
+        },
+        {
+            "id": "tool-weather",
+            "name": "Get Weather Data",
+            "type": "n8n-nodes-base.httpRequestTool",
+            "typeVersion": 4.2,
+            "position": [
+                450,
+                550
+            ],
+            "parameters": {
+                "url": "={{ $('Webhook').item.json.body.apiUrl || 'http://host.docker.internal:8083/api' }}/weather/raspi/recent",
+                "options": {
+                    "response": {
+                        "response": {
+                            "responseFormat": "json"
+                        }
+                    }
+                },
+                "sendQuery": true,
+                "queryParameters": {
+                    "parameters": [
+                        {
+                            "name": "limit",
+                            "value": "20"
+                        }
+                    ]
+                },
+                "toolDescription": "Get recent weather sensor readings including temperature, humidity, and pressure. Use this when users ask about current or recent weather conditions."
+            }
+        },
+        {
+            "id": "tool-weather-stats",
+            "name": "Get Weather Stats",
+            "type": "n8n-nodes-base.httpRequestTool",
+            "typeVersion": 4.2,
+            "position": [
+                600,
+                550
+            ],
+            "parameters": {
+                "url": "={{ $('Webhook').item.json.body.apiUrl || 'http://host.docker.internal:8083/api' }}/weather/raspi/stats",
+                "options": {
+                    "response": {
+                        "response": {
+                            "responseFormat": "json"
+                        }
+                    }
+                },
+                "toolDescription": "Get weather statistics including averages, minimums, and maximums for temperature, humidity, and pressure. Use this for weather trends and summaries."
+            }
+        },
+        {
+            "id": "format-response",
+            "name": "Format Response",
+            "type": "n8n-nodes-base.set",
+            "typeVersion": 3.4,
+            "position": [
+                520,
+                200
+            ],
+            "parameters": {
+                "assignments": {
+                    "assignments": [
+                        {
+                            "id": "response",
+                            "name": "response",
+                            "value": "={{ $json.output }}",
+                            "type": "string"
+                        },
+                        {
+                            "id": "success",
+                            "name": "success",
+                            "value": true,
+                            "type": "boolean"
+                        }
+                    ]
+                },
+                "options": {}
+            }
+        }
+    ],
+    "connections": {
+        "Webhook": {
+            "main": [
+                [
+                    {
+                        "node": "Sentio AI Agent",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Gemini Model": {
+            "ai_languageModel": [
+                [
+                    {
+                        "node": "Sentio AI Agent",
+                        "type": "ai_languageModel",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Conversation Memory": {
+            "ai_memory": [
+                [
+                    {
+                        "node": "Sentio AI Agent",
+                        "type": "ai_memory",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Get Recent Sightings": {
+            "ai_tool": [
+                [
+                    {
+                        "node": "Sentio AI Agent",
+                        "type": "ai_tool",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Get Species Summary": {
+            "ai_tool": [
+                [
+                    {
+                        "node": "Sentio AI Agent",
+                        "type": "ai_tool",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Get Weather Data": {
+            "ai_tool": [
+                [
+                    {
+                        "node": "Sentio AI Agent",
+                        "type": "ai_tool",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Get Weather Stats": {
+            "ai_tool": [
+                [
+                    {
+                        "node": "Sentio AI Agent",
+                        "type": "ai_tool",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Sentio AI Agent": {
+            "main": [
+                [
+                    {
+                        "node": "Format Response",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "settings": {
+        "executionOrder": "v1"
+    },
+    "staticData": null,
+    "tags": [
+        {
+            "name": "sentio"
+        },
+        {
+            "name": "agent"
+        }
+    ],
+    "triggerCount": 1,
+    "pinData": {}
+}
