@@ -35,13 +35,11 @@ public class Device {
     private String name;
 
     /**
-     * Set of Keycloak user IDs/Usernames who own this device.
-     * Stored as a collection of strings.
+     * Keycloak user UUID who owns this device.
+     * Each device can only have ONE owner.
      */
-    @ElementCollection(fetch = FetchType.EAGER)
-    @CollectionTable(name = "device_owners", joinColumns = @JoinColumn(name = "device_id"))
-    @Column(name = "user_id")
-    private Set<String> owners = new HashSet<>();
+    @Column(name = "owner_id", nullable = false)
+    private String ownerId;
 
     /**
      * Set of active services running on this device (e.g. "animal_detector",

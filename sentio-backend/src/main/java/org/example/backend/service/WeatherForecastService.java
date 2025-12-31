@@ -198,7 +198,7 @@ public class WeatherForecastService {
     }
 
     /**
-     * Sets location data on the forecast entity.
+     * Sets location data on the forecast entity including deviceId for isolation.
      */
     private void setLocationData(WeatherForecast forecast, LocationData locationData) {
         if (locationData != null) {
@@ -207,6 +207,7 @@ public class WeatherForecastService {
             forecast.setLatitude(locationData.getLatitude());
             forecast.setLongitude(locationData.getLongitude());
             forecast.setIpAddress(locationData.getIpAddress());
+            forecast.setDeviceId(locationData.getDeviceId());
             forecast.setDetectedLocation(locationData.getCity() + ", " + locationData.getCountry());
         }
     }

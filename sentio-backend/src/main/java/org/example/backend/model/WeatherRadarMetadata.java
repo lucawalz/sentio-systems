@@ -26,6 +26,10 @@ public class WeatherRadarMetadata {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** Device ID that this radar data belongs to (for user data isolation) */
+    @Column(name = "device_id", length = 100)
+    private String deviceId;
+
     /**
      * Timestamp of the radar snapshot from BrightSky
      */

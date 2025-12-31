@@ -8,27 +8,21 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 /**
- * Unit tests for {@link DeviceService}.
- * 
- * <p>
- * Following FIRST principles with Given/When/Then format.
- * </p>
+ * Unit tests for {@link DeviceService} with single-owner model.
  */
 @ExtendWith(MockitoExtension.class)
 class DeviceServiceTest {
@@ -39,14 +33,21 @@ class DeviceServiceTest {
     @Mock
     private AuthService authService;
 
+    @Mock
+    private org.springframework.context.ApplicationEventPublisher eventPublisher;
+
     @InjectMocks
     private DeviceService deviceService;
 
     private AuthDTOs.UserInfo testUser;
 
+    private static final String TEST_USER_ID = "test-user-uuid-123";
+    private static final String TEST_USERNAME = "testuser";
+    private static final String OTHER_USER_ID = "other-user-uuid-456";
+
     @BeforeEach
     void setUp() {
-        testUser = new AuthDTOs.UserInfo("testuser", "test@example.com", List.of("user"));
+        testUser = new AuthDTOs.UserInfo(TEST_USER_ID, TEST_USERNAME, "test@example.com", List.of("user"));
     }
 
     @Nested
@@ -71,12 +72,12 @@ class DeviceServiceTest {
             assertThat(result).isNotNull();
             assertThat(result.getId()).isEqualTo(deviceId);
             assertThat(result.getName()).isEqualTo(deviceName);
-            assertThat(result.getOwners()).contains("testuser");
+            assertThat(result.getOwnerId()).isEqualTo(TEST_USER_ID);
         }
 
         @Test
-        @DisplayName("should add owner to existing device")
-        void shouldAddOwnerToExistingDevice() {
+        @DisplayName("should update name when device already belongs to user")
+        void shouldUpdateNameWhenDeviceAlreadyBelongsToUser() {
             // Given
             String deviceId = "device-123";
             String deviceName = "Updated Name";
@@ -84,7 +85,7 @@ class DeviceServiceTest {
             Device existingDevice = new Device();
             existingDevice.setId(deviceId);
             existingDevice.setName("Old Name");
-            existingDevice.setOwners(new HashSet<>(Set.of("otheruser")));
+            existingDevice.setOwnerId(TEST_USER_ID);
 
             when(authService.getCurrentUser()).thenReturn(testUser);
             when(deviceRepository.findById(deviceId)).thenReturn(Optional.of(existingDevice));
@@ -94,8 +95,27 @@ class DeviceServiceTest {
             Device result = deviceService.registerDevice(deviceId, deviceName);
 
             // Then
-            assertThat(result.getOwners()).containsExactlyInAnyOrder("testuser", "otheruser");
+            assertThat(result.getOwnerId()).isEqualTo(TEST_USER_ID);
             assertThat(result.getName()).isEqualTo(deviceName);
+        }
+
+        @Test
+        @DisplayName("should throw exception when device belongs to another user")
+        void shouldThrowWhenDeviceBelongsToAnotherUser() {
+            // Given
+            String deviceId = "device-123";
+
+            Device existingDevice = new Device();
+            existingDevice.setId(deviceId);
+            existingDevice.setOwnerId(OTHER_USER_ID);
+
+            when(authService.getCurrentUser()).thenReturn(testUser);
+            when(deviceRepository.findById(deviceId)).thenReturn(Optional.of(existingDevice));
+
+            // When/Then
+            assertThatThrownBy(() -> deviceService.registerDevice(deviceId, "My Device"))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("already belongs to another user");
         }
 
         @Test
@@ -122,14 +142,14 @@ class DeviceServiceTest {
     class UnregisterDeviceTests {
 
         @Test
-        @DisplayName("should remove owner from device")
-        void shouldRemoveOwnerFromDevice() {
+        @DisplayName("should delete device when user owns it")
+        void shouldDeleteDeviceWhenUserOwnsIt() {
             // Given
             String deviceId = "device-123";
 
             Device device = new Device();
             device.setId(deviceId);
-            device.setOwners(new HashSet<>(Set.of("testuser", "otheruser")));
+            device.setOwnerId(TEST_USER_ID);
 
             when(authService.getCurrentUser()).thenReturn(testUser);
             when(deviceRepository.findById(deviceId)).thenReturn(Optional.of(device));
@@ -138,12 +158,27 @@ class DeviceServiceTest {
             deviceService.unregisterDevice(deviceId);
 
             // Then
-            ArgumentCaptor<Device> deviceCaptor = ArgumentCaptor.forClass(Device.class);
-            verify(deviceRepository).save(deviceCaptor.capture());
+            verify(deviceRepository).delete(device);
+        }
 
-            Device savedDevice = deviceCaptor.getValue();
-            assertThat(savedDevice.getOwners()).containsExactly("otheruser");
-            assertThat(savedDevice.getOwners()).doesNotContain("testuser");
+        @Test
+        @DisplayName("should not delete device when user does not own it")
+        void shouldNotDeleteDeviceWhenUserDoesNotOwnIt() {
+            // Given
+            String deviceId = "device-123";
+
+            Device device = new Device();
+            device.setId(deviceId);
+            device.setOwnerId(OTHER_USER_ID);
+
+            when(authService.getCurrentUser()).thenReturn(testUser);
+            when(deviceRepository.findById(deviceId)).thenReturn(Optional.of(device));
+
+            // When
+            deviceService.unregisterDevice(deviceId);
+
+            // Then
+            verify(deviceRepository, never()).delete(any(Device.class));
         }
 
         @Test
@@ -159,7 +194,7 @@ class DeviceServiceTest {
             deviceService.unregisterDevice(deviceId);
 
             // Then
-            verify(deviceRepository, never()).save(any(Device.class));
+            verify(deviceRepository, never()).delete(any(Device.class));
         }
     }
 
@@ -174,13 +209,15 @@ class DeviceServiceTest {
             Device device1 = new Device();
             device1.setId("device-1");
             device1.setName("Device 1");
+            device1.setOwnerId(TEST_USER_ID);
 
             Device device2 = new Device();
             device2.setId("device-2");
             device2.setName("Device 2");
+            device2.setOwnerId(TEST_USER_ID);
 
             when(authService.getCurrentUser()).thenReturn(testUser);
-            when(deviceRepository.findAllByOwnerId("testuser")).thenReturn(List.of(device1, device2));
+            when(deviceRepository.findAllByOwnerId(TEST_USER_ID)).thenReturn(List.of(device1, device2));
 
             // When
             List<Device> result = deviceService.getMyDevices();
@@ -196,7 +233,7 @@ class DeviceServiceTest {
         void shouldReturnEmptyListWhenNoDevices() {
             // Given
             when(authService.getCurrentUser()).thenReturn(testUser);
-            when(deviceRepository.findAllByOwnerId("testuser")).thenReturn(List.of());
+            when(deviceRepository.findAllByOwnerId(TEST_USER_ID)).thenReturn(List.of());
 
             // When
             List<Device> result = deviceService.getMyDevices();
@@ -218,7 +255,7 @@ class DeviceServiceTest {
 
             Device device = new Device();
             device.setId(deviceId);
-            device.setOwners(Set.of("testuser"));
+            device.setOwnerId(TEST_USER_ID);
 
             when(authService.getCurrentUser()).thenReturn(testUser);
             when(deviceRepository.findById(deviceId)).thenReturn(Optional.of(device));
@@ -238,7 +275,7 @@ class DeviceServiceTest {
 
             Device device = new Device();
             device.setId(deviceId);
-            device.setOwners(Set.of("otheruser"));
+            device.setOwnerId(OTHER_USER_ID);
 
             when(authService.getCurrentUser()).thenReturn(testUser);
             when(deviceRepository.findById(deviceId)).thenReturn(Optional.of(device));
@@ -269,11 +306,8 @@ class DeviceServiceTest {
         @Test
         @DisplayName("should return false when deviceId is null")
         void shouldReturnFalseWhenDeviceIdIsNull() {
-            // Given
-            String deviceId = null;
-
             // When
-            boolean result = deviceService.hasAccessToDevice(deviceId);
+            boolean result = deviceService.hasAccessToDevice(null);
 
             // Then
             assertThat(result).isFalse();
@@ -304,12 +338,14 @@ class DeviceServiceTest {
             // Given
             Device device1 = new Device();
             device1.setId("device-1");
+            device1.setOwnerId(TEST_USER_ID);
 
             Device device2 = new Device();
             device2.setId("device-2");
+            device2.setOwnerId(TEST_USER_ID);
 
             when(authService.getCurrentUser()).thenReturn(testUser);
-            when(deviceRepository.findAllByOwnerId("testuser")).thenReturn(List.of(device1, device2));
+            when(deviceRepository.findAllByOwnerId(TEST_USER_ID)).thenReturn(List.of(device1, device2));
 
             // When
             List<String> result = deviceService.getMyDeviceIds();

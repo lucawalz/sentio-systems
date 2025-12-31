@@ -12,11 +12,15 @@ import java.time.LocalDateTime;
 
 /**
  * JPA entity representing hourly weather forecast data from Open-Meteo API.
- * Stores comprehensive hourly weather predictions with location information and temporal data.
+ * Stores comprehensive hourly weather predictions with location information and
+ * temporal data.
  * <p>
- * This entity is designed for hourly forecasts and includes weather conditions (temperature, humidity, pressure),
- * precipitation data, wind information, and location details. It implements automatic timestamping
- * for creation and update tracking, with a unique constraint on forecast datetime
+ * This entity is designed for hourly forecasts and includes weather conditions
+ * (temperature, humidity, pressure),
+ * precipitation data, wind information, and location details. It implements
+ * automatic timestamping
+ * for creation and update tracking, with a unique constraint on forecast
+ * datetime
  * combined with location to prevent duplicates.
  * </p>
  *
@@ -29,17 +33,18 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Slf4j
-@Table(name = "weather_forecasts",
-        indexes = {
-                @Index(name = "idx_forecast_unique",
-                        columnList = "forecastDateTime, city, country",
-                        unique = true)
-        })
+@Table(name = "weather_forecasts", indexes = {
+        @Index(name = "idx_forecast_unique", columnList = "forecastDateTime, city, country", unique = true)
+})
 public class WeatherForecast {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    /** Device ID that this forecast belongs to (for user data isolation) */
+    @Column(name = "device_id", length = 100)
+    private String deviceId;
 
     /** Date component of the forecast (used for daily grouping and queries) */
     @Column(nullable = false)

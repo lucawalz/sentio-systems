@@ -66,8 +66,8 @@ public class BrightSkyService {
         log.debug("Retrieving alerts for current user's device location");
         Optional<LocationData> deviceLocation = deviceLocationService.getFirstUserDeviceLocation();
         if (deviceLocation.isPresent()) {
-            return getAlertsForLocation(deviceLocation.get().getLatitude(),
-                    deviceLocation.get().getLongitude());
+            LocationData loc = deviceLocation.get();
+            return getAlertsForLocation(loc.getLatitude(), loc.getLongitude(), loc.getDeviceId());
         }
         log.warn("User has no registered devices, cannot retrieve weather alerts");
         return new ArrayList<>();
@@ -85,8 +85,8 @@ public class BrightSkyService {
      * @return List of processed and persisted weather alerts
      */
     @Transactional
-    public List<WeatherAlert> getAlertsForLocation(Float latitude, Float longitude) {
-        log.info("Processing weather alerts for location: lat: {}, lon: {}", latitude, longitude);
+    public List<WeatherAlert> getAlertsForLocation(Float latitude, Float longitude, String deviceId) {
+        log.info("Processing weather alerts for location: lat: {}, lon: {}, device: {}", latitude, longitude, deviceId);
 
         try {
             // Clean up expired alerts before fetching new data
@@ -108,7 +108,7 @@ public class BrightSkyService {
 
             if (alertsNode != null && alertsNode.isArray()) {
                 for (JsonNode alertNode : alertsNode) {
-                    WeatherAlert alert = processAlertNode(alertNode, locationNode);
+                    WeatherAlert alert = processAlertNode(alertNode, locationNode, deviceId);
                     if (alert != null) {
                         processedAlerts.add(alert);
                     }
@@ -132,13 +132,16 @@ public class BrightSkyService {
     /**
      * Processes a single alert node from the BrightSky API response.
      */
-    private WeatherAlert processAlertNode(JsonNode alertNode, JsonNode locationNode) {
+    private WeatherAlert processAlertNode(JsonNode alertNode, JsonNode locationNode, String deviceId) {
         try {
             String alertId = alertNode.get("alert_id").asText();
 
             // Check if alert already exists
             Optional<WeatherAlert> existingAlert = weatherAlertRepository.findByAlertId(alertId);
             WeatherAlert alert = existingAlert.orElse(new WeatherAlert());
+
+            // Set device ID for user data isolation
+            alert.setDeviceId(deviceId);
 
             // Set alert identification
             alert.setAlertId(alertId);
@@ -295,15 +298,15 @@ public class BrightSkyService {
         log.info("Starting alert update for current location");
 
         try {
-            // Update alerts for current location
-            Optional<LocationData> currentLocation = ipLocationService.getCurrentLocation();
-            if (currentLocation.isPresent()) {
-                LocationData location = currentLocation.get();
-                getAlertsForLocation(location.getLatitude(), location.getLongitude());
-                log.info("Successfully updated alerts for current location: {}, {}",
+            // Update alerts for current user's device location (not server IP)
+            Optional<LocationData> deviceLocation = deviceLocationService.getFirstUserDeviceLocation();
+            if (deviceLocation.isPresent()) {
+                LocationData location = deviceLocation.get();
+                getAlertsForLocation(location.getLatitude(), location.getLongitude(), location.getDeviceId());
+                log.info("Successfully updated alerts for device location: {}, {}",
                         location.getCity(), location.getCountry());
             } else {
-                log.warn("Unable to determine current location for alert update");
+                log.warn("No device location available for alert update");
             }
         } catch (Exception e) {
             log.error("Error occurred during alert update for current location", e);
@@ -349,7 +352,7 @@ public class BrightSkyService {
             int successCount = 0;
             for (LocationData location : deviceLocations) {
                 try {
-                    getAlertsForLocation(location.getLatitude(), location.getLongitude());
+                    getAlertsForLocation(location.getLatitude(), location.getLongitude(), location.getDeviceId());
                     log.debug("Updated alerts for device location: {}, {}",
                             location.getCity(), location.getCountry());
                     successCount++;

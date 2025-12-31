@@ -61,6 +61,7 @@ public class DeviceEventListener {
                 return;
             }
             LocationData location = locationOpt.get();
+            location.setDeviceId(device.getId());
 
             log.info("Fetching initial weather data for device {} at location ({}, {})",
                     device.getId(), location.getLatitude(), location.getLongitude());
@@ -75,9 +76,10 @@ public class DeviceEventListener {
             webSocketService.broadcastWeatherUpdated("FORECAST");
 
             // Fetch alerts (uses existing method that fetches and stores)
-            var alerts = brightSkyService.getAlertsForLocation(
+            java.util.List<org.example.backend.model.WeatherAlert> alerts = brightSkyService.getAlertsForLocation(
                     location.getLatitude().floatValue(),
-                    location.getLongitude().floatValue());
+                    location.getLongitude().floatValue(),
+                    device.getId());
 
             // Notify frontend about alerts update
             webSocketService.broadcastAlertsUpdated(alerts.size(), !alerts.isEmpty());

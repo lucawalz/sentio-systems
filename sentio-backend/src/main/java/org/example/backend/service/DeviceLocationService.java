@@ -127,6 +127,42 @@ public class DeviceLocationService {
     }
 
     /**
+     * Retrieves all devices with their locations for the current user.
+     * Returns a map of device ID to LocationData for user data isolation.
+     *
+     * @return Map of deviceId to LocationData for user's devices
+     */
+    public Map<String, LocationData> getCurrentUserDevicesWithLocations() {
+        log.debug("Retrieving devices with locations for current user");
+
+        List<Device> userDevices = deviceService.getMyDevices();
+
+        if (userDevices.isEmpty()) {
+            log.debug("Current user has no registered devices");
+            return Collections.emptyMap();
+        }
+
+        Map<String, LocationData> deviceLocations = new LinkedHashMap<>();
+
+        for (Device device : userDevices) {
+            String ip = device.getIpAddress();
+            if (ip != null && !ip.isEmpty()) {
+                Optional<LocationData> location = ipLocationService.getLocationByIp(ip);
+                if (location.isPresent()) {
+                    LocationData locData = location.get();
+                    locData.setDeviceId(device.getId());
+                    deviceLocations.put(device.getId(), locData);
+                    log.debug("Resolved location for device {}: {}, {}",
+                            device.getId(), locData.getCity(), locData.getCountry());
+                }
+            }
+        }
+
+        log.info("Resolved {} device locations for current user", deviceLocations.size());
+        return deviceLocations;
+    }
+
+    /**
      * Retrieves the geographic location for a specific device by its ID.
      *
      * @param deviceId The unique device identifier

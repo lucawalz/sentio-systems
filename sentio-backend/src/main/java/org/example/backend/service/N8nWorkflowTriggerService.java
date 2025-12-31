@@ -31,7 +31,7 @@ public class N8nWorkflowTriggerService {
      * @return true if triggered successfully, false otherwise
      */
     public boolean triggerWeatherSummary(String userId) {
-        return triggerWebhook("sentio-weather-summary", userId);
+        return triggerWebhook("sentio-weather-summary-openrouter", userId);
     }
 
     /**
@@ -41,7 +41,7 @@ public class N8nWorkflowTriggerService {
      * @return true if triggered successfully, false otherwise
      */
     public boolean triggerSightingsSummary(String userId) {
-        return triggerWebhook("sentio-sightings-summary", userId);
+        return triggerWebhook("sentio-sightings-summary-openrouter", userId);
     }
 
     /**
@@ -52,8 +52,8 @@ public class N8nWorkflowTriggerService {
      * @return The agent's response or null if failed
      */
     public String triggerAiAgent(String userId, String query) {
-        String webhookUrl = n8nWebhookBaseUrl + "/sentio-ai-agent";
-        log.info("Triggering AI Agent for user: {} with query: {}", userId, query);
+        String webhookUrl = n8nWebhookBaseUrl + "/sentio-ai-agent-openrouter";
+        log.info("Triggering AI Agent (OpenRouter) for user: {} with query: {}", userId, query);
 
         try {
             HttpHeaders headers = new HttpHeaders();
