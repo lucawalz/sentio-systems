@@ -26,25 +26,30 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .csrf(csrf -> csrf.disable()) // CSRF disabled for now, relying on SameSite=Lax cookies
+                .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.POST, "/api/contact").permitAll()
-                        .requestMatchers("/api/contact").permitAll()
-                        .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers("/api/**").authenticated() // Require auth for other API endpoints
-
+                        // Public endpoints FIRST
                         .requestMatchers("/swagger-ui.html",
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**",
                                 "/api-docs/**",
                                 "/swagger-resources/**",
-                                "/webjars/**")
-                        .permitAll()
-                        .anyRequest().authenticated())
+                                "/webjars/**").permitAll()
+                        .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/contact").permitAll()
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+
+                        // Everything else under /api needs auth
+                        .requestMatchers("/api/**").authenticated()
+
+                        // any other request
+                        .anyRequest().permitAll() // oder authenticated(), je nachdem
+                )
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .bearerTokenResolver(bearerTokenResolver())
-                        .jwt(org.springframework.security.config.Customizer.withDefaults()));
+                        .jwt(org.springframework.security.config.Customizer.withDefaults())
+                );
 
         return http.build();
     }

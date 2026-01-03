@@ -25,7 +25,7 @@ public class ContactController {
         }
 
         System.out.println("Mail would be sent here");
-        service.sendContactMail(request);
+        //service.sendContactMail(request);
         return ResponseEntity.ok().build();
     }
 
