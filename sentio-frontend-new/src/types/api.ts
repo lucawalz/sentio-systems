@@ -27,6 +27,9 @@ export interface Device {
     ownerId: string
     activeServices: string[]
     ipAddress: string | null
+    latitude: number | null
+    longitude: number | null
+    isPrimary?: boolean
     lastSeen: string | null
     createdAt: string
 }
@@ -93,21 +96,40 @@ export interface WeatherForecast {
 export interface HistoricalWeather {
     id: number
     weatherDate: string
-    temperatureMax: number
-    temperatureMin: number
-    temperatureMean: number
-    precipitationSum: number
-    windSpeedMax: number
+    // Temperature fields (matching backend DTO naming)
+    maxTemperature: number | null
+    minTemperature: number | null
+    temperatureMean: number | null
+    // Weather info
+    weatherCode: number | null
+    weatherMain: string | null
+    description: string | null
+    icon: string | null
+    // Precipitation and wind
+    precipitationSum: number | null
+    precipitationHours: number | null
+    windSpeedMax: number | null
+    windDirectionDominant: number | null
+    // Sun info
+    sunrise: string | null
+    sunset: string | null
+    daylightDuration: number | null
+    sunshineDuration: number | null
+    uvIndexMax: number | null
+    // Location
     city: string
+    country: string | null
     latitude: number
     longitude: number
+    detectedLocation: string | null
+    // Timestamps
     createdAt: string
     updatedAt: string
 }
 
 export interface HistoricalComparison {
     threeDaysAgo: HistoricalWeather | null
-    oneWeekAgo: HistoricalWeather | null
+    twoWeeksAgo: HistoricalWeather | null
     oneMonthAgo: HistoricalWeather | null
     threeMonthsAgo: HistoricalWeather | null
     oneYearAgo: HistoricalWeather | null
@@ -120,14 +142,32 @@ export interface WeatherAlert {
     severity: 'minor' | 'moderate' | 'severe' | 'extreme'
     certainty: string
     urgency: string
-    event: string
-    headline: string
-    description: string
-    instruction: string
-    effectiveFrom: string
-    expiresAt: string
+    // Multilingual event labels
+    eventEn?: string
+    eventDe?: string
+    localizedEvent: string
+    // Multilingual headlines
+    headlineEn?: string
+    headlineDe?: string
+    localizedHeadline: string
+    // Multilingual descriptions
+    descriptionEn?: string
+    descriptionDe?: string
+    localizedDescription: string
+    // Multilingual instructions
+    instructionEn?: string
+    instructionDe?: string
+    localizedInstruction: string
+    // Timing
+    effective: string
+    onset?: string
+    expires: string
+    // Location
     city: string
     warnCellId: number
+    latitude?: number
+    longitude?: number
+    isActive?: boolean
 }
 
 export interface RadarMetadata {
@@ -154,6 +194,27 @@ export interface RadarEndpointConfig {
     documentation: string
     note: string
 }
+
+// ============ BrightSky Direct API Types ============
+export interface BrightSkyRadarRecord {
+    timestamp: string
+    source: string
+    precipitation_5: string // Base64 encoded, zlib compressed when format=compressed
+}
+
+export interface BrightSkyRadarResponse {
+    radar: BrightSkyRadarRecord[]
+    geometry?: {
+        coordinates: number[][]
+        type: string
+    }
+    bbox?: number[]
+    latlon_position?: {
+        x: number
+        y: number
+    }
+}
+
 
 // ============ Animal Detection Types ============
 export interface AnimalDetection {

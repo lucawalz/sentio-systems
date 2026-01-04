@@ -103,10 +103,21 @@ export const authApi = {
 
 export const devicesApi = {
     list: () => api.get('/api/devices'),
-    register: (deviceId: string, name: string) =>
-        api.post('/api/devices/register', null, { params: { deviceId, name } }),
+    register: (deviceId: string, name: string, isPrimary = false) =>
+        api.post('/api/devices/register', null, { params: { deviceId, name, isPrimary } }),
     unregister: (deviceId: string) => api.delete(`/api/devices/${deviceId}`),
     hasAny: () => api.get('/api/devices/has-any'),
+    getPrimary: () => api.get('/api/devices/primary'),
+    setPrimary: (deviceId: string) => api.put(`/api/devices/${deviceId}/primary`),
+
+    // Device-scoped data APIs
+    getForecasts: (deviceId: string) => api.get(`/api/devices/${deviceId}/forecasts`),
+    getAlerts: (deviceId: string) => api.get(`/api/devices/${deviceId}/alerts`),
+    getSensors: (deviceId: string) => api.get(`/api/devices/${deviceId}/sensors`),
+    getSensorLatest: (deviceId: string) => api.get(`/api/devices/${deviceId}/sensors/latest`),
+    getRadar: (deviceId: string) => api.get(`/api/devices/${deviceId}/radar`),
+    getSightings: (deviceId: string, limit = 20) =>
+        api.get(`/api/devices/${deviceId}/sightings`, { params: { limit } }),
 }
 
 export const weatherApi = {
@@ -126,7 +137,7 @@ export const forecastApi = {
 
 export const historicalApi = {
     currentLocation: () => api.get('/api/historical/current-location'),
-    comparison: () => api.get('/api/historical/comparison'),
+    comparison: (deviceId?: string) => api.get('/api/historical/comparison', { params: deviceId ? { deviceId } : {} }),
     forDate: (date: string) => api.get(`/api/historical/date/${date}`),
     lastUpdate: () => api.get('/api/historical/last-update'),
 }

@@ -9,14 +9,14 @@ import {
 import { sidebarData } from './data/sidebar-data'
 import { NavGroup } from './nav-group'
 import { NavUser } from './nav-user'
-import { TeamSwitcher } from './team-switcher'
+import { DeviceSwitcher } from './team-switcher'
 
 export function AppSidebar() {
     const { collapsible, variant } = useLayout()
     return (
         <Sidebar collapsible={collapsible} variant={variant}>
             <SidebarHeader>
-                <TeamSwitcher teams={sidebarData.teams} />
+                <DeviceSwitcher />
             </SidebarHeader>
             <SidebarContent>
                 {sidebarData.navGroups.map((props) => (

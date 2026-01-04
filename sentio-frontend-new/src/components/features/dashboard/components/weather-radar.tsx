@@ -3,47 +3,80 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { RefreshCw, ExternalLink, Cloud } from 'lucide-react'
-import { alertsApi } from '@/lib/api'
-import type { RadarMetadata, RadarEndpointConfig } from '@/types/api'
+import { RefreshCw, Cloud, Droplets, Activity, MapPin } from 'lucide-react'
+import { alertsApi, devicesApi } from '@/lib/api'
+import { WeatherRadarMap } from './weather-radar-map'
+import { useDevices } from '@/context/device-context'
+import type { RadarMetadata } from '@/types/api'
 
 interface WeatherRadarProps {
     loading?: boolean
 }
 
 export function WeatherRadar({ loading: parentLoading }: WeatherRadarProps) {
-    const [radarUrl, setRadarUrl] = useState<string | null>(null)
+    const { devices, selectedDevice, focusLocation, setFocusLocation } = useDevices()
     const [metadata, setMetadata] = useState<RadarMetadata | null>(null)
     const [loading, setLoading] = useState(true)
     const [refreshing, setRefreshing] = useState(false)
+    const [refreshKey, setRefreshKey] = useState(0)
 
-    const fetchRadar = async () => {
+    // Determine which devices to show on map
+    // If a specific device is selected, show only that one
+    // If unified view (null), use primary device (or first) for centering, but still show all device markers
+    const safeDevices = Array.isArray(devices) ? devices : []
+
+    // For map centering: use selected device, or primary device in unified view
+    const primaryDevice = safeDevices.find(d => d.isPrimary) || safeDevices[0]
+    const centerDevice = selectedDevice || primaryDevice
+
+    // Show all devices as markers in unified view, or just selected device
+    const displayDevices = selectedDevice
+        ? [selectedDevice]
+        : (centerDevice ? [centerDevice] : safeDevices)
+
+    const fetchData = async () => {
         try {
-            const [endpointRes, latestRes] = await Promise.allSettled([
-                alertsApi.radarEndpoint(50, 'compressed'),
-                alertsApi.radarLatest(),
-            ])
-            if (endpointRes.status === 'fulfilled') {
-                const config = endpointRes.value.data as RadarEndpointConfig
-                setRadarUrl(config.radarEndpoint)
-            }
-            if (latestRes.status === 'fulfilled') {
-                setMetadata(latestRes.value.data as RadarMetadata)
+            setLoading(true)
+            // Use device-scoped radar when a device is selected
+            if (selectedDevice?.id) {
+                const radarRes = await devicesApi.getRadar(selectedDevice.id)
+                if (radarRes.data?.radarEndpoint) {
+                    // Store the radar endpoint for the map to use
+                    setMetadata({
+                        latitude: selectedDevice.latitude,
+                        longitude: selectedDevice.longitude,
+                        radarEndpoint: radarRes.data.radarEndpoint,
+                        distance: 50, // Default distance in km
+                        coveragePercent: 0,
+                    } as unknown as RadarMetadata)
+                }
+            } else {
+                // Unified view: use global radar (primary device)
+                const metadataRes = await alertsApi.radarLatest()
+                if (metadataRes.data) {
+                    setMetadata(metadataRes.data as RadarMetadata)
+                }
             }
         } catch (err) {
-            console.error('Failed to fetch radar data:', err)
+            console.log('Radar metadata not available:', err)
         } finally {
             setLoading(false)
         }
     }
 
-    useEffect(() => { fetchRadar() }, [])
+    useEffect(() => { fetchData() }, [selectedDevice])
+
+    // Refetch when device selection changes
+    useEffect(() => {
+        setRefreshKey(prev => prev + 1)
+    }, [selectedDevice])
 
     const handleRefresh = async () => {
         setRefreshing(true)
         try {
             await alertsApi.fetchRadar(50)
-            await fetchRadar()
+            await fetchData()
+            setRefreshKey(prev => prev + 1)
         } catch (err) {
             console.error('Failed to refresh radar:', err)
         } finally {
@@ -51,50 +84,69 @@ export function WeatherRadar({ loading: parentLoading }: WeatherRadarProps) {
         }
     }
 
+    // Clear focus location after it's been used by the map
+    const handleFocusComplete = () => {
+        setFocusLocation(null)
+    }
+
     const isLoading = loading || parentLoading
 
+    // Show device name in subtitle if specific device selected
+    const subtitle = selectedDevice
+        ? `${selectedDevice.name} area`
+        : 'BrightSky precipitation radar'
+
     return (
-        <Card className="h-full">
-            <CardHeader className="pb-2">
+        <Card className="h-full flex flex-col">
+            <CardHeader className="pb-2 flex-none">
                 <div className="flex items-center justify-between">
                     <div>
                         <CardTitle className="text-lg font-semibold flex items-center gap-2">
                             <Cloud className="h-5 w-5" />
                             Weather Radar
                         </CardTitle>
-                        <CardDescription>BrightSky precipitation radar</CardDescription>
+                        <CardDescription>{subtitle}</CardDescription>
                     </div>
-                    <div className="flex gap-2">
-                        <Button size="sm" variant="outline" onClick={handleRefresh} disabled={refreshing}>
-                            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-                        </Button>
-                        {radarUrl && (
-                            <Button size="sm" variant="outline" asChild>
-                                <a href={radarUrl} target="_blank" rel="noopener noreferrer">
-                                    <ExternalLink className="h-4 w-4" />
-                                </a>
-                            </Button>
-                        )}
-                    </div>
+                    <Button size="sm" variant="outline" onClick={handleRefresh} disabled={refreshing}>
+                        <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                    </Button>
                 </div>
-            </CardHeader>
-            <CardContent>
-                {isLoading ? (
-                    <Skeleton className="h-[200px] w-full rounded-lg" />
-                ) : radarUrl ? (
-                    <div className="space-y-3">
-                        <div className="relative rounded-lg overflow-hidden bg-muted h-[180px]">
-                            <iframe src={radarUrl} className="w-full h-full border-0" title="Weather Radar" loading="lazy" />
-                        </div>
-                        {metadata && (
-                            <div className="flex flex-wrap gap-2">
-                                {metadata.hasActivePrecipitation && <Badge variant="destructive">Active Precipitation</Badge>}
-                                <Badge variant="secondary">{metadata.coveragePercent?.toFixed(0) || 0}% coverage</Badge>
-                            </div>
+                {/* Radar metadata from backend */}
+                {metadata && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                        {metadata.hasActivePrecipitation && (
+                            <Badge variant="destructive" className="text-xs gap-1">
+                                <Activity className="h-3 w-3" /> Active Rain
+                            </Badge>
                         )}
+                        <Badge variant="outline" className="text-xs gap-1">
+                            <Droplets className="h-3 w-3" />
+                            {metadata.coveragePercent?.toFixed(0) || 0}% coverage
+                        </Badge>
+                        {metadata.precipitationMax != null && metadata.precipitationMax > 0 && (
+                            <Badge variant="outline" className="text-xs gap-1">
+                                Max: {metadata.precipitationMax.toFixed(1)} mm/h
+                            </Badge>
+                        )}
+                        <Badge variant="secondary" className="text-xs gap-1">
+                            <MapPin className="h-3 w-3" />
+                            {metadata.distance}km radius
+                        </Badge>
                     </div>
+                )}
+            </CardHeader>
+            <CardContent className="flex-1 flex flex-col">
+                {isLoading ? (
+                    <Skeleton className="flex-1 w-full rounded-lg min-h-[200px]" />
                 ) : (
-                    <div className="flex items-center justify-center h-[200px] text-muted-foreground">Radar data unavailable</div>
+                    <WeatherRadarMap
+                        key={refreshKey}
+                        devices={displayDevices}
+                        coveragePercent={metadata?.coveragePercent}
+                        focusLocation={focusLocation}
+                        onFocusComplete={handleFocusComplete}
+                        className="flex-1 min-h-[200px]"
+                    />
                 )}
             </CardContent>
         </Card>

@@ -36,7 +36,7 @@ export function ActivityFeed({ detections, alerts, loading }: ActivityFeedProps)
         events.push({
             type: 'alert',
             data: a,
-            timestamp: new Date(a.effectiveFrom),
+            timestamp: new Date(a.onset || a.effective),
         })
     })
 
@@ -72,7 +72,7 @@ export function ActivityFeed({ detections, alerts, loading }: ActivityFeedProps)
             case 'detection':
                 return `${event.data.species} detected`
             case 'alert':
-                return event.data.event || 'Weather Alert'
+                return event.data.localizedEvent || event.data.eventEn || 'Weather Alert'
             case 'device':
                 return `${event.data.device.name} ${event.data.status}`
         }
