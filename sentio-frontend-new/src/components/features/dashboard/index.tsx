@@ -1,16 +1,16 @@
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Skeleton } from '@/components/ui/skeleton'
 import { Header } from '@/components/layout/dashboard/header'
 import { Main } from '@/components/layout/dashboard/main'
 import { useAuth } from '@/context/auth-context'
-import { Cpu, Activity, Thermometer, MessageCircle, Send, Bot, Sparkles, Bird, TrendingUp, Trash2 } from 'lucide-react'
+import { Cpu, Activity, Thermometer, MessageCircle, Send, Bot, Sparkles, Bird, Trash2 } from 'lucide-react'
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { devicesApi, weatherApi, animalsApi, workflowApi, alertsApi } from '@/lib/api'
 import type { WeatherStats, AnimalSummary, Device, WeatherAlert, AnimalDetection } from '@/types/api'
 import { useAnimatedCounter } from '@/hooks/use-animated-counter'
 import { SystemHealth } from './components/system-health'
 import { ActivityFeed } from './components/activity-feed'
+import { SmartInsightCard } from './components/smart-insight-card'
 
 const CHAT_STORAGE_KEY = 'sentio-ai-chat-messages'
 
@@ -271,91 +271,102 @@ export function Dashboard() {
                     </p>
                 </div>
 
-                {/* Stats Cards Row */}
-                <div className="grid grid-cols-4 gap-4 w-full mb-6">
-                    <Card>
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">Devices Online</CardTitle>
-                            <Cpu className="h-4 w-4 text-muted-foreground" />
-                        </CardHeader>
-                        <CardContent>
-                            {loading ? (
-                                <Skeleton className="h-8 w-16" />
-                            ) : (
-                                <>
-                                    <div className="text-2xl font-bold tabular-nums">
-                                        {onlineDevices.length} / {devices.length}
+                {/* Stats Cards Row - Upgraded with SmartInsightCard */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full mb-6">
+                    <SmartInsightCard
+                        icon={<Cpu className="h-4 w-4" />}
+                        value={loading ? '...' : `${onlineDevices.length} / ${devices.length}`}
+                        label="Devices Online"
+                        trend={onlineDevices.length === devices.length ? 'up' : 'neutral'}
+                        trendValue={onlineDevices.length === devices.length ? 'All online' : `${devices.length - onlineDevices.length} offline`}
+                        variant={onlineDevices.length === devices.length ? 'success' : onlineDevices.length > 0 ? 'warning' : 'danger'}
+                        loading={loading}
+                        expandedContent={
+                            <div className="space-y-1 text-xs">
+                                {devices.slice(0, 3).map((d) => (
+                                    <div key={d.id} className="flex items-center justify-between">
+                                        <span className="truncate">{d.name}</span>
+                                        <span className={onlineDevices.some(od => od.id === d.id) ? 'text-green-500' : 'text-muted-foreground'}>
+                                            {onlineDevices.some(od => od.id === d.id) ? '● Online' : '○ Offline'}
+                                        </span>
                                     </div>
-                                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                                        <TrendingUp className="h-3 w-3 text-green-500" />
-                                        {onlineDevices.length === devices.length ? 'All systems go' : 'Some offline'}
-                                    </p>
-                                </>
-                            )}
-                        </CardContent>
-                    </Card>
+                                ))}
+                            </div>
+                        }
+                    />
 
-                    <Card>
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">Today's Detections</CardTitle>
-                            <Activity className="h-4 w-4 text-muted-foreground" />
-                        </CardHeader>
-                        <CardContent>
-                            {loading ? (
-                                <Skeleton className="h-8 w-16" />
-                            ) : (
-                                <>
-                                    <div className="text-2xl font-bold tabular-nums">{animatedDetections}</div>
-                                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                                        <Bird className="h-3 w-3" />
-                                        {animatedSpecies} unique species
-                                    </p>
-                                </>
-                            )}
-                        </CardContent>
-                    </Card>
+                    <SmartInsightCard
+                        icon={<Activity className="h-4 w-4" />}
+                        value={loading ? '...' : animatedDetections.toString()}
+                        label="Today's Detections"
+                        trend={(animalSummary?.totalDetections || 0) > 10 ? 'up' : 'neutral'}
+                        trendValue={`${animatedSpecies} species`}
+                        loading={loading}
+                        expandedContent={
+                            <div className="space-y-1 text-xs">
+                                <div className="flex items-center gap-1">
+                                    <Bird className="h-3 w-3" />
+                                    <span>{animatedSpecies} unique species spotted</span>
+                                </div>
+                                <div className="text-muted-foreground">
+                                    In the last 24 hours
+                                </div>
+                            </div>
+                        }
+                    />
 
-                    <Card>
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">Current Temp</CardTitle>
-                            <Thermometer className="h-4 w-4 text-muted-foreground" />
-                        </CardHeader>
-                        <CardContent>
-                            {loading ? (
-                                <Skeleton className="h-8 w-20" />
-                            ) : weatherStats?.latest?.temperature != null ? (
-                                <>
-                                    <div className="text-2xl font-bold tabular-nums">
-                                        {animatedTemp}°C
+                    <SmartInsightCard
+                        icon={<Thermometer className="h-4 w-4" />}
+                        value={loading ? '...' : weatherStats?.latest?.temperature != null ? `${animatedTemp}°C` : '--'}
+                        label="Current Temperature"
+                        trend={
+                            weatherStats?.latest?.temperature != null
+                                ? weatherStats.latest.temperature > 25 ? 'up' : weatherStats.latest.temperature < 10 ? 'down' : 'neutral'
+                                : 'neutral'
+                        }
+                        trendValue={weatherStats?.latest?.humidity != null ? `${weatherStats.latest.humidity.toFixed(0)}% humidity` : '--'}
+                        variant={
+                            weatherStats?.latest?.temperature != null
+                                ? weatherStats.latest.temperature > 30 ? 'danger' : weatherStats.latest.temperature < 5 ? 'warning' : 'default'
+                                : 'default'
+                        }
+                        loading={loading}
+                        expandedContent={
+                            weatherStats?.latest && (
+                                <div className="grid grid-cols-2 gap-2 text-xs">
+                                    <div>
+                                        <span className="text-muted-foreground">Pressure:</span>{' '}
+                                        {weatherStats.latest.pressure?.toFixed(0) ?? '--'} hPa
                                     </div>
-                                    <p className="text-xs text-muted-foreground">
-                                        {weatherStats.latest.humidity?.toFixed(0) ?? '--'}% humidity
-                                    </p>
-                                </>
-                            ) : (
-                                <div className="text-muted-foreground">No data</div>
-                            )}
-                        </CardContent>
-                    </Card>
+                                    <div>
+                                        <span className="text-muted-foreground">Humidity:</span>{' '}
+                                        {weatherStats.latest.humidity?.toFixed(0) ?? '--'}%
+                                    </div>
+                                </div>
+                            )
+                        }
+                    />
 
-                    <Card>
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">AI Status</CardTitle>
-                            <Bot className="h-4 w-4 text-muted-foreground" />
-                        </CardHeader>
-                        <CardContent>
-                            {loading ? (
-                                <Skeleton className="h-8 w-16" />
-                            ) : (
-                                <>
-                                    <div className="text-2xl font-bold text-green-500">Active</div>
-                                    <p className="text-xs text-muted-foreground">
-                                        Ready to assist
-                                    </p>
-                                </>
-                            )}
-                        </CardContent>
-                    </Card>
+                    <SmartInsightCard
+                        icon={<Bot className="h-4 w-4" />}
+                        value="Active"
+                        label="AI Agent Status"
+                        trend="up"
+                        trendValue="Ready"
+                        variant="success"
+                        loading={loading}
+                        expandedContent={
+                            <div className="text-xs space-y-1">
+                                <div className="flex items-center gap-1">
+                                    <Sparkles className="h-3 w-3 text-primary" />
+                                    <span>Powered by n8n + AI</span>
+                                </div>
+                                <div className="text-muted-foreground">
+                                    Ask about weather, detections, and devices
+                                </div>
+                            </div>
+                        }
+                    />
                 </div>
 
                 {/* Main Content: Asymmetric 7-column grid layout */}

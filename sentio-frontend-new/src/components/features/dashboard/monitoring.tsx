@@ -5,7 +5,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Activity, Bird, Video, RefreshCcw, TrendingUp, Clock, Wifi } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { animalsApi } from '@/lib/api'
+import { animalsApi, devicesApi } from '@/lib/api'
+import { useDevices } from '@/context/device-context'
 import type { AnimalDetection, AnimalSummary } from '@/types/api'
 import { SmartInsightCard } from './components/smart-insight-card'
 import { AIMonitoringAnalysis } from './components/ai-monitoring-analysis'
@@ -15,6 +16,7 @@ import { SpeciesGallery, getSpeciesEmoji } from './components/species-gallery'
 const PI_STREAM_URL = import.meta.env.VITE_PI_STREAM_URL || 'http://192.168.2.194:8080/video_feed'
 
 export default function MonitoringPage() {
+    const { selectedDevice } = useDevices()
     const [loading, setLoading] = useState(true)
     const [detections, setDetections] = useState<AnimalDetection[]>([])
     const [summary, setSummary] = useState<AnimalSummary | null>(null)
@@ -25,25 +27,49 @@ export default function MonitoringPage() {
     const fetchData = async () => {
         try {
             setLoading(true)
-            const [detectionsRes, summaryRes, speciesRes] = await Promise.allSettled([
-                animalsApi.latest(100), // Get more for heatmap
-                animalsApi.summary(24),
-                animalsApi.speciesCount(24),
-            ])
 
-            if (detectionsRes.status === 'fulfilled') {
-                const data = detectionsRes.value.data
-                setDetections(Array.isArray(data) ? data : [])
-            }
-            if (summaryRes.status === 'fulfilled') {
-                setSummary(summaryRes.value.data)
-            }
-            if (speciesRes.status === 'fulfilled') {
-                const data = speciesRes.value.data
-                setSpeciesCount(data && typeof data === 'object' && !Array.isArray(data) ? data : {})
+            // When device is selected, use device-scoped API
+            // When unified view, use global API (all sightings)
+            if (selectedDevice?.id) {
+                // Device-specific sightings
+                const sightingsRes = await devicesApi.getSightings(selectedDevice.id, 100)
+                const data = sightingsRes.data
+                const deviceDetections = Array.isArray(data) ? data : []
+                setDetections(deviceDetections)
+
+                // Calculate summary from device-specific data
+                const speciesCounts: Record<string, number> = {}
+                deviceDetections.forEach((d: AnimalDetection) => {
+                    speciesCounts[d.species] = (speciesCounts[d.species] || 0) + 1
+                })
+                setSpeciesCount(speciesCounts)
+                setSummary({
+                    totalDetections: deviceDetections.length,
+                    uniqueSpecies: Object.keys(speciesCounts).length,
+                    mostActiveHour: getMostActiveHour(deviceDetections),
+                } as AnimalSummary)
+            } else {
+                // Unified view: all sightings from all devices
+                const [detectionsRes, summaryRes, speciesRes] = await Promise.allSettled([
+                    animalsApi.latest(100),
+                    animalsApi.summary(24),
+                    animalsApi.speciesCount(24),
+                ])
+
+                if (detectionsRes.status === 'fulfilled') {
+                    const data = detectionsRes.value.data
+                    setDetections(Array.isArray(data) ? data : [])
+                }
+                if (summaryRes.status === 'fulfilled') {
+                    setSummary(summaryRes.value.data)
+                }
+                if (speciesRes.status === 'fulfilled') {
+                    const data = speciesRes.value.data
+                    setSpeciesCount(data && typeof data === 'object' && !Array.isArray(data) ? data : {})
+                }
             }
 
-            // Simulate yesterday's data for trend (in real app, fetch from API)
+            // Simulate yesterday's data for trend
             setYesterdayTotal(Math.floor(Math.random() * 50) + 10)
         } catch (err) {
             console.error(err)
@@ -52,9 +78,21 @@ export default function MonitoringPage() {
         }
     }
 
+    // Helper to calculate most active hour from detections
+    const getMostActiveHour = (dets: AnimalDetection[]): string => {
+        if (dets.length === 0) return '--'
+        const hourCounts: Record<number, number> = {}
+        dets.forEach(d => {
+            const hour = new Date(d.timestamp).getHours()
+            hourCounts[hour] = (hourCounts[hour] || 0) + 1
+        })
+        const maxHour = Object.entries(hourCounts).sort(([, a], [, b]) => b - a)[0]
+        return maxHour ? `${maxHour[0]}:00` : '--'
+    }
+
     useEffect(() => {
         fetchData()
-    }, [])
+    }, [selectedDevice])
 
     // Calculate metrics
     const todayTotal = summary?.totalDetections || 0

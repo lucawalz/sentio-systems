@@ -11,6 +11,7 @@ import ForgotPassword from '@/pages/ForgotPassword'
 import Contact from '@/pages/Contact'
 import DashboardPage from '@/pages/Dashboard'
 import { AuthProvider } from '@/context/auth-context'
+import { DeviceProvider } from '@/context/device-context'
 import { ProtectedRoute } from '@/components/common/ProtectedRoute'
 
 const pageVariants = {
@@ -73,13 +74,15 @@ function AppRoutes() {
   // Dashboard has its own layout (sidebar), no header/footer
   if (isDashboard) {
     return (
-      <Routes>
-        <Route path="/dashboard/*" element={
-          <ProtectedRoute>
-            <DashboardPage />
-          </ProtectedRoute>
-        } />
-      </Routes>
+      <DeviceProvider>
+        <Routes>
+          <Route path="/dashboard/*" element={
+            <ProtectedRoute>
+              <DashboardPage />
+            </ProtectedRoute>
+          } />
+        </Routes>
+      </DeviceProvider>
     )
   }
 

@@ -1,12 +1,16 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { AlertTriangle, Info, AlertCircle, XCircle } from 'lucide-react'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { AlertTriangle, Info, AlertCircle, XCircle, ChevronDown, Clock, MapPin } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import type { WeatherAlert } from '@/types/api'
+import { useState } from 'react'
 
 interface AlertsBannerProps {
     alerts: WeatherAlert[]
     loading: boolean
+    onAlertClick?: (alert: WeatherAlert) => void
 }
 
 function getSeverityConfig(severity: string) {
@@ -42,8 +46,42 @@ function getSeverityConfig(severity: string) {
     }
 }
 
-export function AlertsBanner({ alerts, loading }: AlertsBannerProps) {
+function formatDateTime(dateString: string) {
+    try {
+        return new Date(dateString).toLocaleString('en-GB', {
+            weekday: 'short',
+            day: 'numeric',
+            month: 'short',
+            hour: '2-digit',
+            minute: '2-digit'
+        })
+    } catch {
+        return dateString
+    }
+}
+
+export function AlertsBanner({ alerts, loading, onAlertClick }: AlertsBannerProps) {
     const safeAlerts = Array.isArray(alerts) ? alerts : []
+    const [expandedAlerts, setExpandedAlerts] = useState<Set<number>>(new Set())
+
+    const toggleAlert = (id: number) => {
+        setExpandedAlerts(prev => {
+            const next = new Set(prev)
+            if (next.has(id)) {
+                next.delete(id)
+            } else {
+                next.add(id)
+            }
+            return next
+        })
+    }
+
+    const handleZoomToAlert = (e: React.MouseEvent, alert: WeatherAlert) => {
+        e.stopPropagation()
+        if (onAlertClick && alert.latitude && alert.longitude) {
+            onAlertClick(alert)
+        }
+    }
 
     if (loading) {
         return (
@@ -100,19 +138,79 @@ export function AlertsBanner({ alerts, loading }: AlertsBannerProps) {
                         {safeAlerts.map((alert, i) => {
                             const config = getSeverityConfig(alert.severity)
                             const Icon = config.icon
+                            const isExpanded = expandedAlerts.has(alert.id || i)
+                            const hasLocation = alert.latitude && alert.longitude
                             return (
-                                <div key={alert.id || i} className={`rounded-lg border p-3 ${config.bg}`}>
-                                    <div className="flex items-start gap-3">
-                                        <Icon className={`h-5 w-5 mt-0.5 ${config.text}`} />
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                                <Badge className={config.badge}>{alert.severity.toUpperCase()}</Badge>
-                                                <span className="text-xs text-muted-foreground">{alert.event}</span>
+                                <Collapsible
+                                    key={alert.id || i}
+                                    open={isExpanded}
+                                    onOpenChange={() => toggleAlert(alert.id || i)}
+                                >
+                                    <div className={`rounded-lg border p-3 ${config.bg}`}>
+                                        <CollapsibleTrigger className="w-full text-left">
+                                            <div className="flex items-start gap-3">
+                                                <Icon className={`h-5 w-5 mt-0.5 flex-shrink-0 ${config.text}`} />
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        <Badge className={config.badge}>{alert.severity.toUpperCase()}</Badge>
+                                                        <span className={`font-medium text-sm ${config.text}`}>
+                                                            {alert.localizedEvent || alert.eventEn || 'Weather Alert'}
+                                                        </span>
+                                                        <ChevronDown className={`h-4 w-4 ml-auto transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                                    </div>
+                                                    {(alert.localizedHeadline || alert.headlineEn) && (
+                                                        <p className="text-sm font-medium mt-1 line-clamp-2">{alert.localizedHeadline || alert.headlineEn}</p>
+                                                    )}
+                                                </div>
                                             </div>
-                                            <p className={`font-medium mt-1 ${config.text}`}>{alert.headline}</p>
-                                        </div>
+                                        </CollapsibleTrigger>
+                                        <CollapsibleContent>
+                                            <div className="mt-3 ml-8 space-y-2 text-sm">
+                                                {/* Time range */}
+                                                {(alert.onset || alert.effective || alert.expires) && (
+                                                    <div className="flex items-center gap-2 text-muted-foreground">
+                                                        <Clock className="h-4 w-4" />
+                                                        <span>
+                                                            {(alert.onset || alert.effective) && formatDateTime(alert.onset || alert.effective)}
+                                                            {(alert.onset || alert.effective) && alert.expires && ' → '}
+                                                            {alert.expires && formatDateTime(alert.expires)}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                {/* Description */}
+                                                {(alert.localizedDescription || alert.descriptionEn) && (
+                                                    <p className="text-muted-foreground">{alert.localizedDescription || alert.descriptionEn}</p>
+                                                )}
+                                                {/* Instruction */}
+                                                {(alert.localizedInstruction || alert.instructionEn) && (
+                                                    <div className="mt-2 p-2 bg-background/50 rounded text-xs">
+                                                        <span className="font-medium">What to do: </span>
+                                                        {alert.localizedInstruction || alert.instructionEn}
+                                                    </div>
+                                                )}
+                                                {/* Location + Zoom button */}
+                                                <div className="flex items-center justify-between">
+                                                    {alert.city && (
+                                                        <p className="text-xs text-muted-foreground italic">
+                                                            Location: {alert.city}
+                                                        </p>
+                                                    )}
+                                                    {hasLocation && onAlertClick && (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="h-7 text-xs gap-1"
+                                                            onClick={(e) => handleZoomToAlert(e, alert)}
+                                                        >
+                                                            <MapPin className="h-3 w-3" />
+                                                            View on map
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </CollapsibleContent>
                                     </div>
-                                </div>
+                                </Collapsible>
                             )
                         })}
                     </div>

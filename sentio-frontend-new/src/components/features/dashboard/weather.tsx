@@ -12,39 +12,54 @@ import { AIWeatherAnalysis } from './components/ai-weather-analysis'
 import { HistoricalComparison } from './components/historical-comparison'
 import { DeviceComparison } from './components/device-comparison'
 import { SmartInsightCard } from './components/smart-insight-card'
+import { useDevices } from '@/context/device-context'
 
 export default function WeatherPage() {
+    const { setFocusLocation, selectedDevice, devices } = useDevices()
     const [loading, setLoading] = useState(true)
     const [sensorData, setSensorData] = useState<RaspiWeather | null>(null)
     const [sensorReadings, setSensorReadings] = useState<RaspiWeather[]>([])
     const [currentForecast, setCurrentForecast] = useState<WeatherForecast | null>(null)
     const [alerts, setAlerts] = useState<WeatherAlert[]>([])
-    const [devices, setDevices] = useState<Device[]>([])
     const [comparison, setComparison] = useState<HistoricalComparisonType | null>(null)
 
+    // Refetch data when selected device changes
     useEffect(() => {
         const fetchData = async () => {
             try {
                 setLoading(true)
+
+                // Determine which device to show data for:
+                // - If a device is explicitly selected: use that device
+                // - If unified view (null): use primary device, or first device as fallback
+                let effectiveDeviceId: string | undefined = selectedDevice?.id
+
+                if (!effectiveDeviceId && devices.length > 0) {
+                    // Find primary device, or fall back to first device
+                    const primaryDevice = devices.find(d => d.isPrimary) || devices[0]
+                    effectiveDeviceId = primaryDevice?.id
+                }
+
                 const [
                     latestRes,
-                    recentRes,
+                    allRecentRes, // All devices for SensorChart and DeviceComparison
                     forecastRes,
                     alertsRes,
-                    devicesRes,
                     comparisonRes,
                 ] = await Promise.allSettled([
-                    weatherApi.latest(),
+                    // Use effective device for main display (primary in unified view)
+                    effectiveDeviceId ? devicesApi.getSensorLatest(effectiveDeviceId) : weatherApi.latest(),
+                    // Always fetch all readings for SensorChart and DeviceComparison
                     weatherApi.recent(),
-                    forecastApi.currentLocation(),
-                    alertsApi.currentLocation(),
-                    devicesApi.list(),
-                    historicalApi.comparison(),
+                    effectiveDeviceId ? devicesApi.getForecasts(effectiveDeviceId) : forecastApi.currentLocation(),
+                    effectiveDeviceId ? devicesApi.getAlerts(effectiveDeviceId) : alertsApi.currentLocation(),
+                    historicalApi.comparison(effectiveDeviceId || undefined),
                 ])
 
                 if (latestRes.status === 'fulfilled') setSensorData(latestRes.value.data)
-                if (recentRes.status === 'fulfilled') {
-                    const data = recentRes.value.data
+                // Use all readings for chart/comparison, not just selected device
+                if (allRecentRes.status === 'fulfilled') {
+                    const data = allRecentRes.value.data
                     setSensorReadings(Array.isArray(data) ? data : [])
                 }
                 if (forecastRes.status === 'fulfilled') {
@@ -56,10 +71,6 @@ export default function WeatherPage() {
                     const data = alertsRes.value.data
                     setAlerts(Array.isArray(data) ? data : [])
                 }
-                if (devicesRes.status === 'fulfilled') {
-                    const data = devicesRes.value.data
-                    setDevices(Array.isArray(data) ? data : [])
-                }
                 if (comparisonRes.status === 'fulfilled') setComparison(comparisonRes.value.data)
             } catch (err) {
                 console.error('Failed to load weather data:', err)
@@ -68,7 +79,18 @@ export default function WeatherPage() {
             }
         }
         fetchData()
-    }, [])
+    }, [selectedDevice, devices]) // Refetch when device changes or devices list updates
+
+    // Handle alert click - zoom to alert location on radar
+    const handleAlertClick = (alert: WeatherAlert) => {
+        if (alert.latitude && alert.longitude) {
+            setFocusLocation({
+                latitude: alert.latitude,
+                longitude: alert.longitude,
+                label: alert.city || alert.localizedEvent || 'Alert Location'
+            })
+        }
+    }
 
     const currentTemp = sensorData?.temperature ?? currentForecast?.temperature ?? null
     const forecastTemp = currentForecast?.temperature ?? null
@@ -208,7 +230,11 @@ export default function WeatherPage() {
                             loading={loading}
                             lastUpdated={sensorData?.timestamp}
                         />
-                        <AlertsBanner alerts={alerts} loading={loading} />
+                        <AlertsBanner
+                            alerts={alerts}
+                            loading={loading}
+                            onAlertClick={handleAlertClick}
+                        />
                     </div>
 
                     {/* Right column: Radar */}
