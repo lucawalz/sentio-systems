@@ -4,10 +4,13 @@ PyYAML
 requests
 
 # Sensor libraries
-sparkfun-qwiic-bme280
+adafruit-circuitpython-bme680
 sparkfun-qwiic-veml6030
 adafruit-circuitpython-ltr390
 adafruit-blinka
+
+# GPS (Adafruit library supports I2C)
+adafruit-circuitpython-gps
 
 # MQTT communication
 paho-mqtt
@@ -15,3 +18,4 @@ paho-mqtt
 # Utilities
 python-dateutil
 schedule
+

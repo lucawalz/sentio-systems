@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Weather Sensors Module
-Handles BME280, VEML6030, and LTR390 sensors
+Handles BME688, VEML6030, and LTR390 sensors
 """
 
 import time
@@ -14,12 +14,12 @@ import busio
 
 # Sensor imports
 try:
-    import qwiic_bme280  # SparkFun BME280
+    from adafruit_bme680 import Adafruit_BME680_I2C  # Adafruit BME688/BME680
 
-    BME280_AVAILABLE = True
+    BME688_AVAILABLE = True
 except ImportError:
-    BME280_AVAILABLE = False
-    logging.warning("BME280 library not available")
+    BME688_AVAILABLE = False
+    logging.warning("BME688/BME680 library not available")
 
 try:
     import qwiic_veml6030  # SparkFun VEML6030
@@ -72,37 +72,56 @@ class SensorBase:
         }
 
 
-class BME280Sensor(SensorBase):
-    """BME280 Temperature, Humidity, and Pressure sensor"""
+class BME688Sensor(SensorBase):
+    """
+    BME688 Temperature, Humidity, Pressure, and Gas Resistance sensor.
+    
+    The BME688 is an upgrade from BME280 with added gas sensing for
+    air quality monitoring. Uses Adafruit CircuitPython library.
+    """
 
     def __init__(self, config: dict = None):
-        super().__init__("BME280", config)
+        super().__init__("BME688", config)
         self.sensor = None
+        self.i2c = None
         self.initialize()
 
     def initialize(self):
-        """Initialize BME280 sensor"""
-        if not BME280_AVAILABLE:
-            self.logger.error("BME280 library not available")
+        """Initialize BME688 sensor over I2C"""
+        if not BME688_AVAILABLE:
+            self.logger.error("BME688/BME680 library not available")
             return False
 
         try:
-            self.sensor = qwiic_bme280.QwiicBme280()
-            if self.sensor.connected:
-                self.sensor.begin()
-                self.connected = True
-                self.logger.info("BME280 initialized successfully")
-                return True
-            else:
-                self.logger.error("BME280 not connected")
-                return False
+            self.i2c = busio.I2C(board.SCL, board.SDA)
+            self.sensor = Adafruit_BME680_I2C(self.i2c)
+            
+            # Configure gas heater for air quality readings
+            self.sensor.sea_level_pressure = 1013.25  # Standard pressure
+            
+            self.connected = True
+            self.logger.info("BME688 initialized successfully")
+            return True
+            
         except Exception as e:
-            self.logger.error(f"BME280 initialization error: {e}")
+            self.logger.error(f"BME688 initialization error: {e}")
+            self.connected = False
             return False
 
     def read_data(self) -> Dict[str, Optional[float]]:
-        """Read temperature, humidity, and pressure from BME280"""
-        data = {"temperature": None, "humidity": None, "pressure": None}
+        """
+        Read temperature, humidity, pressure, and gas resistance from BME688.
+        
+        Returns:
+            Dict with temperature (°C), humidity (%), pressure (hPa), 
+            and gas_resistance (Ohms).
+        """
+        data = {
+            "temperature": None, 
+            "humidity": None, 
+            "pressure": None,
+            "gas_resistance": None
+        }
 
         with self._lock:
             if not self.connected or not self.sensor:
@@ -113,29 +132,26 @@ class BME280Sensor(SensorBase):
                 return data
 
             try:
-                if self.sensor.connected:
-                    data["temperature"] = round(self.sensor.temperature_celsius, 2)
-                    data["humidity"] = round(self.sensor.humidity, 2)
-                    data["pressure"] = round(self.sensor.pressure / 100.0, 2)  # Convert to hPa
+                # Read all sensor values
+                data["temperature"] = round(self.sensor.temperature, 2)
+                data["humidity"] = round(self.sensor.relative_humidity, 2)
+                data["pressure"] = round(self.sensor.pressure, 2)  # Already in hPa
+                data["gas_resistance"] = round(self.sensor.gas, 0)  # Ohms
 
-                    self.last_reading = datetime.now().isoformat()
-                    self.error_count = 0
-                    self._reconnect_attempts = 0
-                    self._last_error_time = None
+                self.last_reading = datetime.now().isoformat()
+                self.error_count = 0
+                self._reconnect_attempts = 0
+                self._last_error_time = None
 
-                    self.logger.debug(f"BME280 data: {data}")
-                else:
-                    self.logger.warning("BME280 connection lost")
-                    self.connected = False
-                    self._last_error_time = datetime.now()
+                self.logger.debug(f"BME688 data: {data}")
 
             except Exception as e:
                 self.error_count += 1
                 self._last_error_time = datetime.now()
-                self.logger.error(f"BME280 read error ({self.error_count}/{self.max_errors}): {e}")
+                self.logger.error(f"BME688 read error ({self.error_count}/{self.max_errors}): {e}")
 
                 if self.error_count >= self.max_errors and self._reconnect_attempts < self._max_reconnect_attempts:
-                    self.logger.error("BME280 max errors reached, attempting reinitialize")
+                    self.logger.error("BME688 max errors reached, attempting reinitialize")
                     self._reconnect_attempts += 1
                     if self.initialize():
                         self.error_count = 0
@@ -321,9 +337,10 @@ class WeatherSensorManager:
         """Initialize all configured sensors"""
         sensor_configs = self.config.get('sensors', {})
 
-        # BME280
-        if sensor_configs.get('bme280', {}).get('enabled', True):
-            self.sensors['bme280'] = BME280Sensor(sensor_configs.get('bme280', {}))
+        # BME688 (was BME280 - config key kept for backwards compatibility)
+        bme_config = sensor_configs.get('bme688', sensor_configs.get('bme280', {}))
+        if bme_config.get('enabled', True):
+            self.sensors['bme688'] = BME688Sensor(bme_config)
 
         # VEML6030
         if sensor_configs.get('veml6030', {}).get('enabled', True):
@@ -354,9 +371,10 @@ class WeatherSensorManager:
 
                 # Initialize data structure with simplified payload
                 data = {
-                    "temperature": None,  # from BME280
-                    "humidity": None,  # from BME280
-                    "pressure": None,  # from BME280
+                    "temperature": None,  # from BME688
+                    "humidity": None,  # from BME688
+                    "pressure": None,  # from BME688
+                    "gas_resistance": None,  # from BME688 (air quality)
                     "lux": None,  # from VEML6030 (better ambient light sensor)
                     "uvi": None,  # from LTR390 (standardized UV Index)
                     "timestamp": datetime.now().isoformat(),
@@ -367,28 +385,29 @@ class WeatherSensorManager:
                 sensor_count = 0
                 sensor_errors = 0
 
-                # BME280 - Temperature, Humidity, Pressure
-                if 'bme280' in self.sensors and self.sensors['bme280'].is_available():
+                # BME688 - Temperature, Humidity, Pressure, Gas Resistance
+                if 'bme688' in self.sensors and self.sensors['bme688'].is_available():
                     try:
                         start_time = time.time()
-                        bme_data = self.sensors['bme280'].read_data()
+                        bme_data = self.sensors['bme688'].read_data()
                         read_time = time.time() - start_time
 
                         if read_time > 2.0:
-                            self.logger.warning(f"BME280 reading took {read_time:.2f}s")
+                            self.logger.warning(f"BME688 reading took {read_time:.2f}s")
 
-                        if bme_data and all(v is not None for v in bme_data.values()):
+                        if bme_data and bme_data.get('temperature') is not None:
                             data["temperature"] = bme_data["temperature"]
                             data["humidity"] = bme_data["humidity"]
                             data["pressure"] = bme_data["pressure"]
+                            data["gas_resistance"] = bme_data.get("gas_resistance")
                             sensor_count += 1
-                            self.logger.debug(f"BME280 data: {bme_data}")
+                            self.logger.debug(f"BME688 data: {bme_data}")
                         else:
                             sensor_errors += 1
-                            self.logger.warning("BME280 returned invalid data")
+                            self.logger.warning("BME688 returned invalid data")
                     except Exception as e:
                         sensor_errors += 1
-                        self.logger.error(f"Error reading BME280: {e}")
+                        self.logger.error(f"Error reading BME688: {e}")
 
                 # VEML6030 - Ambient Light (as lux) with timeout protection
                 if 'veml6030' in self.sensors and self.sensors['veml6030'].is_available():
@@ -451,6 +470,7 @@ class WeatherSensorManager:
                     "temperature": None,
                     "humidity": None,
                     "pressure": None,
+                    "gas_resistance": None,
                     "lux": None,
                     "uvi": None,
                     "timestamp": datetime.now().isoformat(),

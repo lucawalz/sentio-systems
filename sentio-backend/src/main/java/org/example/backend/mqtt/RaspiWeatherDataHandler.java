@@ -70,6 +70,12 @@ public class RaspiWeatherDataHandler {
             float lux = (float) rootNode.get("lux").asDouble();
             float uvi = (float) rootNode.get("uvi").asDouble();
 
+            // Gas resistance from BME688 (optional - may not be present in older data)
+            Integer gasResistance = null;
+            if (rootNode.has("gas_resistance") && !rootNode.get("gas_resistance").isNull()) {
+                gasResistance = rootNode.get("gas_resistance").asInt();
+            }
+
             // Create weather data object
             RaspiWeatherData raspiWeatherData = new RaspiWeatherData();
             raspiWeatherData.setDeviceId(deviceId);
@@ -80,10 +86,12 @@ public class RaspiWeatherDataHandler {
             raspiWeatherData.setPressure(pressure);
             raspiWeatherData.setLux(lux);
             raspiWeatherData.setUvi(uvi);
+            raspiWeatherData.setGasResistance(gasResistance);
 
             // Log parsed weather measurements
-            log.info("Parsed weather data - Temperature: {}°C, Humidity: {}%, Pressure: {} hPa, Lux: {} lux, UVI: {}, Timestamp: {}",
-                    temperature, humidity, pressure, lux, uvi, timestamp);
+            log.info(
+                    "Parsed weather data - Temperature: {}°C, Humidity: {}%, Pressure: {} hPa, Lux: {} lux, UVI: {}, Gas: {} Ω, Timestamp: {}",
+                    temperature, humidity, pressure, lux, uvi, gasResistance, timestamp);
 
             // Persist weather data through service
             RaspiWeatherData saved = raspiWeatherDataService.saveWeatherData(raspiWeatherData);

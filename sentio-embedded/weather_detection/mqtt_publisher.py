@@ -186,8 +186,16 @@ class WeatherMQTTPublisher:
             self.failed_messages += 1
             return False
 
-    def publish_status(self, ip_address: str, status: str = "online", additional_data: Optional[Dict] = None):
-        """Publish system status"""
+    def publish_status(self, ip_address: str, status: str = "online", additional_data: Optional[Dict] = None, gps_data: Optional[Dict] = None):
+        """
+        Publish system status.
+        
+        Args:
+            ip_address: Device IP address
+            status: Status string (online/offline)
+            additional_data: Optional additional fields
+            gps_data: Optional GPS data dict with latitude/longitude
+        """
         if not self.client:
            return
 
@@ -202,6 +210,17 @@ class WeatherMQTTPublisher:
                 "publish_count": self.publish_count,
                 "error_count": self.error_count
             }
+
+            # Add GPS coordinates if available
+            if gps_data:
+                if gps_data.get('latitude') is not None:
+                    status_data['latitude'] = gps_data['latitude']
+                if gps_data.get('longitude') is not None:
+                    status_data['longitude'] = gps_data['longitude']
+                if gps_data.get('altitude') is not None:
+                    status_data['altitude'] = gps_data['altitude']
+                if gps_data.get('satellites') is not None:
+                    status_data['satellites'] = gps_data['satellites']
 
             if additional_data:
                 status_data.update(additional_data)

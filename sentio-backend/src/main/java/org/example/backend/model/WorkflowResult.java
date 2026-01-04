@@ -36,7 +36,7 @@ public class WorkflowResult {
     /** Type of workflow that generated this result */
     @Enumerated(EnumType.STRING)
     @Column(name = "workflow_type", nullable = false)
-    private WorkflowType workflowType = WorkflowType.SUMMARY;
+    private WorkflowType workflowType = WorkflowType.WEATHER_SUMMARY;
 
     /**
      * User ID (Keycloak subject) who owns this result. Null for global summaries.
@@ -114,7 +114,7 @@ public class WorkflowResult {
             timestamp = LocalDateTime.now();
         }
         if (workflowType == null) {
-            workflowType = WorkflowType.SUMMARY;
+            workflowType = WorkflowType.WEATHER_SUMMARY;
         }
         lastUpdated = LocalDateTime.now();
 

@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.backend.model.Device;
 import org.example.backend.repository.DeviceRepository;
+import org.example.backend.service.DeviceLocationService;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +19,7 @@ import java.util.Optional;
 public class DeviceStatusHandler {
 
     private final DeviceRepository deviceRepository;
+    private final DeviceLocationService deviceLocationService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Transactional
@@ -33,6 +35,10 @@ public class DeviceStatusHandler {
             String deviceId = root.path("device_id").asText();
             String ipAddress = root.path("ip").asText();
             String service = root.has("service") ? root.path("service").asText() : null;
+
+            // Extract GPS coordinates if present
+            Double latitude = root.has("latitude") ? root.path("latitude").asDouble() : null;
+            Double longitude = root.has("longitude") ? root.path("longitude").asDouble() : null;
 
             if (deviceId == null || ipAddress == null) {
                 log.warn("Missing device_id or ip in payload: {}", payload);
@@ -66,6 +72,29 @@ public class DeviceStatusHandler {
                     log.info("Updated status for device {} (Service: {})", deviceId, service);
                 } else {
                     log.debug("Ignoring status update for {} - throttled", deviceId);
+                }
+
+                // Process GPS coordinates if present - this triggers weather data fetch via EDA
+                if (latitude != null && longitude != null) {
+                    // Check if location has changed significantly (not just GPS drift)
+                    // ~0.0005 degrees ≈ 50 meters - prevents unnecessary weather fetches
+                    double LOCATION_CHANGE_THRESHOLD = 0.0005;
+                    boolean isNewLocation = device.getLatitude() == null || device.getLongitude() == null;
+
+                    if (!isNewLocation) {
+                        double latDiff = Math.abs(device.getLatitude() - latitude);
+                        double lonDiff = Math.abs(device.getLongitude() - longitude);
+                        isNewLocation = latDiff > LOCATION_CHANGE_THRESHOLD || lonDiff > LOCATION_CHANGE_THRESHOLD;
+                    }
+
+                    if (isNewLocation) {
+                        log.info("GPS coordinates changed significantly for device {}: ({}, {})", deviceId, latitude,
+                                longitude);
+                        // This fires DeviceLocationUpdatedEvent which triggers forecast/alert fetching
+                        deviceLocationService.updateDeviceGpsLocation(deviceId, latitude, longitude);
+                    } else {
+                        log.debug("GPS coordinates unchanged (within tolerance) for device {}", deviceId);
+                    }
                 }
 
             } else {

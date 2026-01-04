@@ -9,8 +9,10 @@ import lombok.extern.slf4j.Slf4j;
 import java.time.LocalDateTime;
 
 /**
- * JPA entity representing animal detection results from computer vision systems.
- * Unified entity that stores both initial detection and AI classification results.
+ * JPA entity representing animal detection results from computer vision
+ * systems.
+ * Unified entity that stores both initial detection and AI classification
+ * results.
  * Supports multiple animal types including birds, mammals, and other wildlife.
  */
 @Entity
@@ -18,7 +20,10 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Slf4j
-@Table(name = "animal_detections")
+@Table(name = "animal_detections", indexes = {
+        @Index(name = "idx_detection_device", columnList = "device_id"),
+        @Index(name = "idx_detection_device_time", columnList = "device_id, timestamp DESC")
+})
 public class AnimalDetection {
 
     @Id

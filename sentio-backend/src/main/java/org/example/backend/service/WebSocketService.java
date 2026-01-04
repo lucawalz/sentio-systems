@@ -72,4 +72,12 @@ public class WebSocketService {
         WebSocketMessage message = WebSocketMessage.alertsUpdated(alertCount, hasActive);
         broadcast("/topic/alerts", message);
     }
+
+    /**
+     * Broadcast animal detection event to all connected clients.
+     */
+    public void broadcastAnimalDetected(String deviceId, String species, float confidence) {
+        WebSocketMessage message = WebSocketMessage.animalDetected(deviceId, species, confidence);
+        broadcast("/topic/animals", message);
+    }
 }

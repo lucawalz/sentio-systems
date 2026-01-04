@@ -6,7 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.backend.model.AnimalDetection;
 import org.example.backend.service.AnimalClassifierService;
-import org.example.backend.service.AnimalDetectionService;
+import org.example.backend.service.AnimalDetectionCommandService;
 import org.example.backend.service.ImageStorageService;
 import org.springframework.stereotype.Component;
 
@@ -15,15 +15,18 @@ import java.time.format.DateTimeFormatter;
 import java.util.Base64;
 
 /**
- * MQTT handler for processing animal detection events from Raspberry Pi devices.
- * Handles multiple animal types and creates initial detection records for AI classification.
+ * MQTT handler for processing animal detection events from Raspberry Pi
+ * devices.
+ * Handles multiple animal types and creates initial detection records for AI
+ * classification.
+ * Uses CQRS CommandService for write operations.
  */
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class AnimalDetectionHandler {
 
-    private final AnimalDetectionService animalDetectionService;
+    private final AnimalDetectionCommandService commandService;
     private final ImageStorageService imageStorageService;
     private final ObjectMapper objectMapper;
     private final AnimalClassifierService animalClassifierService;
@@ -60,7 +63,7 @@ public class AnimalDetectionHandler {
                     AnimalDetection animalDetection = createAnimalDetection(
                             detectionNode, imageUrl, timestamp, deviceId, location, triggerReason);
 
-                    AnimalDetection savedDetection = animalDetectionService.saveAnimalDetection(animalDetection);
+                    AnimalDetection savedDetection = commandService.saveAnimalDetection(animalDetection);
                     log.info("Saved initial detection with ID: {} - Type: {}, will be classified by AI",
                             savedDetection.getId(), savedDetection.getAnimalType());
 
@@ -79,8 +82,8 @@ public class AnimalDetectionHandler {
      * Determines animal type from species classification and sets initial values.
      */
     private AnimalDetection createAnimalDetection(JsonNode detectionNode, String imageUrl,
-                                                  LocalDateTime timestamp, String deviceId,
-                                                  String location, String triggerReason) {
+            LocalDateTime timestamp, String deviceId,
+            String location, String triggerReason) {
         AnimalDetection detection = new AnimalDetection();
 
         // Extract bounding box
@@ -102,8 +105,7 @@ public class AnimalDetectionHandler {
         detection.setClassId(detectionNode.get("class_id").asInt());
 
         // Get species from detection node or use generic classification
-        String initialSpecies = detectionNode.has("species") ?
-                detectionNode.get("species").asText() : "unknown";
+        String initialSpecies = detectionNode.has("species") ? detectionNode.get("species").asText() : "unknown";
         detection.setSpecies(initialSpecies);
 
         // Determine animal type based on initial classification or device configuration

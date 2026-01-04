@@ -27,26 +27,23 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * Unit tests for {@link AnimalDetectionService}.
+ * Unit tests for {@link AnimalDetectionQueryService}.
  * 
  * <p>
  * Following FIRST principles with Given/When/Then format.
  * </p>
  */
 @ExtendWith(MockitoExtension.class)
-class AnimalDetectionServiceTest {
+class AnimalDetectionQueryServiceTest {
 
     @Mock
     private AnimalDetectionRepository animalDetectionRepository;
 
     @Mock
-    private ImageStorageService imageStorageService;
-
-    @Mock
     private DeviceService deviceService;
 
     @InjectMocks
-    private AnimalDetectionService animalDetectionService;
+    private AnimalDetectionQueryService queryService;
 
     private AnimalDetection createTestDetection(Long id, String species, String animalType) {
         AnimalDetection detection = new AnimalDetection();
@@ -57,30 +54,6 @@ class AnimalDetectionServiceTest {
         detection.setTimestamp(LocalDateTime.now());
         detection.setDeviceId("device-1");
         return detection;
-    }
-
-    @Nested
-    @DisplayName("saveAnimalDetection")
-    class SaveAnimalDetectionTests {
-
-        @Test
-        @DisplayName("should save detection and return saved entity")
-        void shouldSaveDetectionAndReturnSavedEntity() {
-            // Given
-            AnimalDetection detection = createTestDetection(null, "sparrow", "bird");
-            AnimalDetection savedDetection = createTestDetection(1L, "sparrow", "bird");
-
-            when(animalDetectionRepository.save(any(AnimalDetection.class))).thenReturn(savedDetection);
-
-            // When
-            AnimalDetection result = animalDetectionService.saveAnimalDetection(detection);
-
-            // Then
-            assertThat(result).isNotNull();
-            assertThat(result.getId()).isEqualTo(1L);
-            assertThat(result.getSpecies()).isEqualTo("sparrow");
-            verify(animalDetectionRepository).save(detection);
-        }
     }
 
     @Nested
@@ -102,7 +75,7 @@ class AnimalDetectionServiceTest {
                     .thenReturn(detections);
 
             // When
-            List<AnimalDetection> result = animalDetectionService.getLatestDetections(limit);
+            List<AnimalDetection> result = queryService.getLatestDetections(limit);
 
             // Then
             assertThat(result).hasSize(2);
@@ -116,7 +89,7 @@ class AnimalDetectionServiceTest {
             when(deviceService.getMyDeviceIds()).thenReturn(Collections.emptyList());
 
             // When
-            List<AnimalDetection> result = animalDetectionService.getLatestDetections(10);
+            List<AnimalDetection> result = queryService.getLatestDetections(10);
 
             // Then
             assertThat(result).isEmpty();
@@ -142,7 +115,7 @@ class AnimalDetectionServiceTest {
                     .thenReturn(detections);
 
             // When
-            List<AnimalDetection> result = animalDetectionService.getRecentDetections(hours);
+            List<AnimalDetection> result = queryService.getRecentDetections(hours);
 
             // Then
             assertThat(result).hasSize(1);
@@ -155,7 +128,7 @@ class AnimalDetectionServiceTest {
             when(deviceService.getMyDeviceIds()).thenReturn(Collections.emptyList());
 
             // When
-            List<AnimalDetection> result = animalDetectionService.getRecentDetections(24);
+            List<AnimalDetection> result = queryService.getRecentDetections(24);
 
             // Then
             assertThat(result).isEmpty();
@@ -181,7 +154,7 @@ class AnimalDetectionServiceTest {
                     .thenReturn(detections);
 
             // When
-            List<AnimalDetection> result = animalDetectionService.getDetectionsByDate(date);
+            List<AnimalDetection> result = queryService.getDetectionsByDate(date);
 
             // Then
             assertThat(result).hasSize(1);
@@ -209,7 +182,7 @@ class AnimalDetectionServiceTest {
                     .thenReturn(detections);
 
             // When
-            List<AnimalDetection> result = animalDetectionService.getDetectionsBySpecies(species, pageable);
+            List<AnimalDetection> result = queryService.getDetectionsBySpecies(species, pageable);
 
             // Then
             assertThat(result).hasSize(1);
@@ -235,7 +208,7 @@ class AnimalDetectionServiceTest {
                     .thenReturn(detections);
 
             // When
-            List<AnimalDetection> result = animalDetectionService.getDetectionsByDevice(deviceId, pageable);
+            List<AnimalDetection> result = queryService.getDetectionsByDevice(deviceId, pageable);
 
             // Then
             assertThat(result).hasSize(1);
@@ -251,7 +224,7 @@ class AnimalDetectionServiceTest {
             when(deviceService.hasAccessToDevice(deviceId)).thenReturn(false);
 
             // When / Then
-            assertThatThrownBy(() -> animalDetectionService.getDetectionsByDevice(deviceId, pageable))
+            assertThatThrownBy(() -> queryService.getDetectionsByDevice(deviceId, pageable))
                     .isInstanceOf(AccessDeniedException.class)
                     .hasMessageContaining("Access denied");
         }
@@ -272,7 +245,7 @@ class AnimalDetectionServiceTest {
             when(deviceService.hasAccessToDevice("device-1")).thenReturn(true);
 
             // When
-            Optional<AnimalDetection> result = animalDetectionService.getDetectionById(id);
+            Optional<AnimalDetection> result = queryService.getDetectionById(id);
 
             // Then
             assertThat(result).isPresent();
@@ -290,7 +263,7 @@ class AnimalDetectionServiceTest {
             when(deviceService.hasAccessToDevice("device-1")).thenReturn(false);
 
             // When
-            Optional<AnimalDetection> result = animalDetectionService.getDetectionById(id);
+            Optional<AnimalDetection> result = queryService.getDetectionById(id);
 
             // Then
             assertThat(result).isEmpty();
@@ -304,66 +277,10 @@ class AnimalDetectionServiceTest {
             when(animalDetectionRepository.findById(id)).thenReturn(Optional.empty());
 
             // When
-            Optional<AnimalDetection> result = animalDetectionService.getDetectionById(id);
+            Optional<AnimalDetection> result = queryService.getDetectionById(id);
 
             // Then
             assertThat(result).isEmpty();
-        }
-    }
-
-    @Nested
-    @DisplayName("deleteDetection")
-    class DeleteDetectionTests {
-
-        @Test
-        @DisplayName("should delete detection and associated image")
-        void shouldDeleteDetectionAndImage() {
-            // Given
-            Long id = 1L;
-            AnimalDetection detection = createTestDetection(id, "sparrow", "bird");
-            detection.setImageUrl("http://example.com/image.jpg");
-
-            when(animalDetectionRepository.findById(id)).thenReturn(Optional.of(detection));
-            when(deviceService.hasAccessToDevice("device-1")).thenReturn(true);
-            when(imageStorageService.deleteImage(detection.getImageUrl())).thenReturn(true);
-
-            // When
-            boolean result = animalDetectionService.deleteDetection(id);
-
-            // Then
-            assertThat(result).isTrue();
-            verify(imageStorageService).deleteImage(detection.getImageUrl());
-            verify(animalDetectionRepository).deleteById(id);
-        }
-
-        @Test
-        @DisplayName("should return false when detection not found")
-        void shouldReturnFalseWhenNotFound() {
-            // Given
-            Long id = 999L;
-            when(animalDetectionRepository.findById(id)).thenReturn(Optional.empty());
-
-            // When
-            boolean result = animalDetectionService.deleteDetection(id);
-
-            // Then
-            assertThat(result).isFalse();
-            verify(animalDetectionRepository, never()).deleteById(any());
-        }
-
-        @Test
-        @DisplayName("should throw AccessDeniedException when no access to device")
-        void shouldThrowExceptionWhenNoAccessToDelete() {
-            // Given
-            Long id = 1L;
-            AnimalDetection detection = createTestDetection(id, "sparrow", "bird");
-
-            when(animalDetectionRepository.findById(id)).thenReturn(Optional.of(detection));
-            when(deviceService.hasAccessToDevice("device-1")).thenReturn(false);
-
-            // When / Then
-            assertThatThrownBy(() -> animalDetectionService.deleteDetection(id))
-                    .isInstanceOf(AccessDeniedException.class);
         }
     }
 
@@ -394,7 +311,7 @@ class AnimalDetectionServiceTest {
                     .thenReturn(detections);
 
             // When
-            AnimalDetectionSummary summary = animalDetectionService.getDetectionSummary(hours);
+            AnimalDetectionSummary summary = queryService.getDetectionSummary(hours);
 
             // Then
             assertThat(summary.getTotalDetections()).isEqualTo(3);
@@ -412,7 +329,7 @@ class AnimalDetectionServiceTest {
                     .thenReturn(Collections.emptyList());
 
             // When
-            AnimalDetectionSummary summary = animalDetectionService.getDetectionSummary(24);
+            AnimalDetectionSummary summary = queryService.getDetectionSummary(24);
 
             // Then
             assertThat(summary.getTotalDetections()).isZero();
@@ -435,7 +352,7 @@ class AnimalDetectionServiceTest {
                     .thenReturn(List.of(d1, d2, d3));
 
             // When
-            var result = animalDetectionService.getSpeciesCount(24);
+            var result = queryService.getSpeciesCount(24);
 
             // Then
             assertThat(result).containsEntry("sparrow", 2L);
@@ -455,7 +372,7 @@ class AnimalDetectionServiceTest {
                     .thenReturn(List.of("crow", "fox", "sparrow"));
 
             // When
-            List<String> result = animalDetectionService.getAllSpecies();
+            List<String> result = queryService.getAllSpecies();
 
             // Then
             assertThat(result).containsExactly("crow", "fox", "sparrow");
@@ -478,7 +395,7 @@ class AnimalDetectionServiceTest {
                     .thenReturn(birds);
 
             // When
-            List<AnimalDetection> result = animalDetectionService.getBirdDetections(hours);
+            List<AnimalDetection> result = queryService.getBirdDetections(hours);
 
             // Then
             assertThat(result).hasSize(1);
