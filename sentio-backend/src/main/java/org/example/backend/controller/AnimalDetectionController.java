@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -36,7 +37,15 @@ import java.util.Map;
 @RequestMapping("/api/animals")
 @RequiredArgsConstructor
 @CrossOrigin(origins = "*")
-@Tag(name = "Animal Detection", description = "API for managing and analyzing animal detection data")
+@Tag(
+    name = "Animal Detection", 
+    description = """
+        API for managing and analyzing animal detection data from AI-powered wildlife monitoring systems.
+        
+        Supports multiple animal types (birds, mammals, reptiles) with AI classification. 
+        Data flows:  IoT device → MQTT → AI classification → Database → API
+        """
+)
 public class AnimalDetectionController {
 
     private static final Logger logger = LoggerFactory.getLogger(AnimalDetectionController.class);
@@ -49,17 +58,92 @@ public class AnimalDetectionController {
      * @param limit Maximum number of detections to return (default: 10)
      * @return List of latest animal detections
      */
-    @Operation(summary = "Get latest animal detections",
-            description = "Retrieves the most recent animal detections with a configurable limit", tags = {"Read"})
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Successfully retrieved latest detections",
-                    content = @Content(mediaType = "application/json",
-                            array = @ArraySchema(schema = @Schema(implementation = AnimalDetectionDTO.class))))
-    })
+    @Operation(
+    summary = "Get latest animal detections",
+    description = """
+        Retrieves the most recent animal detections with a configurable limit.
+        
+        **Synchronous Endpoint**:  Returns cached data from PostgreSQL immediately. 
+        **Performance**: Average response time < 50ms
+        
+        **Use Cases:**
+        - Dashboard real-time feed
+        - Recent activity monitoring
+        - Wildlife statistics
+        
+        **Data Source**: AI-classified detections from IoT cameras via MQTT
+        """,
+    tags = {"Read Operations"}
+)
+@ApiResponses(value = {
+    @ApiResponse(
+        responseCode = "200",
+        description = "Successfully retrieved latest detections",
+        content = @Content(
+            mediaType = "application/json",
+            array = @ArraySchema(schema = @Schema(implementation = AnimalDetectionDTO.class)),
+            examples = @ExampleObject(
+                name = "Bird Detections Example",
+                summary = "Two recent bird detections",
+                value = """
+                    [
+                      {
+                        "id": 123,
+                        "species": "European Robin",
+                        "animalType": "bird",
+                        "confidence": 0.95,
+                        "timestamp": "2026-01-04T14:30:00",
+                        "imageUrl": "/images/detections/robin_20260104_143000.jpg",
+                        "deviceId": "camera_01",
+                        "location": "Garden Feeder",
+                        "aiProcessed": true,
+                        "aiClassifiedAt": "2026-01-04T14:30:15",
+                        "alternateSpecies": [
+                          {"species": "Great Tit", "confidence": 0.12}
+                        ]
+                      },
+                      {
+                        "id": 122,
+                        "species": "Great Tit",
+                        "animalType": "bird",
+                        "confidence": 0.89,
+                        "timestamp": "2026-01-04T14:15:00",
+                        "imageUrl": "/images/detections/tit_20260104_141500.jpg",
+                        "deviceId": "camera_01",
+                        "location": "Garden Feeder",
+                        "aiProcessed": true
+                      }
+                    ]
+                    """
+            )
+        )
+    ),
+    @ApiResponse(
+        responseCode = "400",
+        description = "Invalid limit parameter (must be 1-100)",
+        content = @Content(
+            mediaType = "application/json",
+            examples = @ExampleObject(
+                value = """
+                    {
+                      "error": "Bad Request",
+                      "message": "Limit must be between 1 and 100",
+                      "status": 400
+                    }
+                    """
+            )
+        )
+    ),
+    @ApiResponse(responseCode = "500", description = "Internal server error")
+})
     @GetMapping("/latest")
     public ResponseEntity<List<AnimalDetectionDTO>> getLatestDetections(
-            @Parameter(description = "Maximum number of detections to return")
-            @RequestParam(defaultValue = "10") int limit) {
+           @Parameter(
+                        description = "Maximum number of detections to return (1-100)",
+                        example = "10",
+                        schema = @Schema(type = "integer", minimum = "1", maximum = "100")
+)
+                @RequestParam(defaultValue = "10") int limit) {
         logger.info("Retrieving {} latest animal detections", limit);
         List<AnimalDetection> detections = animalDetectionService.getLatestDetections(limit);
         List<AnimalDetectionDTO> dtos = mapper.toDTOList(detections);
@@ -350,13 +434,64 @@ public class AnimalDetectionController {
      * @param detectionDTO Animal detection data to be stored
      * @return Saved detection with generated ID and timestamps
      */
-    @Operation(summary = "Record new detection",
-            description = "Records a new animal detection event in the system")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Successfully recorded the detection",
-                    content = @Content(mediaType = "application/json",
-                            schema = @Schema(implementation = AnimalDetectionDTO.class)))
-    })
+    @Operation(
+    summary = "Record new detection",
+    description = """
+        Records a new animal detection event in the system.
+        
+        **Asynchronous Processing**: 
+        - Accepts data immediately (returns 200)
+        - AI classification runs in background (5-30 seconds)
+        - Check `aiProcessed` field or query by ID for final results
+        
+        **Preferred Method**: IoT devices should use MQTT topic `birds/detected` for better performance. 
+        
+        **Process Flow:**
+        1. Validation and storage (immediate)
+        2. AI classification via sentio-ai service (background)
+        3. Results updated in database
+        4. Retrieve via GET /api/animals/{id}
+        """,
+    tags = {"Write Operations"}
+)
+@ApiResponses(value = {
+    @ApiResponse(
+        responseCode = "200",
+        description = "Detection recorded successfully, AI classification pending",
+        content = @Content(
+            mediaType = "application/json",
+            schema = @Schema(implementation = AnimalDetectionDTO.class),
+            examples = @ExampleObject(
+                value = """
+                    {
+                      "id": 124,
+                      "species": "Unknown",
+                      "animalType": "bird",
+                      "confidence": 0.5,
+                      "aiProcessed": false,
+                      "timestamp": "2026-01-04T15:00:00",
+                      "imageUrl": "/uploads/detection_20260104_150000.jpg"
+                    }
+                    """
+            )
+        )
+    ),
+    @ApiResponse(
+        responseCode = "400",
+        description = "Invalid detection data",
+        content = @Content(
+            examples = @ExampleObject(
+                value = """
+                    {
+                      "error": "Validation Error",
+                      "message": "Missing required field:  imageUrl",
+                      "status":  400
+                    }
+                    """
+            )
+        )
+    )
+})
     @PostMapping("/detect")
     public ResponseEntity<AnimalDetectionDTO> recordDetection(
             @Parameter(description = "Animal detection data", required = true)

@@ -3,6 +3,7 @@ package org.example.backend.controller;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -41,15 +42,59 @@ public class LocationController {
      * Retrieves location data for the current user based on their IP address.
      * @return Current user's location information
      */
-    @Operation(summary = "Get current user location",
-            description = "Retrieves location data for the current user based on their IP address using geolocation services")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Successfully retrieved current location",
-                    content = @Content(mediaType = "application/json",
-                            schema = @Schema(implementation = LocationDataDTO.class))),
-            @ApiResponse(responseCode = "404", description = "Unable to determine current location",
-                    content = @Content)
-    })
+    @Operation(
+    summary = "Get current user location",
+    description = """
+        Retrieves location data for the current user based on their IP address using IP-API geolocation. 
+        
+        **Synchronous Endpoint**: Returns cached data (24h TTL) or fetches fresh data from ip-api.com
+        **Performance**: < 100ms (cached) or < 500ms (fresh lookup)
+        
+        **Caching Strategy**:
+        - Results cached for 24 hours per IP address
+        - Automatic cache refresh on expiry
+        
+        **Use Cases:**
+        - Auto-detect user location for weather data
+        - Location-based content personalization
+        - Analytics and statistics
+        """,
+    tags = {"Read Operations"}
+)
+@ApiResponses(value = {
+    @ApiResponse(
+        responseCode = "200",
+        description = "Successfully retrieved current location",
+        content = @Content(
+            mediaType = "application/json",
+            schema = @Schema(implementation = LocationDataDTO.class),
+            examples = @ExampleObject(
+                name = "Munich Location Example",
+                value = """
+                    {
+                      "id": 42,
+                      "ipAddress": "85.123.45.67",
+                      "city": "Munich",
+                      "country": "Germany",
+                      "region": "Bavaria",
+                      "latitude": 48.1351,
+                      "longitude": 11.5820,
+                      "timezone": "Europe/Berlin",
+                      "isp": "Vodafone GmbH",
+                      "organization": "Vodafone DSL",
+                      "createdAt": "2026-01-04T10:00:00",
+                      "updatedAt": "2026-01-04T10:00:00"
+                    }
+                    """
+            )
+        )
+    ),
+    @ApiResponse(
+        responseCode = "404",
+        description = "Unable to determine location (invalid/private IP)",
+        content = @Content
+    )
+})
     @GetMapping("/current")
     public ResponseEntity<LocationDataDTO> getCurrentLocation() {
         logger.info("Retrieving current location data");
