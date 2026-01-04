@@ -2,6 +2,7 @@ package org.example.backend.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.backend.model.LocationData;
@@ -27,8 +28,8 @@ import java.util.stream.Collectors;
 public class WeatherForecastService {
 
     private final WeatherForecastRepository weatherForecastRepository;
-    private final IpLocationService ipLocationService;
     private final DeviceLocationService deviceLocationService;
+    private final DeviceService deviceService;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private volatile boolean isUpdating = false;
@@ -59,6 +60,7 @@ public class WeatherForecastService {
      * Uses the new Open-Meteo hourly API parameters.
      */
     @Transactional
+    @CircuitBreaker(name = "openMeteo", fallbackMethod = "getForecastForLocationFallback")
     public List<WeatherForecast> getForecastForLocation(Float latitude, Float longitude, LocationData locationData) {
         log.info("Processing hourly weather forecast for location: {}, {} (lat: {}, lon: {})",
                 locationData.getCity(), locationData.getCountry(), latitude, longitude);
@@ -78,10 +80,19 @@ public class WeatherForecastService {
             JsonNode jsonNode = objectMapper.readTree(response);
 
             // Get existing forecasts for intelligent update/insert logic
+            // Use deviceId-based lookup if available, otherwise fall back to city/country
             LocalDate startDate = LocalDate.now();
             LocalDate endDate = LocalDate.now().plusDays(7);
-            List<WeatherForecast> existingForecasts = weatherForecastRepository.findByLocationAndDateRange(
-                    locationData.getCity(), locationData.getCountry(), startDate, endDate);
+            List<WeatherForecast> existingForecasts;
+            if (locationData.getDeviceId() != null) {
+                // Device-specific: use deviceId to avoid collision with other devices
+                existingForecasts = weatherForecastRepository.findByDeviceIdAndDateRange(
+                        locationData.getDeviceId(), startDate, endDate);
+            } else {
+                // Fallback to city/country for non-device locations
+                existingForecasts = weatherForecastRepository.findByLocationAndDateRange(
+                        locationData.getCity(), locationData.getCountry(), startDate, endDate);
+            }
 
             // Create lookup map for existing forecasts
             Map<LocalDateTime, WeatherForecast> existingMap = existingForecasts.stream()
@@ -198,7 +209,7 @@ public class WeatherForecastService {
     }
 
     /**
-     * Sets location data on the forecast entity.
+     * Sets location data on the forecast entity including deviceId for isolation.
      */
     private void setLocationData(WeatherForecast forecast, LocationData locationData) {
         if (locationData != null) {
@@ -207,6 +218,7 @@ public class WeatherForecastService {
             forecast.setLatitude(locationData.getLatitude());
             forecast.setLongitude(locationData.getLongitude());
             forecast.setIpAddress(locationData.getIpAddress());
+            forecast.setDeviceId(locationData.getDeviceId());
             forecast.setDetectedLocation(locationData.getCity() + ", " + locationData.getCountry());
         }
     }
@@ -247,6 +259,21 @@ public class WeatherForecastService {
             case 99 -> new String[] { "Thunderstorm", "Thunderstorm with heavy hail", "11d" };
             default -> new String[] { "Unknown", "Unknown weather condition", "01d" };
         };
+    }
+
+    // ===== Device-scoped methods =====
+
+    /**
+     * Retrieves forecasts for a specific device after verifying ownership.
+     *
+     * @param deviceId The device UUID
+     * @return List of upcoming forecasts for the device
+     * @throws IllegalArgumentException if device not found or not owned by user
+     */
+    public List<WeatherForecast> getForecastForDevice(String deviceId) {
+        deviceService.getVerifiedDevice(deviceId);
+        return weatherForecastRepository.findByDeviceIdAndForecastDateGreaterThanEqual(
+                deviceId, LocalDate.now());
     }
 
     // Keep all existing service methods unchanged
@@ -303,21 +330,22 @@ public class WeatherForecastService {
         }
 
         isUpdating = true;
-        log.info("Starting forecast update for current location");
+        log.info("Starting forecast update for current device location");
 
         try {
             cleanupOldForecasts();
-            Optional<LocationData> currentLocation = ipLocationService.getCurrentLocation();
+            // Use device location instead of IP-based location
+            Optional<LocationData> currentLocation = deviceLocationService.getFirstUserDeviceLocation();
             if (currentLocation.isPresent()) {
                 LocationData location = currentLocation.get();
                 getForecastForLocation(location.getLatitude(), location.getLongitude(), location);
-                log.info("Successfully updated forecasts for current location: {}, {}",
-                        location.getCity(), location.getCountry());
+                log.info("Successfully updated forecasts for device location: ({}, {})",
+                        location.getLatitude(), location.getLongitude());
             } else {
-                log.warn("Unable to determine current location for forecast update");
+                log.warn("No device with GPS coordinates found for forecast update");
             }
         } catch (Exception e) {
-            log.error("Error occurred during forecast update for current location", e);
+            log.error("Error occurred during forecast update for device location", e);
         } finally {
             isUpdating = false;
         }
@@ -385,5 +413,15 @@ public class WeatherForecastService {
     public List<String> getAvailableCities() {
         log.debug("Retrieving available cities with upcoming forecasts");
         return weatherForecastRepository.findDistinctCitiesWithUpcomingForecasts(LocalDate.now());
+    }
+
+    // ==================== Circuit Breaker Fallback Methods ====================
+
+    @SuppressWarnings("unused")
+    private List<WeatherForecast> getForecastForLocationFallback(Float latitude, Float longitude,
+            LocationData locationData, Exception ex) {
+        log.warn("Open-Meteo API unavailable for forecast at {}, {}: {}. Using cached data.",
+                latitude, longitude, ex.getMessage());
+        return new ArrayList<>();
     }
 }

@@ -3,6 +3,7 @@ package org.example.backend.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.backend.model.HistoricalWeather;
@@ -41,7 +42,6 @@ import java.util.stream.Collectors;
 public class HistoricalWeatherService {
 
     private final HistoricalWeatherRepository historicalWeatherRepository;
-    private final IpLocationService ipLocationService;
     private final DeviceLocationService deviceLocationService;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
@@ -80,23 +80,29 @@ public class HistoricalWeatherService {
      * @param locationData Complete location information
      * @return List of processed historical weather records
      */
+    @CircuitBreaker(name = "openMeteo", fallbackMethod = "getHistoricalWeatherForLocationFallback")
     @Transactional
     public List<HistoricalWeather> getHistoricalWeatherForLocation(Float latitude, Float longitude,
             LocationData locationData) {
-        log.info("Processing historical weather for location: {}, {} (lat: {}, lon: {})",
-                locationData.getCity(), locationData.getCountry(), latitude, longitude);
+        String deviceId = locationData.getDeviceId();
+        log.info("Processing historical weather for device {} (lat: {}, lon: {})",
+                deviceId, latitude, longitude);
 
         List<HistoricalWeather> allHistoricalData = new ArrayList<>();
 
         // Define historical intervals
         List<LocalDate> historicalDates = getHistoricalDates();
 
-        // Check which dates we already have in the database
-        List<LocalDate> existingDates = historicalWeatherRepository.findExistingDatesInRange(
-                locationData.getCity(), locationData.getCountry(),
-                historicalDates.get(historicalDates.size() - 1), // oldest date
-                historicalDates.get(0) // newest date
-        );
+        // Check which dates we already have in the database FOR THIS DEVICE
+        List<LocalDate> existingDates = deviceId != null
+                ? historicalWeatherRepository.findExistingDatesForDevice(
+                        deviceId,
+                        historicalDates.get(historicalDates.size() - 1), // oldest date
+                        historicalDates.get(0)) // newest date
+                : historicalWeatherRepository.findExistingDatesInRange(
+                        locationData.getCity(), locationData.getCountry(),
+                        historicalDates.get(historicalDates.size() - 1),
+                        historicalDates.get(0));
 
         // Filter out dates we already have (unless they're very old records that need
         // updating)
@@ -106,10 +112,11 @@ public class HistoricalWeatherService {
                 .collect(Collectors.toList());
 
         if (datesToFetch.isEmpty()) {
-            log.info("All historical data is up to date for location: {}, {}",
-                    locationData.getCity(), locationData.getCountry());
-            return historicalWeatherRepository.findByDatesAndLocation(historicalDates,
-                    locationData.getCity(), locationData.getCountry());
+            log.info("All historical data is up to date for device: {}", deviceId);
+            return deviceId != null
+                    ? historicalWeatherRepository.findByDatesAndDeviceId(historicalDates, deviceId)
+                    : historicalWeatherRepository.findByDatesAndLocation(historicalDates,
+                            locationData.getCity(), locationData.getCountry());
         }
 
         log.info("Fetching historical weather for {} dates", datesToFetch.size());
@@ -171,8 +178,11 @@ public class HistoricalWeatherService {
      * Checks if a historical record needs updating based on its age.
      */
     private boolean needsUpdate(LocalDate date, LocationData locationData, LocalDateTime cutoff) {
-        Optional<HistoricalWeather> existing = historicalWeatherRepository.findByWeatherDateAndLocation(
-                date, locationData.getCity(), locationData.getCountry());
+        String deviceId = locationData.getDeviceId();
+        Optional<HistoricalWeather> existing = deviceId != null
+                ? historicalWeatherRepository.findByWeatherDateAndDeviceId(date, deviceId)
+                : historicalWeatherRepository.findByWeatherDateAndLocation(
+                        date, locationData.getCity(), locationData.getCountry());
 
         return existing.isEmpty() || existing.get().getUpdatedAt().isBefore(cutoff);
     }
@@ -227,12 +237,15 @@ public class HistoricalWeatherService {
             return historicalData;
         }
 
-        // Get existing records for update/insert logic
+        // Get existing records for update/insert logic - use deviceId if available
         Map<LocalDate, HistoricalWeather> existingMap = new HashMap<>();
+        String deviceId = locationData.getDeviceId();
         for (LocalDate date : targetDates) {
-            historicalWeatherRepository.findByWeatherDateAndLocation(
-                    date, locationData.getCity(), locationData.getCountry())
-                    .ifPresent(existing -> existingMap.put(date, existing));
+            Optional<HistoricalWeather> existing = deviceId != null
+                    ? historicalWeatherRepository.findByWeatherDateAndDeviceId(date, deviceId)
+                    : historicalWeatherRepository.findByWeatherDateAndLocation(
+                            date, locationData.getCity(), locationData.getCountry());
+            existing.ifPresent(hw -> existingMap.put(date, hw));
         }
 
         int newCount = 0;
@@ -348,6 +361,10 @@ public class HistoricalWeatherService {
             historical.setLongitude(locationData.getLongitude());
             historical.setIpAddress(locationData.getIpAddress());
             historical.setDetectedLocation(locationData.getCity() + ", " + locationData.getCountry());
+            // Set deviceId for multi-device support
+            if (locationData.getDeviceId() != null) {
+                historical.setDeviceId(locationData.getDeviceId());
+            }
         }
     }
 
@@ -401,24 +418,24 @@ public class HistoricalWeatherService {
         }
 
         isUpdating = true;
-        log.info("Starting historical weather update for current location");
+        log.info("Starting historical weather update for device location");
 
         try {
             // Perform cleanup before updating
             cleanupOldHistoricalWeather();
 
-            // Update historical weather for current location
-            Optional<LocationData> currentLocation = ipLocationService.getCurrentLocation();
+            // Update historical weather for first user device location
+            Optional<LocationData> currentLocation = deviceLocationService.getFirstUserDeviceLocation();
             if (currentLocation.isPresent()) {
                 LocationData location = currentLocation.get();
                 getHistoricalWeatherForLocation(location.getLatitude(), location.getLongitude(), location);
-                log.info("Successfully updated historical weather for current location: {}, {}",
-                        location.getCity(), location.getCountry());
+                log.info("Successfully updated historical weather for device location: ({}, {})",
+                        location.getLatitude(), location.getLongitude());
             } else {
-                log.warn("Unable to determine current location for historical weather update");
+                log.warn("No device with GPS coordinates found for historical weather update");
             }
         } catch (Exception e) {
-            log.error("Error occurred during historical weather update for current location", e);
+            log.error("Error occurred during historical weather update for device location", e);
         } finally {
             isUpdating = false;
         }
@@ -492,10 +509,23 @@ public class HistoricalWeatherService {
     }
 
     /**
-     * Retrieves historical weather for a specific date.
+     * Retrieves historical weather for a specific date (legacy - no device filter).
      */
     public HistoricalWeather getHistoricalWeatherForDate(LocalDate date) {
         log.debug("Retrieving historical weather for date: {}", date);
+        return historicalWeatherRepository.findTopByWeatherDateOrderByCreatedAtDesc(date);
+    }
+
+    /**
+     * Retrieves historical weather for a specific date and device.
+     * If deviceId is null, falls back to returning any record for that date.
+     */
+    public HistoricalWeather getHistoricalWeatherForDate(LocalDate date, String deviceId) {
+        log.debug("Retrieving historical weather for date: {} and device: {}", date, deviceId);
+        if (deviceId != null && !deviceId.isEmpty()) {
+            return historicalWeatherRepository.findByWeatherDateAndDeviceId(date, deviceId)
+                    .orElse(null);
+        }
         return historicalWeatherRepository.findTopByWeatherDateOrderByCreatedAtDesc(date);
     }
 
@@ -531,5 +561,15 @@ public class HistoricalWeatherService {
     public List<String> getAvailableCitiesWithHistoricalWeather() {
         log.debug("Retrieving available cities with historical weather");
         return historicalWeatherRepository.findDistinctCitiesWithHistoricalWeather(LocalDate.now().minusYears(1));
+    }
+
+    // ==================== Circuit Breaker Fallback Methods ====================
+
+    @SuppressWarnings("unused")
+    private List<HistoricalWeather> getHistoricalWeatherForLocationFallback(Float latitude, Float longitude,
+            LocationData locationData, Exception ex) {
+        log.warn("Open-Meteo Archive API unavailable at {}, {}: {}. Using cached data.",
+                latitude, longitude, ex.getMessage());
+        return new ArrayList<>();
     }
 }
