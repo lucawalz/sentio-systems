@@ -135,4 +135,31 @@ public class RaspiWeatherDataService {
 
         return new WeatherStats(totalReadings, latest, avgTemp, avgHumidity, avgPressure);
     }
+
+    // ===== Device-scoped methods =====
+
+    /**
+     * Retrieves the most recent weather data for a specific device.
+     *
+     * @param deviceId The device UUID
+     * @return Latest weather data for the device, null if no data
+     * @throws IllegalArgumentException if device not found or not owned by user
+     */
+    public RaspiWeatherData getLatestForDevice(String deviceId) {
+        deviceService.getVerifiedDevice(deviceId);
+        return raspiWeatherDataRepository.findTopByDeviceIdInOrderByTimestampDesc(List.of(deviceId));
+    }
+
+    /**
+     * Retrieves recent weather data for a specific device (last 24 hours).
+     *
+     * @param deviceId The device UUID
+     * @return List of recent weather data for the device
+     * @throws IllegalArgumentException if device not found or not owned by user
+     */
+    public List<RaspiWeatherData> getRecentForDevice(String deviceId) {
+        deviceService.getVerifiedDevice(deviceId);
+        LocalDateTime dayAgo = LocalDateTime.now().minusDays(1);
+        return raspiWeatherDataRepository.findRecentDataByDevices(List.of(deviceId), dayAgo);
+    }
 }

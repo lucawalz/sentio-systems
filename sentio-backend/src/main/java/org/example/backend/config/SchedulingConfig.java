@@ -5,7 +5,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.backend.repository.DeviceRepository;
 import org.example.backend.service.BrightSkyService;
 import org.example.backend.service.HistoricalWeatherService;
-import org.example.backend.service.IpLocationService;
 import org.example.backend.service.WeatherForecastService;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
@@ -21,7 +20,6 @@ public class SchedulingConfig {
 
     private final WeatherForecastService weatherForecastService;
     private final HistoricalWeatherService historicalWeatherService;
-    private final IpLocationService ipLocationService;
     private final BrightSkyService brightSkyService;
     private final DeviceRepository deviceRepository;
 
@@ -35,14 +33,27 @@ public class SchedulingConfig {
 
     /**
      * Update weather on application ready.
-     * Weather updates now happen via scheduled tasks using device locations only.
+     * Performs initial data fetch for all devices with GPS coordinates.
      */
     @EventListener(ApplicationReadyEvent.class)
     public void onApplicationReady() {
-        log.info("Application ready - weather updates will be handled by scheduled tasks for device locations");
-        // Removed immediate updates to avoid API calls before devices are registered
-        // All weather updates now happen via scheduled tasks using device-only
-        // locations
+        log.info("Application ready - checking for devices with GPS coordinates");
+
+        if (!hasAnyDevices()) {
+            log.info("No devices registered - weather updates will start when devices are added");
+            return;
+        }
+
+        // Fetch weather data for all existing devices on startup
+        // This ensures data is available immediately after server restart
+        log.info("Found devices - fetching initial weather data for all device locations");
+        try {
+            weatherForecastService.updateForecastsForAllDeviceLocations();
+            brightSkyService.updateAlertsForAllDeviceLocations();
+            log.info("Initial weather data fetch completed successfully");
+        } catch (Exception e) {
+            log.error("Failed to fetch initial weather data: {}", e.getMessage(), e);
+        }
     }
 
     /**
@@ -94,7 +105,6 @@ public class SchedulingConfig {
     public void cleanupOldForecastData() {
         log.info("Starting daily cleanup of old forecast data (2-day retention for forecasts)");
         weatherForecastService.cleanupOldForecasts();
-        ipLocationService.cleanupOldLocationData(); // Still 14 days for location data
     }
 
     /**

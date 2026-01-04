@@ -109,7 +109,7 @@ public class WorkflowController {
                         result.setTimestamp(LocalDateTime.now());
                 }
                 if (result.getWorkflowType() == null) {
-                        result.setWorkflowType(WorkflowType.SUMMARY);
+                        result.setWorkflowType(WorkflowType.WEATHER_SUMMARY);
                 }
                 WorkflowResult saved = workflowService.saveWorkflowResult(result);
                 return ResponseEntity.ok(saved);

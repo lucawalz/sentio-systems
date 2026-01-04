@@ -33,7 +33,9 @@ import java.time.LocalDateTime;
         @Index(name = "idx_alert_unique", columnList = "alertId", unique = true),
         @Index(name = "idx_alert_location", columnList = "warnCellId, city"),
         @Index(name = "idx_alert_effective", columnList = "effective"),
-        @Index(name = "idx_alert_expires", columnList = "expires")
+        @Index(name = "idx_alert_expires", columnList = "expires"),
+        @Index(name = "idx_alert_device", columnList = "device_id"),
+        @Index(name = "idx_alert_device_active", columnList = "device_id, expires")
 })
 public class WeatherAlert {
 

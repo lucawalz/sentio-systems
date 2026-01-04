@@ -15,6 +15,11 @@ public interface DeviceRepository extends JpaRepository<Device, String> {
      */
     List<Device> findAllByOwnerId(String ownerId);
 
+    /**
+     * Find the primary device for a specific user.
+     */
+    Optional<Device> findByOwnerIdAndIsPrimaryTrue(String ownerId);
+
     @Override
     @org.springframework.lang.NonNull
     Optional<Device> findById(@org.springframework.lang.NonNull String id);

@@ -55,12 +55,12 @@ class WorkflowServiceTest {
             // Given
             WorkflowResult inputResult = new WorkflowResult();
             inputResult.setAnalysisText("Test analysis");
-            inputResult.setWorkflowType(WorkflowType.SUMMARY);
+            inputResult.setWorkflowType(WorkflowType.WEATHER_SUMMARY);
 
             WorkflowResult savedResult = new WorkflowResult();
             savedResult.setId(1L);
             savedResult.setAnalysisText("Test analysis");
-            savedResult.setWorkflowType(WorkflowType.SUMMARY);
+            savedResult.setWorkflowType(WorkflowType.WEATHER_SUMMARY);
             savedResult.setTimestamp(LocalDateTime.now());
 
             when(workflowResultRepository.save(any(WorkflowResult.class))).thenReturn(savedResult);
@@ -72,7 +72,7 @@ class WorkflowServiceTest {
             assertThat(result).isNotNull();
             assertThat(result.getId()).isEqualTo(1L);
             assertThat(result.getAnalysisText()).isEqualTo("Test analysis");
-            assertThat(result.getWorkflowType()).isEqualTo(WorkflowType.SUMMARY);
+            assertThat(result.getWorkflowType()).isEqualTo(WorkflowType.WEATHER_SUMMARY);
         }
 
         @Test
@@ -81,7 +81,7 @@ class WorkflowServiceTest {
             // Given
             WorkflowResult result = new WorkflowResult();
             result.setAnalysisText("New analysis");
-            result.setWorkflowType(WorkflowType.SUMMARY);
+            result.setWorkflowType(WorkflowType.WEATHER_SUMMARY);
 
             when(workflowResultRepository.save(any(WorkflowResult.class))).thenReturn(result);
 
@@ -90,7 +90,7 @@ class WorkflowServiceTest {
 
             // Then
             ArgumentCaptor<LocalDateTime> cutoffCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
-            verify(workflowResultRepository).deleteOldResultsByType(eq(WorkflowType.SUMMARY), cutoffCaptor.capture());
+            verify(workflowResultRepository).deleteOldResultsByType(eq(WorkflowType.WEATHER_SUMMARY), cutoffCaptor.capture());
 
             LocalDateTime capturedCutoff = cutoffCaptor.getValue();
             assertThat(capturedCutoff).isBefore(LocalDateTime.now().minusHours(23));
@@ -146,10 +146,10 @@ class WorkflowServiceTest {
             // Given
             WorkflowResult summary = new WorkflowResult();
             summary.setId(1L);
-            summary.setWorkflowType(WorkflowType.SUMMARY);
+            summary.setWorkflowType(WorkflowType.WEATHER_SUMMARY);
             summary.setAnalysisText("Summary text");
 
-            when(workflowResultRepository.findTopByWorkflowTypeOrderByTimestampDesc(WorkflowType.SUMMARY))
+            when(workflowResultRepository.findTopByWorkflowTypeOrderByTimestampDesc(WorkflowType.WEATHER_SUMMARY))
                     .thenReturn(Optional.of(summary));
 
             // When
@@ -157,7 +157,7 @@ class WorkflowServiceTest {
 
             // Then
             assertThat(result).isPresent();
-            assertThat(result.get().getWorkflowType()).isEqualTo(WorkflowType.SUMMARY);
+            assertThat(result.get().getWorkflowType()).isEqualTo(WorkflowType.WEATHER_SUMMARY);
         }
     }
 
