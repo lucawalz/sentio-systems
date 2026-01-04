@@ -23,10 +23,13 @@ public class ContactController {
         if (isBlank(request.getMail()) || isBlank(request.getMessage())) {
             return ResponseEntity.badRequest().build();
         }
-
-        System.out.println("Mail would be sent here");
-        //service.sendContactMail(request);
-        return ResponseEntity.ok().build();
+        try {
+            service.sendContactMail(request);
+            return ResponseEntity.ok().build();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(500).build();
+        }
     }
 
     @PostMapping("/test")

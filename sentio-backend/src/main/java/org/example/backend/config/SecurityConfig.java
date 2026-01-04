@@ -29,27 +29,20 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // Public endpoints FIRST
+                        .requestMatchers("/api/auth/").permitAll()
+                        .requestMatchers("/api/contact").permitAll()
+                        .requestMatchers("/api/").authenticated()
                         .requestMatchers("/swagger-ui.html",
-                                "/swagger-ui/**",
-                                "/v3/api-docs/**",
-                                "/api-docs/**",
-                                "/swagger-resources/**",
-                                "/webjars/**").permitAll()
-                        .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/contact").permitAll()
-                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-
-                        // Everything else under /api needs auth
-                        .requestMatchers("/api/**").authenticated()
-
-                        // any other request
-                        .anyRequest().permitAll() // oder authenticated(), je nachdem
-                )
+                                "/swagger-ui/",
+                                "/v3/api-docs/",
+                                "/api-docs/",
+                                "/swagger-resources/",
+                                "/webjars/**")
+                        .permitAll()
+                        .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .bearerTokenResolver(bearerTokenResolver())
-                        .jwt(org.springframework.security.config.Customizer.withDefaults())
-                );
+                        .jwt(org.springframework.security.config.Customizer.withDefaults()));
 
         return http.build();
     }
