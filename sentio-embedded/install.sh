@@ -162,7 +162,7 @@ EOF
     if [ "$INSTALL_WEATHER" = true ]; then
         cat >> requirements.txt << EOF
 requests
-sparkfun-qwiic-bme280
+adafruit-circuitpython-bme680
 sparkfun-qwiic-veml6030
 adafruit-circuitpython-ltr390
 adafruit-blinka
@@ -170,6 +170,11 @@ python-dateutil
 schedule
 EOF
     fi
+
+    # GPS requirements (Adafruit library supports I2C)
+    cat >> requirements.txt << EOF
+adafruit-circuitpython-gps
+EOF
 
     pip install -r requirements.txt -q
     print_success "Python dependencies installed"
@@ -203,8 +208,11 @@ EOF
     fi
     if [ "$INSTALL_WEATHER" = true ]; then
         PACKAGES+=("requests" "schedule" "dateutil:python-dateutil")
-        PACKAGES+=("qwiic_bme280:sparkfun-qwiic-bme280" "qwiic_veml6030:sparkfun-qwiic-veml6030" "adafruit_ltr390:adafruit-circuitpython-ltr390")
+        PACKAGES+=("adafruit_bme680:adafruit-circuitpython-bme680" "qwiic_veml6030:sparkfun-qwiic-veml6030" "adafruit_ltr390:adafruit-circuitpython-ltr390")
     fi
+    
+    # GPS packages
+    PACKAGES+=("adafruit_gps:adafruit-circuitpython-gps")
 
     for pkg in "${PACKAGES[@]}"; do
         IFS=':' read -r import_name pip_name <<< "$pkg"
@@ -319,7 +327,7 @@ if [ "$INSTALL_WEATHER" = true ]; then
     WEATHER_INTERVAL=${WEATHER_INTERVAL:-300}
 
     echo "Sensor Selection:"
-    read -p "Enable BME280 (Temp/Hum/Pres)? [Y/n]: " -n 1 -r; echo
+    read -p "Enable BME688 (Temp/Hum/Pres/Gas)? [Y/n]: " -n 1 -r; echo
     if [[ $REPLY =~ ^[Nn]$ ]]; then BME_ENABLED=false; fi
     
     read -p "Enable VEML6030 (Light)? [Y/n]: " -n 1 -r; echo
@@ -388,11 +396,20 @@ if [ "$INSTALL_WEATHER" = true ]; then
 collection:
   interval: ${WEATHER_INTERVAL}
 sensors:
-  bme280: {enabled: ${BME_ENABLED:-true}, max_errors: 5}
+  bme688: {enabled: ${BME_ENABLED:-true}, max_errors: 5}
   veml6030: {enabled: ${VEML_ENABLED:-true}, gain: 0.125, max_errors: 5}
   ltr390: {enabled: ${LTR_ENABLED:-true}, gain: 1, resolution: 3, max_errors: 5}
 EOF
 fi
+
+# GPS Configuration (always added - required for both services)
+cat >> config.yaml << EOF
+
+# GPS Configuration (Sparkfun SAM-M10Q via I2C)
+gps:
+  address: 0x42  # Default I2C address for SAM-M10Q
+  debug: false
+EOF
 
 chmod 444 config.yaml
 mkdir -p logs
@@ -499,6 +516,50 @@ if [ ! -d ".venv" ]; then
 fi
 source setup_env.sh
 
+# Function to wait for GPS fix before services start
+wait_for_gps() {
+    echo "[GPS] Checking GPS sensor..."
+    python3 - << 'GPSPY'
+import sys
+import time
+try:
+    import board
+    import busio
+    import adafruit_gps
+    
+    i2c = busio.I2C(board.SCL, board.SDA)
+    gps = adafruit_gps.GPS_GtopI2C(i2c, address=0x42, debug=False)
+    gps.send_command(b"PMTK314,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0")
+    gps.send_command(b"PMTK220,1000")
+    
+    print("[GPS] Waiting for GPS fix... (Ctrl+C to skip)")
+    attempt = 0
+    while True:
+        attempt += 1
+        gps.update()
+        time.sleep(1)
+        if gps.has_fix:
+            print(f"[GPS] Fix acquired: ({gps.latitude:.6f}, {gps.longitude:.6f})")
+            sys.exit(0)
+        if attempt % 10 == 0:
+            print(f"[GPS] Still waiting... ({attempt}s)")
+except KeyboardInterrupt:
+    print("[GPS] Skipped by user - continuing without GPS fix")
+    sys.exit(0)
+except ImportError as e:
+    print(f"[GPS] Library not installed: {e}")
+    print("[GPS] Run: pip install adafruit-circuitpython-gps adafruit-blinka")
+    sys.exit(1)
+except Exception as e:
+    print(f"[GPS] Error: {e}")
+    sys.exit(1)
+GPSPY
+    if [ $? -ne 0 ]; then
+        echo "[GPS] Failed to acquire GPS fix - exiting"
+        exit 1
+    fi
+}
+
 # Function to start service
 start_service() {
     NAME=$1
@@ -516,7 +577,7 @@ start_service() {
     if [ "$BG_MODE" = true ]; then
         nohup python3 $CMD > "$LOG" 2>&1 &
         echo $! > "$PID_FILE"
-        echo "✓ $NAME started in background (PID: $(cat $PID_FILE))"
+        echo "[OK] $NAME started in background (PID: $(cat $PID_FILE))"
     else
         echo "Starting in Foreground (Ctrl+C to stop)"
         python3 $CMD
@@ -549,11 +610,12 @@ read -p "Enter Choice [5]: " CHOICE
 CHOICE=${CHOICE:-5}
 
 case $CHOICE in
-    1) start_animal true ;;
-    2) start_animal false ;;
-    3) start_weather true ;;
-    4) start_weather false ;;
+    1) wait_for_gps; start_animal true ;;
+    2) wait_for_gps; start_animal false ;;
+    3) wait_for_gps; start_weather true ;;
+    4) wait_for_gps; start_weather false ;;
     5) 
+       wait_for_gps
        start_animal true
        start_weather true
        ;;

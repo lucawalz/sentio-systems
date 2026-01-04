@@ -2,6 +2,7 @@ package org.example.backend.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.backend.dto.AnimalDetectionDTO;
@@ -123,6 +124,7 @@ public class AnimalClassifierService {
      * Calls the preprocessing service which handles image enhancement and
      * forwarding to classifier
      */
+    @CircuitBreaker(name = "aiClassifier", fallbackMethod = "callPreprocessingServiceFallback")
     private Map<String, Object> callPreprocessingService(File imageFile, String animalType) {
         try {
             // Prepare request with image and animal type
@@ -462,5 +464,14 @@ public class AnimalClassifierService {
             // Default to the original classification or unknown
             default -> "unknown";
         };
+    }
+
+    // ==================== Circuit Breaker Fallback Methods ====================
+
+    @SuppressWarnings("unused")
+    private Map<String, Object> callPreprocessingServiceFallback(File imageFile, String animalType, Exception ex) {
+        log.warn("AI preprocessing service unavailable for {}: {}. Skipping AI classification.",
+                animalType, ex.getMessage());
+        return null;
     }
 }

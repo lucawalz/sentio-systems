@@ -149,4 +149,73 @@ public class DeviceService {
                     }
                 });
     }
+
+    /**
+     * Get the primary device for the current user.
+     * Falls back to first device if no primary is set.
+     */
+    public Optional<Device> getPrimaryDevice() {
+        AuthDTOs.UserInfo currentUser = authService.getCurrentUser();
+        String userId = currentUser.getId();
+
+        // First try to find explicitly set primary device
+        Optional<Device> primary = deviceRepository.findByOwnerIdAndIsPrimaryTrue(userId);
+        if (primary.isPresent()) {
+            return primary;
+        }
+
+        // Fallback to first device with coordinates
+        List<Device> devices = deviceRepository.findAllByOwnerId(userId);
+        return devices.stream()
+                .filter(d -> d.getLatitude() != null && d.getLongitude() != null)
+                .findFirst()
+                .or(() -> devices.stream().findFirst());
+    }
+
+    /**
+     * Set a device as the primary device for the current user.
+     * Unsets any existing primary device first.
+     */
+    @Transactional
+    public Device setPrimaryDevice(String deviceId) {
+        AuthDTOs.UserInfo currentUser = authService.getCurrentUser();
+        String userId = currentUser.getId();
+
+        log.info("Setting device {} as primary for user {}", deviceId, userId);
+
+        // Verify the device belongs to this user
+        Device device = deviceRepository.findById(deviceId)
+                .filter(d -> d.getOwnerId().equals(userId))
+                .orElseThrow(() -> new IllegalArgumentException("Device not found or not owned by user"));
+
+        // Unset any existing primary device
+        deviceRepository.findByOwnerIdAndIsPrimaryTrue(userId)
+                .ifPresent(existingPrimary -> {
+                    existingPrimary.setIsPrimary(false);
+                    deviceRepository.save(existingPrimary);
+                    log.debug("Unset previous primary device: {}", existingPrimary.getId());
+                });
+
+        // Set the new primary device
+        device.setIsPrimary(true);
+        Device savedDevice = deviceRepository.save(device);
+
+        log.info("Device {} is now primary for user {}", deviceId, userId);
+        return savedDevice;
+    }
+
+    /**
+     * Verifies device belongs to current user and returns it.
+     * Throws exception if device not found or not owned by user.
+     * 
+     * @param deviceId The device UUID to verify
+     * @return The verified device
+     * @throws IllegalArgumentException if device not found or not owned by user
+     */
+    public Device getVerifiedDevice(String deviceId) {
+        AuthDTOs.UserInfo currentUser = authService.getCurrentUser();
+        return deviceRepository.findById(deviceId)
+                .filter(d -> d.getOwnerId().equals(currentUser.getId()))
+                .orElseThrow(() -> new IllegalArgumentException("Device not found or not owned by user"));
+    }
 }

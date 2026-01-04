@@ -131,9 +131,14 @@ class MQTTPublisher:
         except Exception as e:
             self.logger.error(f"Error queuing detection: {e}")
 
-    def publish_status(self, ip_address: str, status: str = "online"):
+    def publish_status(self, ip_address: str, status: str = "online", gps_data: Dict = None):
         """
-        Publish device status including IP address
+        Publish device status including IP address and GPS coordinates.
+        
+        Args:
+            ip_address: Device IP address
+            status: Status string (online/offline)
+            gps_data: Optional GPS data dict with latitude/longitude
         """
         if not self.client:
             return
@@ -147,10 +152,21 @@ class MQTTPublisher:
                 "timestamp": datetime.now().isoformat()
             }
             
+            # Add GPS coordinates if available
+            if gps_data:
+                if gps_data.get('latitude') is not None:
+                    payload['latitude'] = gps_data['latitude']
+                if gps_data.get('longitude') is not None:
+                    payload['longitude'] = gps_data['longitude']
+                if gps_data.get('altitude') is not None:
+                    payload['altitude'] = gps_data['altitude']
+                if gps_data.get('satellites') is not None:
+                    payload['satellites'] = gps_data['satellites']
+            
             topic = f"{self.topic.split('/')[0]}/status" # e.g. animal_detection/status
             
             self.client.publish(topic, json.dumps(payload), retain=True)
-            self.logger.info(f"Published status: IP={ip_address}, Status={status}")
+            self.logger.info(f"Published status: IP={ip_address}, Status={status}, GPS={gps_data is not None}")
             
         except Exception as e:
             self.logger.error(f"Error publishing status: {e}")

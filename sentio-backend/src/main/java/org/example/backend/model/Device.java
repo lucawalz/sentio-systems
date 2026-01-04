@@ -62,6 +62,29 @@ public class Device {
     private String ipAddress;
 
     /**
+     * Geographic latitude coordinate of the device.
+     * Can be set manually, via GPS sensor, or from IP geolocation.
+     */
+    @Column(name = "latitude")
+    private Double latitude;
+
+    /**
+     * Geographic longitude coordinate of the device.
+     * Can be set manually, via GPS sensor, or from IP geolocation.
+     */
+    @Column(name = "longitude")
+    private Double longitude;
+
+    /**
+     * Whether this is the user's primary device.
+     * The primary device is used as default for forecasts, radar, and sensor
+     * display.
+     * Only one device per user should be primary.
+     */
+    @Column(name = "is_primary")
+    private Boolean isPrimary = false;
+
+    /**
      * Timestamp when the device was last seen/reported status.
      */
     @Column(name = "last_seen")

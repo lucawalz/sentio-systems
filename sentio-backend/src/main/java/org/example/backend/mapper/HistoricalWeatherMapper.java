@@ -9,11 +9,15 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Mapper component responsible for converting between HistoricalWeather entities and DTOs.
- * Provides bidirectional mapping functionality for historical weather data transfer objects.
+ * Mapper component responsible for converting between HistoricalWeather
+ * entities and DTOs.
+ * Provides bidirectional mapping functionality for historical weather data
+ * transfer objects.
  * <p>
- * This mapper handles the conversion of historical weather data between the persistence
- * layer (entities) and the presentation layer (DTOs). It includes null-safe operations
+ * This mapper handles the conversion of historical weather data between the
+ * persistence
+ * layer (entities) and the presentation layer (DTOs). It includes null-safe
+ * operations
  * and supports both individual object mapping and bulk list transformations for
  * efficient data transfer in REST API operations.
  * </p>
@@ -49,6 +53,12 @@ public class HistoricalWeatherMapper {
         dto.setWeatherCode(entity.getWeatherCode());
         dto.setMaxTemperature(entity.getMaxTemperature());
         dto.setMinTemperature(entity.getMinTemperature());
+
+        // Calculate mean temperature from max and min for comparison charts
+        if (entity.getMaxTemperature() != null && entity.getMinTemperature() != null) {
+            dto.setTemperatureMean((entity.getMaxTemperature() + entity.getMinTemperature()) / 2.0f);
+        }
+
         dto.setSunrise(entity.getSunrise());
         dto.setSunset(entity.getSunset());
         dto.setDaylightDuration(entity.getDaylightDuration());

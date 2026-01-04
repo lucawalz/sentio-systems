@@ -55,7 +55,7 @@ public class WorkflowService {
      * Gets the most recent AI summary
      */
     public Optional<WorkflowResult> getCurrentSummary() {
-        return getCurrentResultByType(WorkflowType.SUMMARY);
+        return getCurrentResultByType(WorkflowType.WEATHER_SUMMARY);
     }
 
     /**
@@ -78,7 +78,7 @@ public class WorkflowService {
      * Gets recent AI summaries from the last 24 hours
      */
     public List<WorkflowResult> getRecentSummaries() {
-        return getRecentResultsByType(WorkflowType.SUMMARY);
+        return getRecentResultsByType(WorkflowType.WEATHER_SUMMARY);
     }
 
     /**

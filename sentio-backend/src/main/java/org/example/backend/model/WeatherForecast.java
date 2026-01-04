@@ -34,7 +34,11 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Slf4j
 @Table(name = "weather_forecasts", indexes = {
-        @Index(name = "idx_forecast_unique", columnList = "forecastDateTime, city, country", unique = true)
+        // Include device_id in unique constraint so each device can have its own
+        // forecasts
+        @Index(name = "idx_forecast_unique", columnList = "forecastDateTime, device_id", unique = true),
+        @Index(name = "idx_forecast_device", columnList = "device_id"),
+        @Index(name = "idx_forecast_device_date", columnList = "device_id, forecast_date")
 })
 public class WeatherForecast {
 
