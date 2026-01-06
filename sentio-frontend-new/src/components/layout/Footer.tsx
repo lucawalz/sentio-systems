@@ -22,6 +22,10 @@ const links = [
         title: 'About',
         to: '/about',
     },
+    {
+        title: 'Privacy',
+        to: '/privacy'
+    }
 ]
 
 export default function FooterSection() {
