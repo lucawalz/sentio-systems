@@ -35,13 +35,11 @@ public class Device {
     private String name;
 
     /**
-     * Set of Keycloak user IDs/Usernames who own this device.
-     * Stored as a collection of strings.
+     * Keycloak user UUID who owns this device.
+     * Each device can only have ONE owner.
      */
-    @ElementCollection(fetch = FetchType.EAGER)
-    @CollectionTable(name = "device_owners", joinColumns = @JoinColumn(name = "device_id"))
-    @Column(name = "user_id")
-    private Set<String> owners = new HashSet<>();
+    @Column(name = "owner_id", nullable = false)
+    private String ownerId;
 
     /**
      * Set of active services running on this device (e.g. "animal_detector",
@@ -62,6 +60,29 @@ public class Device {
      */
     @Column(name = "ip_address")
     private String ipAddress;
+
+    /**
+     * Geographic latitude coordinate of the device.
+     * Can be set manually, via GPS sensor, or from IP geolocation.
+     */
+    @Column(name = "latitude")
+    private Double latitude;
+
+    /**
+     * Geographic longitude coordinate of the device.
+     * Can be set manually, via GPS sensor, or from IP geolocation.
+     */
+    @Column(name = "longitude")
+    private Double longitude;
+
+    /**
+     * Whether this is the user's primary device.
+     * The primary device is used as default for forecasts, radar, and sensor
+     * display.
+     * Only one device per user should be primary.
+     */
+    @Column(name = "is_primary")
+    private Boolean isPrimary = false;
 
     /**
      * Timestamp when the device was last seen/reported status.

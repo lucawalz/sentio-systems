@@ -4,12 +4,13 @@ services:
     image: alpine:latest
     container_name: sentio-init-realm
     command: >
-      sh -c "apk add --no-cache gettext sed &&  echo 'Generating Keycloak realm configuration...' && sed 's|KEYCLOAK_CLIENT_SECRET_PLACEHOLDER|'\"$${KEYCLOAK_ADMIN_CLIENT_SECRET}\"'|g' /init-scripts/sentio-realm.json.template > /realm_data/sentio-realm.json && echo 'Realm configuration generated successfully.'"
+      sh -c "apk add --no-cache gettext sed && echo 'Generating Keycloak realm configuration...' && sed -e 's|KEYCLOAK_CLIENT_SECRET_PLACEHOLDER|'\"$${KEYCLOAK_ADMIN_CLIENT_SECRET}\"'|g' -e 's|N8N_CLIENT_SECRET_PLACEHOLDER|'\"$${N8N_CLIENT_SECRET}\"'|g' /init-scripts/sentio-realm.json.template > /realm_data/sentio-realm.json && echo 'Realm configuration generated successfully.'"
     volumes:
       - ./init-scripts:/init-scripts:ro
       - realm_data:/realm_data
     environment:
       KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET}
+      N8N_CLIENT_SECRET: ${N8N_CLIENT_SECRET}
     networks:
       - sentio-network
 
@@ -142,6 +143,9 @@ services:
       # AI Services
       PREPROCESSING_SERVICE_URL: http://preprocessing:8082/preprocess-and-classify
       PREPROCESSING_SERVICE_ENABLED: ${PREPROCESSING_SERVICE_ENABLED:-true}
+
+      # n8n Workflow Integration
+      N8N_WEBHOOK_BASE_URL: ${N8N_WEBHOOK_BASE_URL:-https://n8n.syslabs.dev/webhook}
     ports:
       - "${BACKEND_PORT:-8083}:8080"
     networks:
@@ -154,7 +158,7 @@ services:
   # Frontend Service (React + Vite + Nginx)
   frontend:
     build:
-      context: ./sentio-web
+      context: ./sentio-frontend-new
       dockerfile: Dockerfile
       args:
         VITE_API_BASE_URL: ""

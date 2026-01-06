@@ -39,6 +39,7 @@ public class AuthDTOs {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class UserInfo {
+        private String id; // Keycloak user UUID (from JWT 'sub' claim)
         private String username;
         private String email;
         private java.util.List<String> roles;

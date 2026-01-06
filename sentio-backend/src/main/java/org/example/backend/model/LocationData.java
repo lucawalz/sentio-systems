@@ -10,12 +10,17 @@ import lombok.extern.slf4j.Slf4j;
 import java.time.LocalDateTime;
 
 /**
- * JPA entity representing IP-based geographic location data from geolocation services.
- * Stores comprehensive location information resolved from IP addresses for caching and analysis.
+ * JPA entity representing IP-based geographic location data from geolocation
+ * services.
+ * Stores comprehensive location information resolved from IP addresses for
+ * caching and analysis.
  * <p>
- * This entity caches geolocation data from external APIs (like ip-api.com) to minimize
- * API calls and improve performance. It includes geographic coordinates, administrative
- * regions, network provider information, and automatic timestamping for cache management.
+ * This entity caches geolocation data from external APIs (like ip-api.com) to
+ * minimize
+ * API calls and improve performance. It includes geographic coordinates,
+ * administrative
+ * regions, network provider information, and automatic timestamping for cache
+ * management.
  * The data is primarily used for location-based weather services and analytics.
  * </p>
  *
@@ -34,6 +39,10 @@ public class LocationData {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    /** Device ID that this location data belongs to */
+    @Column(name = "device_id", length = 100)
+    private String deviceId;
 
     /** IP address used for geolocation lookup */
     @Column(nullable = false)

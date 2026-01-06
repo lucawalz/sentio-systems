@@ -2,29 +2,24 @@ package org.example.backend.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.backend.event.DeviceLocationUpdatedEvent;
 import org.example.backend.model.Device;
 import org.example.backend.model.LocationData;
 import org.example.backend.repository.DeviceRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * Service responsible for managing the relationship between devices and their
- * geographic locations.
- * Provides centralized logic for retrieving location data associated with
- * registered devices.
- * <p>
- * This service enforces the strict device-only location policy:
- * - Only uses IP addresses from registered devices
- * - Never uses server or browser IP addresses
- * - Gracefully handles scenarios with no registered devices
- * </p>
+ * Service responsible for managing device geographic locations.
+ * Uses device GPS coordinates (latitude/longitude) directly.
+ * Publishes events when locations change to trigger weather data fetching.
  *
  * @author Sentio Team
- * @version 1.0
- * @since 1.0
+ * @version 2.0
  */
 @Service
 @RequiredArgsConstructor
@@ -33,154 +28,177 @@ public class DeviceLocationService {
 
     private final DeviceRepository deviceRepository;
     private final DeviceService deviceService;
-    private final IpLocationService ipLocationService;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
-     * Retrieves all unique geographic locations for all registered devices.
-     * This method queries all devices in the system and resolves their locations
-     * based on their registered IP addresses.
-     *
-     * @return List of unique LocationData objects for all devices. Returns empty
-     *         list if no devices registered.
+     * Helper to build LocationData from device coordinates.
+     */
+    private LocationData buildLocationDataFromDevice(Device device) {
+        LocationData location = new LocationData();
+        location.setLatitude(device.getLatitude() != null ? device.getLatitude().floatValue() : null);
+        location.setLongitude(device.getLongitude() != null ? device.getLongitude().floatValue() : null);
+        location.setDeviceId(device.getId());
+        location.setCity("GPS Location");
+        location.setCountry("Unknown");
+        location.setCreatedAt(LocalDateTime.now());
+        location.setUpdatedAt(LocalDateTime.now());
+        return location;
+    }
+
+    private boolean hasValidCoordinates(Device device) {
+        return device.getLatitude() != null && device.getLongitude() != null;
+    }
+
+    /**
+     * Retrieves locations for all devices with GPS coordinates.
      */
     public List<LocationData> getAllUniqueDeviceLocations() {
         log.debug("Retrieving locations for all registered devices");
 
         List<Device> allDevices = deviceRepository.findAll();
-
         if (allDevices.isEmpty()) {
             log.debug("No devices registered in the system");
             return Collections.emptyList();
         }
 
-        log.info("Found {} registered devices, resolving their locations", allDevices.size());
-
-        // Collect unique IP addresses from devices
-        Set<String> uniqueIps = allDevices.stream()
-                .map(Device::getIpAddress)
-                .filter(Objects::nonNull)
-                .filter(ip -> !ip.isEmpty())
-                .collect(Collectors.toSet());
-
-        if (uniqueIps.isEmpty()) {
-            log.warn("No devices have IP addresses registered yet");
-            return Collections.emptyList();
-        }
-
-        log.debug("Found {} unique IP addresses from devices", uniqueIps.size());
-
-        // Resolve locations for each unique IP
-        List<LocationData> locations = uniqueIps.stream()
-                .map(ipLocationService::getLocationByIp)
-                .filter(Optional::isPresent)
-                .map(Optional::get)
+        List<LocationData> locations = allDevices.stream()
+                .filter(this::hasValidCoordinates)
+                .map(this::buildLocationDataFromDevice)
                 .collect(Collectors.toList());
 
-        log.info("Successfully resolved {} unique device locations", locations.size());
+        log.debug("Found {} devices with GPS coordinates", locations.size());
         return locations;
     }
 
     /**
-     * Retrieves all unique geographic locations for devices owned by the current
-     * user.
-     * Filters devices by the authenticated user's ownership before resolving
-     * locations.
-     *
-     * @return List of unique LocationData objects for user's devices. Returns empty
-     *         list if user has no devices.
+     * Retrieves locations for current user's devices with GPS coordinates.
      */
     public List<LocationData> getCurrentUserDeviceLocations() {
         log.debug("Retrieving locations for current user's devices");
 
         List<Device> userDevices = deviceService.getMyDevices();
-
         if (userDevices.isEmpty()) {
             log.debug("Current user has no registered devices");
             return Collections.emptyList();
         }
 
-        log.info("Current user has {} registered devices", userDevices.size());
-
-        // Collect unique IP addresses from user's devices
-        Set<String> uniqueIps = userDevices.stream()
-                .map(Device::getIpAddress)
-                .filter(Objects::nonNull)
-                .filter(ip -> !ip.isEmpty())
-                .collect(Collectors.toSet());
-
-        if (uniqueIps.isEmpty()) {
-            log.warn("User's devices have no IP addresses registered yet");
-            return Collections.emptyList();
-        }
-
-        log.debug("Found {} unique IP addresses from user's devices", uniqueIps.size());
-
-        // Resolve locations for each unique IP
-        List<LocationData> locations = uniqueIps.stream()
-                .map(ipLocationService::getLocationByIp)
-                .filter(Optional::isPresent)
-                .map(Optional::get)
+        List<LocationData> locations = userDevices.stream()
+                .filter(this::hasValidCoordinates)
+                .map(this::buildLocationDataFromDevice)
                 .collect(Collectors.toList());
 
-        log.info("Successfully resolved {} unique locations for current user", locations.size());
+        log.debug("Found {} user devices with GPS coordinates", locations.size());
         return locations;
     }
 
     /**
-     * Retrieves the geographic location for a specific device by its ID.
-     *
-     * @param deviceId The unique device identifier
-     * @return Optional containing the device's LocationData if found, empty
-     *         otherwise
+     * Retrieves all devices with their locations for the current user.
+     */
+    public Map<String, LocationData> getCurrentUserDevicesWithLocations() {
+        log.debug("Retrieving devices with locations for current user");
+
+        List<Device> userDevices = deviceService.getMyDevices();
+        if (userDevices.isEmpty()) {
+            log.debug("Current user has no registered devices");
+            return Collections.emptyMap();
+        }
+
+        Map<String, LocationData> deviceLocations = new LinkedHashMap<>();
+        for (Device device : userDevices) {
+            if (hasValidCoordinates(device)) {
+                deviceLocations.put(device.getId(), buildLocationDataFromDevice(device));
+            }
+        }
+
+        log.debug("Retrieved {} device locations for current user", deviceLocations.size());
+        return deviceLocations;
+    }
+
+    /**
+     * Retrieves location for a specific device.
      */
     public Optional<LocationData> getDeviceLocation(String deviceId) {
         log.debug("Retrieving location for device: {}", deviceId);
 
-        Optional<Device> deviceOpt = deviceRepository.findById(deviceId);
+        return deviceRepository.findById(deviceId)
+                .filter(this::hasValidCoordinates)
+                .map(this::buildLocationDataFromDevice);
+    }
 
-        if (deviceOpt.isEmpty()) {
-            log.warn("Device not found: {}", deviceId);
+    /**
+     * Gets the primary device location for the current user.
+     * Falls back to first device with coordinates if no primary is set.
+     */
+    public Optional<LocationData> getPrimaryUserDeviceLocation() {
+        log.debug("Retrieving primary device location for current user");
+
+        List<Device> userDevices = deviceService.getMyDevices();
+        if (userDevices.isEmpty()) {
+            log.debug("No devices available for current user");
             return Optional.empty();
         }
 
-        Device device = deviceOpt.get();
-        String ipAddress = device.getIpAddress();
+        // First try to find explicitly set primary device
+        Optional<Device> primary = userDevices.stream()
+                .filter(d -> Boolean.TRUE.equals(d.getIsPrimary()) && hasValidCoordinates(d))
+                .findFirst();
 
-        if (ipAddress == null || ipAddress.isEmpty()) {
-            log.warn("Device {} has no IP address registered", deviceId);
-            return Optional.empty();
+        if (primary.isPresent()) {
+            log.debug("Found primary device: {}", primary.get().getId());
+            return Optional.of(buildLocationDataFromDevice(primary.get()));
         }
 
-        Optional<LocationData> location = ipLocationService.getLocationByIp(ipAddress);
-
-        if (location.isPresent()) {
-            log.info("Successfully resolved location for device {}: {}, {}",
-                    deviceId, location.get().getCity(), location.get().getCountry());
-        } else {
-            log.warn("Could not resolve location for device {} with IP {}", deviceId, ipAddress);
-        }
-
-        return location;
+        // Fallback to first device with coordinates
+        return userDevices.stream()
+                .filter(this::hasValidCoordinates)
+                .findFirst()
+                .map(device -> {
+                    log.debug("Using fallback device (no primary set): {}", device.getId());
+                    return buildLocationDataFromDevice(device);
+                });
     }
 
     /**
      * Gets the first available device location for the current user.
-     * Useful for user-facing endpoints that need a single location.
-     *
-     * @return Optional containing the first device's LocationData, empty if user
-     *         has no devices
+     * 
+     * @deprecated Use {@link #getPrimaryUserDeviceLocation()} instead
      */
+    @Deprecated
     public Optional<LocationData> getFirstUserDeviceLocation() {
-        List<LocationData> locations = getCurrentUserDeviceLocations();
+        return getPrimaryUserDeviceLocation();
+    }
 
-        if (locations.isEmpty()) {
-            log.debug("No device locations available for current user");
-            return Optional.empty();
+    /**
+     * Updates a device's GPS coordinates and publishes an event.
+     * This triggers weather data fetching via DeviceEventListener.
+     *
+     * @param deviceId  The device ID
+     * @param latitude  GPS latitude
+     * @param longitude GPS longitude
+     * @return true if updated successfully
+     */
+    public boolean updateDeviceGpsLocation(String deviceId, Double latitude, Double longitude) {
+        log.debug("Updating device {} with GPS coordinates: ({}, {})", deviceId, latitude, longitude);
+
+        Optional<Device> deviceOpt = deviceRepository.findById(deviceId);
+        if (deviceOpt.isEmpty()) {
+            log.warn("Device not found: {}", deviceId);
+            return false;
         }
 
-        LocationData firstLocation = locations.get(0);
-        log.debug("Returning first device location: {}, {}",
-                firstLocation.getCity(), firstLocation.getCountry());
-        return Optional.of(firstLocation);
+        Device device = deviceOpt.get();
+        boolean isFirstLocation = !hasValidCoordinates(device);
+
+        device.setLatitude(latitude);
+        device.setLongitude(longitude);
+        deviceRepository.save(device);
+
+        log.info("Updated device {} GPS location: ({}, {})", deviceId, latitude, longitude);
+
+        // Publish event to trigger weather data fetching
+        eventPublisher.publishEvent(new DeviceLocationUpdatedEvent(
+                this, deviceId, latitude, longitude, isFirstLocation));
+
+        return true;
     }
 }

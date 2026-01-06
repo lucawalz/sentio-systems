@@ -1,0 +1,297 @@
+{
+    "name": "Sentio AI Agent",
+    "nodes": [
+        {
+            "id": "webhook-trigger",
+            "name": "Webhook",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2,
+            "position": [
+                0,
+                200
+            ],
+            "webhookId": "sentio-ai-agent",
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "sentio-ai-agent",
+                "responseMode": "lastNode",
+                "options": {}
+            }
+        },
+        {
+            "id": "ai-agent",
+            "name": "Sentio AI Agent",
+            "type": "@n8n/n8n-nodes-langchain.agent",
+            "typeVersion": 2.2,
+            "position": [
+                300,
+                200
+            ],
+            "parameters": {
+                "promptType": "define",
+                "text": "=User ID: {{ $json.body.userId }}\nUsername: {{ $json.body.username || 'there' }}\n\nUser Question: {{ $json.body.query }}",
+                "options": {
+                    "systemMessage": "You are Sentio AI 🦊✨, a friendly wildlife monitoring assistant!\n\nYou help users understand their wildlife cameras and weather sensors. Use the database tools to query their data.\n\nGREETING RULES:\n- On the FIRST message of a conversation, greet the user warmly by their username (e.g., 'Hello [Username]! 👋')\n- On follow-up messages, skip the greeting entirely and answer directly\n- You can tell it's a follow-up if there's conversation history\n\nRESPONSE STYLE:\n- Use the tools to get real data before answering\n- Never mention 'tool calls', 'queries', or 'database'\n- Present data naturally with emojis 🐦🌡️\n- Be concise but helpful\n- Format lists nicely with bullet points"
+                }
+            }
+        },
+        {
+            "id": "gemini-model",
+            "name": "Google Gemini Model",
+            "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+            "typeVersion": 1,
+            "position": [
+                0,
+                400
+            ],
+            "parameters": {
+                "model": "models/gemini-2.0-flash",
+                "options": {
+                    "temperature": 0.7
+                }
+            },
+            "credentials": {
+                "googleGeminiApi": {
+                    "id": "GEMINI_CREDENTIAL_ID",
+                    "name": "Google Gemini API"
+                }
+            }
+        },
+        {
+            "id": "memory",
+            "name": "Conversation Memory",
+            "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+            "typeVersion": 1.3,
+            "position": [
+                150,
+                400
+            ],
+            "parameters": {
+                "sessionIdType": "customKey",
+                "sessionKey": "={{ $('Webhook').first().json.body.userId || 'anonymous' }}",
+                "contextWindowLength": 5
+            }
+        },
+        {
+            "id": "tool-sightings",
+            "name": "Query Recent Sightings",
+            "type": "n8n-nodes-base.postgresTool",
+            "typeVersion": 2.5,
+            "position": [
+                450,
+                350
+            ],
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "=SELECT ad.species, ad.animal_type, ad.confidence, ad.timestamp FROM animal_detections ad JOIN devices d ON ad.device_id = d.id WHERE d.owner_id = '{{ $fromAI(\"userId\", \"The user ID from the conversation\") }}' AND ad.timestamp > NOW() - INTERVAL '24 hours' ORDER BY ad.timestamp DESC LIMIT 20",
+                "descriptionType": "manual",
+                "toolDescription": "Get recent animal/wildlife sightings. Returns species, confidence scores, timestamps. Use when users ask about recent detections or what animals were seen."
+            },
+            "credentials": {
+                "postgres": {
+                    "id": "POSTGRES_CREDENTIAL_ID",
+                    "name": "Sentio PostgreSQL"
+                }
+            }
+        },
+        {
+            "id": "tool-species",
+            "name": "Query Species Summary",
+            "type": "n8n-nodes-base.postgresTool",
+            "typeVersion": 2.5,
+            "position": [
+                600,
+                350
+            ],
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "=SELECT ad.species, COUNT(*) as count FROM animal_detections ad JOIN devices d ON ad.device_id = d.id WHERE d.owner_id = '{{ $fromAI(\"userId\", \"The user ID\") }}' AND ad.timestamp > NOW() - INTERVAL '7 days' GROUP BY ad.species ORDER BY count DESC",
+                "descriptionType": "manual",
+                "toolDescription": "Get species diversity counts. Use when users ask about which species are most common."
+            },
+            "credentials": {
+                "postgres": {
+                    "id": "POSTGRES_CREDENTIAL_ID",
+                    "name": "Sentio PostgreSQL"
+                }
+            }
+        },
+        {
+            "id": "tool-weather",
+            "name": "Query Weather Data",
+            "type": "n8n-nodes-base.postgresTool",
+            "typeVersion": 2.5,
+            "position": [
+                450,
+                500
+            ],
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "=SELECT rw.temperature, rw.humidity, rw.pressure, rw.lux, rw.timestamp FROM raspi_weather_data rw JOIN devices d ON rw.device_id = d.id WHERE d.owner_id = '{{ $fromAI(\"userId\", \"The user ID\") }}' AND rw.timestamp > NOW() - INTERVAL '24 hours' ORDER BY rw.timestamp DESC LIMIT 20",
+                "descriptionType": "manual",
+                "toolDescription": "Get recent weather sensor readings. Use when users ask about current weather conditions."
+            },
+            "credentials": {
+                "postgres": {
+                    "id": "POSTGRES_CREDENTIAL_ID",
+                    "name": "Sentio PostgreSQL"
+                }
+            }
+        },
+        {
+            "id": "tool-weather-stats",
+            "name": "Query Weather Stats",
+            "type": "n8n-nodes-base.postgresTool",
+            "typeVersion": 2.5,
+            "position": [
+                600,
+                500
+            ],
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "=SELECT AVG(rw.temperature) as avg_temp, MIN(rw.temperature) as min_temp, MAX(rw.temperature) as max_temp, AVG(rw.humidity) as avg_humidity, MIN(rw.humidity) as min_humidity, MAX(rw.humidity) as max_humidity, AVG(rw.pressure) as avg_pressure FROM raspi_weather_data rw JOIN devices d ON rw.device_id = d.id WHERE d.owner_id = '{{ $fromAI(\"userId\", \"The user ID\") }}' AND rw.timestamp > NOW() - INTERVAL '24 hours'",
+                "descriptionType": "manual",
+                "toolDescription": "Get weather statistics with averages and min/max. Use for weather trends and summaries."
+            },
+            "credentials": {
+                "postgres": {
+                    "id": "POSTGRES_CREDENTIAL_ID",
+                    "name": "Sentio PostgreSQL"
+                }
+            }
+        },
+        {
+            "id": "format-response",
+            "name": "Format Response",
+            "type": "n8n-nodes-base.set",
+            "typeVersion": 3.4,
+            "position": [
+                520,
+                200
+            ],
+            "parameters": {
+                "assignments": {
+                    "assignments": [
+                        {
+                            "id": "response",
+                            "name": "response",
+                            "value": "={{ $json.output }}",
+                            "type": "string"
+                        },
+                        {
+                            "id": "success",
+                            "name": "success",
+                            "value": true,
+                            "type": "boolean"
+                        }
+                    ]
+                },
+                "options": {}
+            }
+        }
+    ],
+    "connections": {
+        "Webhook": {
+            "main": [
+                [
+                    {
+                        "node": "Sentio AI Agent",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Google Gemini Model": {
+            "ai_languageModel": [
+                [
+                    {
+                        "node": "Sentio AI Agent",
+                        "type": "ai_languageModel",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Conversation Memory": {
+            "ai_memory": [
+                [
+                    {
+                        "node": "Sentio AI Agent",
+                        "type": "ai_memory",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Query Recent Sightings": {
+            "ai_tool": [
+                [
+                    {
+                        "node": "Sentio AI Agent",
+                        "type": "ai_tool",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Query Species Summary": {
+            "ai_tool": [
+                [
+                    {
+                        "node": "Sentio AI Agent",
+                        "type": "ai_tool",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Query Weather Data": {
+            "ai_tool": [
+                [
+                    {
+                        "node": "Sentio AI Agent",
+                        "type": "ai_tool",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Query Weather Stats": {
+            "ai_tool": [
+                [
+                    {
+                        "node": "Sentio AI Agent",
+                        "type": "ai_tool",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Sentio AI Agent": {
+            "main": [
+                [
+                    {
+                        "node": "Format Response",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "settings": {
+        "executionOrder": "v1"
+    },
+    "staticData": null,
+    "tags": [
+        {
+            "name": "sentio"
+        },
+        {
+            "name": "agent"
+        }
+    ],
+    "triggerCount": 1,
+    "pinData": {}
+}

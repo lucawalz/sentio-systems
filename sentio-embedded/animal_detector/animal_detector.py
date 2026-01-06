@@ -39,6 +39,10 @@ from mqtt_publisher import MQTTPublisher
 from frame_capture import FrameCapture
 from http_stream import HTTPStreamServer
 
+# Import from shared module
+sys.path.insert(0, str(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from shared import GPSSensor
+
 
 class StreamingDetectionApp(GStreamerDetectionApp):
     """
@@ -224,10 +228,13 @@ class AnimalDetectorData(app_callback_class):
         return True # Continue calling
 
     def _publish_device_status(self):
-        """Get local IP and publish device status"""
+        """Get local IP and GPS data, publish device status"""
         try:
             ip = get_local_ip()
-            self.mqtt_publisher.publish_status(ip)
+            gps_data = None
+            if hasattr(self, 'gps_sensor') and self.gps_sensor and self.gps_sensor.is_available():
+                gps_data = self.gps_sensor.get_location()
+            self.mqtt_publisher.publish_status(ip, gps_data=gps_data)
         except Exception as e:
             self.logger.error(f"Failed to publish status: {e}")
 
@@ -400,6 +407,28 @@ def main():
 
     try:
         user_data.start_services()
+        
+        # Initialize GPS sensor
+        gps_config = config.get('gps', {})
+        gps_sensor = GPSSensor(gps_config)
+        if gps_sensor.connected:
+            gps_sensor.start()
+            user_data.gps_sensor = gps_sensor
+            logger.info("GPS sensor initialized and started")
+            
+            # Wait a few seconds for GPS to get first fix (warm start is fast)
+            logger.info("Waiting for GPS fix...")
+            for _ in range(5):  # Wait up to 5 seconds
+                time.sleep(1)
+                if gps_sensor.is_available():
+                    gps_data = gps_sensor.get_location()
+                    logger.info(f"GPS fix acquired: lat={gps_data.get('latitude')}, lon={gps_data.get('longitude')}")
+                    break
+            else:
+                logger.warning("GPS connected but no fix yet - will retry in background")
+        else:
+            user_data.gps_sensor = None
+            logger.warning("GPS sensor not connected - continuing without GPS")
 
         original_argv = sys.argv.copy()
         sys.argv = [sys.argv[0]]
@@ -449,18 +478,9 @@ def main():
 
 
 def get_local_ip():
-    """Get local IP address"""
-    import socket
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        # Doesn't need to be reachable
-        s.connect(('10.255.255.255', 1))
-        IP = s.getsockname()[0]
-    except Exception:
-        IP = '127.0.0.1'
-    finally:
-        s.close()
-    return IP
+    """Get local IP address - uses shared module"""
+    from shared import get_local_ip as shared_get_local_ip
+    return shared_get_local_ip()
 
 
 if __name__ == "__main__":

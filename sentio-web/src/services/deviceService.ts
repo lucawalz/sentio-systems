@@ -3,7 +3,7 @@ import { get, post, del } from './api';
 export interface Device {
     id: string;
     name: string;
-    owners: string[];
+    ownerId: string;
     createdAt: string;
     ipAddress?: string;
     lastSeen?: string;
