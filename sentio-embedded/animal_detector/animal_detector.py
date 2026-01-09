@@ -17,22 +17,23 @@ from gi.repository import Gst, GLib
 # Import Hailo Python bindings
 import hailo
 
-# Import Hailo app modules
-from hailo_apps.hailo_app_python.core.gstreamer.gstreamer_app import (
+# Import Hailo app modules (new hailo-apps structure)
+from hailo_apps.python.core.gstreamer.gstreamer_app import (
     GStreamerApp, app_callback_class
 )
-from hailo_apps.hailo_app_python.apps.detection.detection_pipeline import (
+from hailo_apps.python.pipeline_apps.detection.detection_pipeline import (
     GStreamerDetectionApp
 )
-from hailo_apps.hailo_app_python.core.gstreamer.gstreamer_helper_pipelines import (
+from hailo_apps.python.core.gstreamer.gstreamer_helper_pipelines import (
     SOURCE_PIPELINE, INFERENCE_PIPELINE, INFERENCE_PIPELINE_WRAPPER,
     TRACKER_PIPELINE, USER_CALLBACK_PIPELINE, DISPLAY_PIPELINE
 )
-from hailo_apps.hailo_app_python.core.common.core import get_resource_path
-from hailo_apps.hailo_app_python.core.common.defines import (
+from hailo_apps.python.core.common.core import get_resource_path
+from hailo_apps.python.core.common.defines import (
     DETECTION_PIPELINE, RESOURCES_MODELS_DIR_NAME,
     RESOURCES_SO_DIR_NAME, DETECTION_POSTPROCESS_SO_FILENAME, DETECTION_POSTPROCESS_FUNCTION
 )
+
 
 # Import MQTT modules
 from mqtt_publisher import MQTTPublisher
@@ -56,6 +57,7 @@ class StreamingDetectionApp(GStreamerDetectionApp):
     def __init__(self, app_callback, user_data, streaming_config=None, http_server=None):
         self.streaming_config = streaming_config or {}
         self.stream_enabled = self.streaming_config.get("enabled", False)
+        self.stream_headless = self.streaming_config.get("headless", True)
         self.stream_port = self.streaming_config.get("port", 8080)
         self.stream_quality = self.streaming_config.get("quality", 80)
         self.http_server = http_server
@@ -129,20 +131,10 @@ class StreamingDetectionApp(GStreamerDetectionApp):
                 f"hailooverlay ! "
                 f"queue leaky=no max-size-buffers=3 max-size-bytes=0 max-size-time=0 ! "
                 f"videoconvert n-threads=3 ! "
-                f"tee name=stream_tee "
-            )
-            
-            # Display branch
-            display_branch = (
-                f"stream_tee. ! "
-                f"queue leaky=no max-size-buffers=3 max-size-bytes=0 max-size-time=0 ! "
-                f"fpsdisplaysink video-sink={self.video_sink} name=hailo_display "
-                f"sync={self.sync} text-overlay={self.show_fps} signal-fps-measurements=true "
             )
             
             # Streaming branch - MJPEG via HTTP (appsink feeds Flask server)
             stream_branch = (
-                f"stream_tee. ! "
                 f"queue leaky=downstream max-size-buffers=2 max-size-bytes=0 max-size-time=0 ! "
                 f"videoscale ! video/x-raw,width=640,height=480 ! "
                 f"videoconvert ! "
@@ -150,17 +142,40 @@ class StreamingDetectionApp(GStreamerDetectionApp):
                 f"appsink name=stream_sink emit-signals=true max-buffers=2 drop=true "
             )
             
-            pipeline_string = (
-                f"{source_pipeline} ! "
-                f"{detection_pipeline_wrapper} ! "
-                f"{tracker_pipeline} ! "
-                f"{user_callback_pipeline} ! "
-                f"{overlay_pipeline} "
-                f"{display_branch} "
-                f"{stream_branch}"
-            )
-            
-            logger.info(f"HTTP streaming enabled on port {self.stream_port}")
+            if self.stream_headless:
+                # Headless mode: streaming only, no display output (better performance)
+                pipeline_string = (
+                    f"{source_pipeline} ! "
+                    f"{detection_pipeline_wrapper} ! "
+                    f"{tracker_pipeline} ! "
+                    f"{user_callback_pipeline} ! "
+                    f"{overlay_pipeline} "
+                    f"{stream_branch}"
+                )
+                logger.info(f"HTTP streaming enabled (headless mode) on port {self.stream_port}")
+            else:
+                # Display + streaming mode via tee
+                tee_pipeline = overlay_pipeline + "tee name=stream_tee "
+                
+                display_branch = (
+                    f"stream_tee. ! "
+                    f"queue leaky=no max-size-buffers=3 max-size-bytes=0 max-size-time=0 ! "
+                    f"fpsdisplaysink video-sink={self.video_sink} name=hailo_display "
+                    f"sync={self.sync} text-overlay={self.show_fps} signal-fps-measurements=true "
+                )
+                
+                stream_branch_tee = f"stream_tee. ! {stream_branch}"
+                
+                pipeline_string = (
+                    f"{source_pipeline} ! "
+                    f"{detection_pipeline_wrapper} ! "
+                    f"{tracker_pipeline} ! "
+                    f"{user_callback_pipeline} ! "
+                    f"{tee_pipeline} "
+                    f"{display_branch} "
+                    f"{stream_branch_tee}"
+                )
+                logger.info(f"HTTP streaming enabled on port {self.stream_port}")
         else:
             # Standard pipeline without streaming
             display_pipeline = DISPLAY_PIPELINE(
@@ -259,18 +274,17 @@ class AnimalDetectorData(app_callback_class):
         return False
 
 
-def animal_detector_callback(pad, info, user_data):
-    """Callback function for processing detection results"""
+def animal_detector_callback(element, buffer, user_data):
+    """Callback function for processing detection results (new hailo-apps API)"""
     user_data.increment()
     user_data.processed_frames += 1
 
-    # Get the GStreamer buffer
-    buffer = info.get_buffer()
+    # Buffer is now passed directly (not via info.get_buffer())
     if buffer is None:
-        return Gst.PadProbeReturn.OK
+        return
 
-    # Capture frame for MQTT
-    user_data.frame_capture.capture_frame_from_buffer(pad, buffer)
+    # Capture frame for MQTT (element replaces pad in new API)
+    user_data.frame_capture.capture_frame_from_buffer(element, buffer)
 
     # Change to a higher number for less frequent processing e.g. 3 frames = detection every 3rd frame
     process_frame = (user_data.processed_frames % 1 == 0)
@@ -278,7 +292,7 @@ def animal_detector_callback(pad, info, user_data):
     if process_frame:
         roi = hailo.get_roi_from_buffer(buffer)
         if roi is None:
-            return Gst.PadProbeReturn.OK
+            return
 
         detections = roi.get_objects_typed(hailo.HAILO_DETECTION)
 
@@ -350,7 +364,7 @@ def animal_detector_callback(pad, info, user_data):
             user_data.logger.info(
                 f"Processed {user_data.processed_frames} frames, detected {user_data.total_detections} animals")
 
-    return Gst.PadProbeReturn.OK
+    return
 
 
 def load_config(config_path):

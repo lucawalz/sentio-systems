@@ -2,15 +2,22 @@ package org.example.backend.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.backend.dto.DevicePairRequest;
+import org.example.backend.dto.DevicePairResponse;
+import org.example.backend.dto.DeviceRegistrationResponse;
 import org.example.backend.model.Device;
 import org.example.backend.service.DeviceLocationService;
 import org.example.backend.service.DeviceService;
+import org.example.backend.service.RateLimitService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/devices")
@@ -21,21 +28,78 @@ public class DeviceController {
 
     private final DeviceService deviceService;
     private final DeviceLocationService deviceLocationService;
+    private final RateLimitService rateLimitService;
 
-    @Operation(summary = "Register a device", description = "Register an existing embedded device to the current user")
+    @Value("${mqtt.external-url:mqtt://localhost:1883}")
+    private String mqttExternalUrl;
+
+    @Operation(summary = "Register a new device", description = "Create a new device with 15-min expiring pairing code")
     @PostMapping("/register")
-    public ResponseEntity<Device> registerDevice(@RequestParam String deviceId,
-            @RequestParam(defaultValue = "My Device") String name,
-            @RequestParam(defaultValue = "false") boolean isPrimary) {
-        log.info("Request to register device: {} (isPrimary: {})", deviceId, isPrimary);
-        Device device = deviceService.registerDevice(deviceId, name);
+    public ResponseEntity<DeviceRegistrationResponse> registerDevice(
+            @RequestBody Map<String, String> request) {
+        String name = request.getOrDefault("name", "My Device");
+        log.info("Request to register new device with name: {}", name);
+
+        DeviceRegistrationResponse response = deviceService.registerDeviceWithCredentials(name);
 
         // If isPrimary flag is set, also set this as the primary device
-        if (isPrimary) {
-            device = deviceService.setPrimaryDevice(deviceId);
+        if (Boolean.parseBoolean(request.get("isPrimary"))) {
+            deviceService.setPrimaryDevice(response.getDeviceId());
         }
 
-        return ResponseEntity.ok(device);
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(summary = "Regenerate pairing code", description = "Generate a new 15-min pairing code for existing device")
+    @PostMapping("/{deviceId}/regenerate-code")
+    public ResponseEntity<DeviceRegistrationResponse> regeneratePairingCode(@PathVariable String deviceId) {
+        log.info("Request to regenerate pairing code for device: {}", deviceId);
+        try {
+            DeviceRegistrationResponse response = deviceService.regeneratePairingCode(deviceId);
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    @Operation(summary = "Exchange pairing code for token", description = "Public endpoint - device calls this to exchange pairing code for permanent token")
+    @PostMapping("/pair")
+    public ResponseEntity<?> pairDevice(@RequestBody DevicePairRequest request, HttpServletRequest httpRequest) {
+        // Rate limiting: 10 requests per minute per IP
+        String clientIp = getClientIp(httpRequest);
+        if (!rateLimitService.allowPairingRequest(clientIp)) {
+            log.warn("Rate limit exceeded for pairing from IP: {}", clientIp);
+            return ResponseEntity.status(429).body(Map.of("error", "Too many pairing attempts. Please wait 1 minute."));
+        }
+
+        log.info("Device pairing request for device: {}", request.getDeviceId());
+        try {
+            String deviceToken = deviceService.exchangePairingCode(request.getDeviceId(), request.getPairingCode());
+
+            DevicePairResponse response = DevicePairResponse.builder()
+                    .deviceId(request.getDeviceId())
+                    .deviceToken(deviceToken)
+                    .mqttUrl(mqttExternalUrl)
+                    .message("Device paired successfully")
+                    .build();
+
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            log.warn("Pairing failed for device {}: {}", request.getDeviceId(), e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /**
+     * Extract client IP from request, handling proxies.
+     */
+    private String getClientIp(HttpServletRequest request) {
+        String xForwardedFor = request.getHeader("X-Forwarded-For");
+        if (xForwardedFor != null && !xForwardedFor.isEmpty()) {
+            // Take first IP in chain
+            return xForwardedFor.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
     }
 
     @Operation(summary = "List my devices", description = "List all devices owned by the current user")

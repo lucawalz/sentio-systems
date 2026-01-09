@@ -90,6 +90,28 @@ public class Device {
     @Column(name = "last_seen")
     private LocalDateTime lastSeen;
 
+    /**
+     * BCrypt-hashed MQTT authentication token.
+     * This is the permanent token used after pairing code exchange.
+     */
+    @Column(name = "mqtt_token_hash")
+    private String mqttTokenHash;
+
+    /**
+     * Temporary pairing code (format: XXXX-XXXX).
+     * Displayed to user in dashboard, entered during device setup.
+     * Expires after 15 minutes.
+     */
+    @Column(name = "pairing_code")
+    private String pairingCode;
+
+    /**
+     * Expiration time for the pairing code.
+     * After this time, the code is invalid and must be regenerated.
+     */
+    @Column(name = "pairing_code_expires_at")
+    private LocalDateTime pairingCodeExpiresAt;
+
     @PrePersist
     protected void onCreate() {
         if (createdAt == null) {

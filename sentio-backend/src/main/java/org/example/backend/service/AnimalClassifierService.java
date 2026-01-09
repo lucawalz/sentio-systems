@@ -272,8 +272,9 @@ public class AnimalClassifierService {
 
         String displaySpecies = extractCommonName(topSpecies);
 
-        if ("blank".equalsIgnoreCase(displaySpecies)) {
-            log.debug("Top species is 'blank', searching for better candidate in predictions...");
+        // Check if the AI returned an invalid species
+        if (!isValidAnimalSpecies(displaySpecies)) {
+            log.debug("AI returned invalid species '{}', searching for better candidate...", displaySpecies);
 
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> predictionsList = (List<Map<String, Object>>) classificationMap
@@ -282,26 +283,27 @@ public class AnimalClassifierService {
             boolean foundBetterCandidate = false;
 
             if (predictionsList != null) {
-                // Iterate through predictions to find first non-blank
+                // Iterate through predictions to find first valid species
                 for (Map<String, Object> pred : predictionsList) {
                     String predSpecies = (String) pred.get(SPECIES_KEY);
                     String predCommon = extractCommonName(predSpecies);
 
-                    if (!"blank".equalsIgnoreCase(predCommon)) {
+                    if (isValidAnimalSpecies(predCommon)) {
                         // Found a better candidate
                         displaySpecies = predCommon;
                         Double conf = ((Number) pred.get(CONFIDENCE_KEY)).doubleValue();
                         topConfidence = conf;
-                        topSpecies = predSpecies; // Update for alternate processing check
+                        topSpecies = predSpecies;
                         foundBetterCandidate = true;
-                        log.info("Promoted candidate '{}' ({:.2f}) over 'blank'", displaySpecies, topConfidence);
+                        log.info("Promoted candidate '{}' ({:.2f}) over invalid species", displaySpecies,
+                                topConfidence);
                         break;
                     }
                 }
             }
 
             if (!foundBetterCandidate) {
-                log.warn("All predictions are 'blank'. Falling back to original species: {}",
+                log.warn("No valid species found in AI predictions. Falling back to original: {}",
                         detection.getOriginalSpecies());
                 displaySpecies = detection.getOriginalSpecies() != null ? detection.getOriginalSpecies()
                         : displaySpecies;
@@ -319,6 +321,24 @@ public class AnimalClassifierService {
 
         log.info("Successfully updated detection ID {} - Type: {}, Primary: {} ({:.2f})",
                 detection.getId(), detection.getAnimalType(), displaySpecies, topConfidence);
+    }
+
+    /**
+     * Checks if a species name is a valid animal/person classification.
+     * Filters out non-animal results like 'blank', 'vehicle', etc.
+     */
+    private boolean isValidAnimalSpecies(String species) {
+        if (species == null || species.isEmpty()) {
+            return false;
+        }
+
+        String lower = species.toLowerCase().trim();
+
+        // Invalid species that should be filtered out
+        return switch (lower) {
+            case "blank", "vehicle", "unknown", "error", "none", "n/a" -> false;
+            default -> true;
+        };
     }
 
     /**
