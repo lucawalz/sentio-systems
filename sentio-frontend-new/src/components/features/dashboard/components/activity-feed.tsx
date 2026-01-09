@@ -3,6 +3,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Bird, AlertTriangle, Cpu, Activity } from 'lucide-react'
 import type { AnimalDetection, WeatherAlert, Device } from '@/types/api'
+import { capitalizeSpecies, getSpeciesEmoji } from './species-gallery'
 
 type ActivityEvent =
     | { type: 'detection'; data: AnimalDetection; timestamp: Date }
@@ -70,7 +71,7 @@ export function ActivityFeed({ detections, alerts, loading }: ActivityFeedProps)
     const getEventTitle = (event: ActivityEvent): string => {
         switch (event.type) {
             case 'detection':
-                return `${event.data.species} detected`
+                return `${getSpeciesEmoji(event.data.species)} ${capitalizeSpecies(event.data.species)}`
             case 'alert':
                 return event.data.localizedEvent || event.data.eventEn || 'Weather Alert'
             case 'device':

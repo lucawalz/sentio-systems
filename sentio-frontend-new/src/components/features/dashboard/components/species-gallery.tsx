@@ -13,11 +13,28 @@ interface SpeciesGalleryProps {
     className?: string;
 }
 
+// Capitalize first letter of species name
+export function capitalizeSpecies(species: string): string {
+    if (!species) return species;
+    return species.charAt(0).toUpperCase() + species.slice(1).toLowerCase();
+}
+
 // Map species names to emojis
 export function getSpeciesEmoji(species: string): string {
     const lower = species.toLowerCase();
 
-    // Birds
+    // Humans/People
+    if (lower.includes("human") || lower.includes("person")) return "👤";
+
+    // Farm animals
+    if (lower.includes("cattle") || lower.includes("cow")) return "🐄";
+    if (lower.includes("horse")) return "🐴";
+    if (lower.includes("sheep")) return "🐑";
+    if (lower.includes("goat")) return "🐐";
+    if (lower.includes("pig")) return "🐷";
+
+    // Birds - generic first
+    if (lower === "bird") return "🐦";
     if (lower.includes("robin")) return "🐦";
     if (lower.includes("sparrow")) return "🐦";
     if (lower.includes("finch")) return "🐦";
@@ -180,7 +197,7 @@ export function SpeciesGallery({
                                     <span className="text-3xl mb-1">{getSpeciesEmoji(species)}</span>
 
                                     {/* Name */}
-                                    <span className="font-medium text-sm truncate w-full">{species}</span>
+                                    <span className="font-medium text-sm truncate w-full">{capitalizeSpecies(species)}</span>
 
                                     {/* Last seen */}
                                     {lastSeen && (

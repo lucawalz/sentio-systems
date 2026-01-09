@@ -103,8 +103,10 @@ export const authApi = {
 
 export const devicesApi = {
     list: () => api.get('/api/devices'),
-    register: (deviceId: string, name: string, isPrimary = false) =>
-        api.post('/api/devices/register', null, { params: { deviceId, name, isPrimary } }),
+    register: (name: string, isPrimary = false) =>
+        api.post<DeviceRegistrationResponse>('/api/devices/register', { name, isPrimary: String(isPrimary) }),
+    regeneratePairingCode: (deviceId: string) =>
+        api.post<DeviceRegistrationResponse>(`/api/devices/${deviceId}/regenerate-code`),
     unregister: (deviceId: string) => api.delete(`/api/devices/${deviceId}`),
     hasAny: () => api.get('/api/devices/has-any'),
     getPrimary: () => api.get('/api/devices/primary'),
@@ -118,6 +120,15 @@ export const devicesApi = {
     getRadar: (deviceId: string) => api.get(`/api/devices/${deviceId}/radar`),
     getSightings: (deviceId: string, limit = 20) =>
         api.get(`/api/devices/${deviceId}/sightings`, { params: { limit } }),
+}
+
+// Device registration response type
+export interface DeviceRegistrationResponse {
+    deviceId: string
+    name: string
+    pairingCode: string
+    pairingCodeExpiresAt: string  // ISO datetime
+    mqttUrl: string
 }
 
 export const weatherApi = {

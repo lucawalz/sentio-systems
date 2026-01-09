@@ -110,9 +110,9 @@ export function DeviceComparison({ devices, readings, loading }: DeviceCompariso
                                                 <WifiOff className="h-4 w-4 text-muted-foreground" />
                                             )}
                                         </div>
-                                        <div>
-                                            <p className="font-semibold">{device.name}</p>
-                                            <p className="text-xs text-muted-foreground">{device.id}</p>
+                                        <div className="min-w-0">
+                                            <p className="font-semibold truncate">{device.name}</p>
+                                            <p className="text-xs text-muted-foreground font-mono truncate max-w-[140px]">{device.id}</p>
                                         </div>
                                     </div>
                                     <Badge variant={isOnline ? 'default' : 'secondary'} className="text-xs">

@@ -91,23 +91,23 @@ export function NativeDelete({
         animate={
           isExpanded
             ? {
-                filter: ["blur(0px)", "blur(3px)", "blur(0px)"],
-                x: [0, -2, 2, -2, 2, 0],
-              }
+              filter: ["blur(0px)", "blur(3px)", "blur(0px)"],
+              x: [0, -2, 2, -2, 2, 0],
+            }
             : {
-                filter: "blur(0px)",
-                x: 0,
-              }
+              filter: "blur(0px)",
+              x: 0,
+            }
         }
         transition={
           isExpanded
             ? {
-                filter: { duration: 0.3 },
-                x: { duration: 0.4, times: [0, 0.2, 0.4, 0.6, 0.8, 1] },
-              }
+              filter: { duration: 0.3 },
+              x: { duration: 0.4, times: [0, 0.2, 0.4, 0.6, 0.8, 1] },
+            }
             : {
-                duration: 0.2,
-              }
+              duration: 0.2,
+            }
         }
       >
         <motion.div

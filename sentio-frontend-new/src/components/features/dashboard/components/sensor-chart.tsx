@@ -110,11 +110,11 @@ export function SensorChart({ devices, readings, loading }: SensorChartProps) {
                         <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                             <defs>
                                 <linearGradient id="tempGradient" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor="#f97316" stopOpacity={0.4} />
+                                    <stop offset="0%" stopColor="#f97316" stopOpacity={0.3} />
                                     <stop offset="100%" stopColor="#f97316" stopOpacity={0.05} />
                                 </linearGradient>
                                 <linearGradient id="humidityGradient" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.3} />
+                                    <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.2} />
                                     <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.05} />
                                 </linearGradient>
                             </defs>
@@ -157,6 +157,7 @@ export function SensorChart({ devices, readings, loading }: SensorChartProps) {
                                 iconSize={8}
                                 formatter={(value) => <span className="text-xs text-muted-foreground">{value}</span>}
                             />
+                            {/* Temperature - fills down to its own dataMin */}
                             <Area
                                 yAxisId="temp"
                                 type="monotone"
@@ -164,10 +165,13 @@ export function SensorChart({ devices, readings, loading }: SensorChartProps) {
                                 stroke="#f97316"
                                 strokeWidth={2}
                                 fill="url(#tempGradient)"
+                                baseValue="dataMin"
                                 name="Temperature"
                                 dot={false}
-                                activeDot={{ r: 4, strokeWidth: 0 }}
+                                activeDot={{ r: 4, strokeWidth: 0, fill: "#f97316" }}
+                                isAnimationActive={false}
                             />
+                            {/* Humidity - fills down to 0 (its natural base) */}
                             <Area
                                 yAxisId="humidity"
                                 type="monotone"
@@ -175,9 +179,11 @@ export function SensorChart({ devices, readings, loading }: SensorChartProps) {
                                 stroke="#3b82f6"
                                 strokeWidth={2}
                                 fill="url(#humidityGradient)"
+                                baseValue={0}
                                 name="Humidity"
                                 dot={false}
-                                activeDot={{ r: 4, strokeWidth: 0 }}
+                                activeDot={{ r: 4, strokeWidth: 0, fill: "#3b82f6" }}
+                                isAnimationActive={false}
                             />
                         </AreaChart>
                     </ResponsiveContainer>

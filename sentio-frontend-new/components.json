@@ -24,6 +24,7 @@
     "@react-bits": "https://reactbits.dev/r/{name}.json",
     "@magicui": "https://magicui.design/r/{name}.json",
     "@hextaui": "https://hextaui.com/r/{name}.json",
-    "@shadcn-map": "http://shadcn-map.vercel.app/r/{name}.json"
+    "@shadcn-map": "http://shadcn-map.vercel.app/r/{name}.json",
+    "@animate-ui": "https://animate-ui.com/r/{name}.json"
   }
 }
