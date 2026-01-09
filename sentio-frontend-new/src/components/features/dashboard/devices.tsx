@@ -16,9 +16,10 @@ import {
     DialogTitle,
     DialogTrigger,
 } from '@/components/ui/dialog'
-import { Cpu, Plus, Wifi, WifiOff, Clock, RefreshCcw, Signal, HardDrive, Zap } from 'lucide-react'
+import { CopyButton } from '@/components/ui/copy-button'
+import { Cpu, Plus, Wifi, WifiOff, Clock, RefreshCcw, Signal, HardDrive, Zap, Check } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { devicesApi } from '@/lib/api'
+import { devicesApi, type DeviceRegistrationResponse } from '@/lib/api'
 import type { Device } from '@/types/api'
 import { cn } from '@/lib/utils'
 import { NativeDelete } from '@/components/ui/native-delete-shadcnui'
@@ -29,13 +30,16 @@ export default function DevicesPage() {
     const [hoveredDevice, setHoveredDevice] = useState<string | null>(null)
     const [registerOpen, setRegisterOpen] = useState(false)
     const [registering, setRegistering] = useState(false)
-    const [newDeviceId, setNewDeviceId] = useState('')
     const [newDeviceName, setNewDeviceName] = useState('')
+
+    // Credentials dialog state
+    const [credentials, setCredentials] = useState<DeviceRegistrationResponse | null>(null)
 
     // Edit state
     const [editDevice, setEditDevice] = useState<Device | null>(null)
     const [editName, setEditName] = useState('')
     const [editOpen, setEditOpen] = useState(false)
+    const [regenerating, setRegenerating] = useState(false)
 
     const fetchDevices = async () => {
         try {
@@ -56,11 +60,11 @@ export default function DevicesPage() {
     }, [])
 
     const handleRegister = async () => {
-        if (!newDeviceId.trim()) return
+        if (!newDeviceName.trim()) return
         try {
             setRegistering(true)
-            await devicesApi.register(newDeviceId.trim(), newDeviceName.trim() || 'My Device')
-            setNewDeviceId('')
+            const res = await devicesApi.register(newDeviceName.trim())
+            setCredentials(res.data)
             setNewDeviceName('')
             setRegisterOpen(false)
             await fetchDevices()
@@ -86,10 +90,18 @@ export default function DevicesPage() {
         setEditOpen(true)
     }
 
-    const handleEditSave = async () => {
-        if (!editDevice || !editName.trim()) return
-        setEditOpen(false)
-        setEditDevice(null)
+    const handleRegeneratePairingCode = async () => {
+        if (!editDevice) return
+        try {
+            setRegenerating(true)
+            const res = await devicesApi.regeneratePairingCode(editDevice.id)
+            setCredentials(res.data)
+            setEditOpen(false)
+        } catch (error) {
+            console.error('Failed to regenerate pairing code:', error)
+        } finally {
+            setRegenerating(false)
+        }
     }
 
     const isOnline = (device: Device) => {
@@ -152,24 +164,15 @@ export default function DevicesPage() {
                             <DialogHeader>
                                 <DialogTitle>Register Device</DialogTitle>
                                 <DialogDescription>
-                                    Enter the device ID from your IoT device to register it to your account.
+                                    Give your device a name. You'll receive credentials to enter on your Raspberry Pi.
                                 </DialogDescription>
                             </DialogHeader>
                             <div className="grid gap-4 py-4">
                                 <div className="grid gap-2">
-                                    <Label htmlFor="deviceId">Device ID</Label>
-                                    <Input
-                                        id="deviceId"
-                                        placeholder="e.g., raspi-sensor-01"
-                                        value={newDeviceId}
-                                        onChange={(e) => setNewDeviceId(e.target.value)}
-                                    />
-                                </div>
-                                <div className="grid gap-2">
-                                    <Label htmlFor="deviceName">Device Name (optional)</Label>
+                                    <Label htmlFor="deviceName">Device Name</Label>
                                     <Input
                                         id="deviceName"
-                                        placeholder="e.g., Weather Station"
+                                        placeholder="e.g., Garden Sensor"
                                         value={newDeviceName}
                                         onChange={(e) => setNewDeviceName(e.target.value)}
                                     />
@@ -179,9 +182,84 @@ export default function DevicesPage() {
                                 <Button variant="outline" onClick={() => setRegisterOpen(false)}>
                                     Cancel
                                 </Button>
-                                <Button onClick={handleRegister} disabled={registering || !newDeviceId.trim()}>
+                                <Button onClick={handleRegister} disabled={registering || !newDeviceName.trim()}>
                                     {registering ? 'Registering...' : 'Register'}
                                 </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+
+                    {/* Credentials Dialog - OTP Style */}
+                    <Dialog open={!!credentials} onOpenChange={() => setCredentials(null)}>
+                        <DialogContent className="sm:max-w-md">
+                            <DialogHeader className="text-center sm:text-center">
+                                <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-green-500/10">
+                                    <Check className="h-6 w-6 text-green-500" />
+                                </div>
+                                <DialogTitle>Device Registered!</DialogTitle>
+                                <DialogDescription>
+                                    Enter these credentials on your Raspberry Pi during setup.
+                                </DialogDescription>
+                            </DialogHeader>
+                            {credentials && (
+                                <div className="space-y-6 py-4">
+                                    {/* Device ID Display - Simple */}
+                                    <div className="space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <Label className="text-sm font-medium">Device ID</Label>
+                                            <CopyButton
+                                                content={credentials.deviceId}
+                                                variant="ghost"
+                                                size="xs"
+                                            />
+                                        </div>
+                                        <Input
+                                            readOnly
+                                            value={credentials.deviceId}
+                                            className="font-mono text-sm bg-muted/30"
+                                        />
+                                    </div>
+
+                                    {/* Pairing Code Display */}
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <Label className="text-sm font-medium">Pairing Code</Label>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs text-amber-500 flex items-center gap-1">
+                                                    <Clock className="h-3 w-3" />
+                                                    15 min
+                                                </span>
+                                                <CopyButton
+                                                    content={credentials.pairingCode}
+                                                    variant="ghost"
+                                                    size="xs"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="flex justify-center">
+                                            <div className="flex items-center gap-1">
+                                                {credentials.pairingCode.split('').map((char, i) => (
+                                                    <div
+                                                        key={i}
+                                                        className="flex h-12 w-10 items-center justify-center border border-input bg-muted/30 text-xl font-bold font-mono rounded-lg transition-colors hover:bg-muted/50"
+                                                    >
+                                                        {char}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Info box */}
+                                    <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-4">
+                                        <p className="text-sm text-muted-foreground">
+                                            <strong className="text-foreground">Next steps:</strong> Run the installer on your Pi and enter these credentials when prompted. The pairing code expires in 15 minutes.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+                            <DialogFooter>
+                                <Button className="w-full" onClick={() => setCredentials(null)}>Done</Button>
                             </DialogFooter>
                         </DialogContent>
                     </Dialog>
@@ -369,12 +447,17 @@ export default function DevicesPage() {
                                     setEditOpen(false)
                                 }}
                             />
+                            <Button
+                                variant="outline"
+                                onClick={handleRegeneratePairingCode}
+                                disabled={regenerating}
+                            >
+                                <RefreshCcw className={`h-4 w-4 mr-2 ${regenerating ? 'animate-spin' : ''}`} />
+                                {regenerating ? 'Regenerating...' : 'New Pairing Code'}
+                            </Button>
                             <div className="flex-1" />
                             <Button variant="outline" onClick={() => setEditOpen(false)}>
-                                Cancel
-                            </Button>
-                            <Button onClick={handleEditSave}>
-                                Save Changes
+                                Close
                             </Button>
                         </DialogFooter>
                     </DialogContent>

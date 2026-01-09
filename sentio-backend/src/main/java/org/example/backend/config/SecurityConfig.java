@@ -28,6 +28,8 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/api/internal/mqtt/**").permitAll() // Called by Mosquitto auth plugin
+                        .requestMatchers("/api/devices/pair").permitAll() // Device pairing (no auth required)
                         .requestMatchers("/ws/**").permitAll() // WebSocket handshake
                         .requestMatchers("/api/**").authenticated() // Require auth for other API endpoints
                         .requestMatchers("/swagger-ui.html",

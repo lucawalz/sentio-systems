@@ -2,15 +2,34 @@
 import json
 import base64
 import logging
+import os
 import threading
 import queue
+import time
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import paho.mqtt.client as mqtt
 import cv2
 import numpy as np
 
 logger = logging.getLogger("mqtt_publisher")
+
+
+def load_device_token(secrets_file: Optional[str]) -> Optional[str]:
+    """Load device token from secrets file."""
+    if not secrets_file or not os.path.exists(secrets_file):
+        return None
+    
+    try:
+        with open(secrets_file, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith('DEVICE_TOKEN='):
+                    return line.split('=', 1)[1]
+    except Exception as e:
+        logger.error(f"Failed to read secrets file: {e}")
+    
+    return None
 
 
 class MQTTPublisher:
@@ -24,6 +43,14 @@ class MQTTPublisher:
         # MQTT settings
         self.broker_host = self.mqtt_config.get("broker_host", "localhost")
         self.broker_port = self.mqtt_config.get("broker_port", 1883)
+        self.transport = self.mqtt_config.get("transport", "tcp")  # "tcp" or "websockets"
+        self.use_tls = self.mqtt_config.get("use_tls", False)
+        self.username = self.mqtt_config.get("username")
+        
+        # Load password from secrets file or fallback to config
+        secrets_file = self.mqtt_config.get("secrets_file")
+        self.password = load_device_token(secrets_file) or self.mqtt_config.get("password")
+        
         # Support unified config with specific key, fallback to generic
         self.topic = self.mqtt_config.get("animal_topic", self.mqtt_config.get("topic", "animal_detection/events"))
         self.device_id = self.device_config.get("id", "animal_detector")
@@ -69,20 +96,37 @@ class MQTTPublisher:
 
     def _setup_mqtt_client(self):
         """Setup MQTT client with callbacks"""
-        self.client = mqtt.Client()
-
-        self.client.on_connect = self._on_connect
-        self.client.on_disconnect = self._on_disconnect
-        self.client.on_publish = self._on_publish
-
-        # Connect to broker
         try:
+            client_id = f"{self.device_id}_{int(time.time())}"
+            
+            # Use paho-mqtt v2 API
+            self.client = mqtt.Client(
+                client_id=client_id,
+                transport=self.transport,
+                callback_api_version=mqtt.CallbackAPIVersion.VERSION2
+            )
+
+            # Set authentication if provided
+            if self.username and self.password:
+                self.client.username_pw_set(self.username, self.password)
+
+            # Enable TLS if configured (for production WSS connections)
+            if self.use_tls:
+                import ssl
+                self.client.tls_set(cert_reqs=ssl.CERT_REQUIRED, tls_version=ssl.PROTOCOL_TLS)
+                self.logger.info("TLS enabled for secure connection")
+
+            self.client.on_connect = self._on_connect
+            self.client.on_disconnect = self._on_disconnect
+            self.client.on_publish = self._on_publish
+
+            # Connect to broker
             self.client.connect(self.broker_host, self.broker_port, 60)
             self.client.loop_start()
         except Exception as e:
             self.logger.error(f"Failed to connect to MQTT broker: {e}")
 
-    def _on_connect(self, client, userdata, flags, rc):
+    def _on_connect(self, client, userdata, flags, rc, *args):
         """MQTT connection callback"""
         if rc == 0:
             self.connected = True
@@ -90,12 +134,12 @@ class MQTTPublisher:
         else:
             self.logger.error(f"Failed to connect to MQTT broker: {rc}")
 
-    def _on_disconnect(self, client, userdata, rc):
+    def _on_disconnect(self, client, userdata, rc, *args):
         """MQTT disconnection callback"""
         self.connected = False
         self.logger.warning("Disconnected from MQTT broker")
 
-    def _on_publish(self, client, userdata, mid):
+    def _on_publish(self, client, userdata, mid, *args):
         """MQTT publish callback"""
         self.logger.debug(f"Message {mid} published successfully")
 

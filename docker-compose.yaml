@@ -63,24 +63,27 @@ services:
       - sentio-network
     restart: unless-stopped
 
-  # MQTT Broker
+  # MQTT Broker with Auth Plugin
   mosquitto:
-    image: eclipse-mosquitto:2.0
+    image: iegomez/mosquitto-go-auth:latest
     container_name: sentio-mosquitto
     ports:
       - "${MQTT_PORT:-1883}:1883"
       - "9001:9001"
     volumes:
       - mosquitto_data:/mosquitto/data
-      - mosquitto_logs:/mosquitto/logs
-      - ./sentio-backend/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - ./sentio-backend/mosquitto.conf:/etc/mosquitto/mosquitto.conf
     networks:
       - sentio-network
+    depends_on:
+      backend:
+        condition: service_started
     healthcheck:
-      test: [ "CMD-SHELL", "mosquitto_sub -t '$$SYS/#' -C 1 -i healthcheck -W 3" ]
+      test: ["CMD-SHELL", "mosquitto_sub -t '$$SYS/#' -C 1 -i healthcheck -W 3 || exit 0"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 30s
     restart: unless-stopped
 
   # Backend Service (Spring Boot)
@@ -91,8 +94,6 @@ services:
     container_name: sentio-backend
     depends_on:
       postgres:
-        condition: service_healthy
-      mosquitto:
         condition: service_healthy
       keycloak:
         condition: service_started

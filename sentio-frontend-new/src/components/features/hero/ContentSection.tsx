@@ -31,9 +31,11 @@ export default function ContentSection() {
                     </div>
                     <div className="md:mask-l-from-35% md:mask-l-to-55% mt-12 h-fit md:absolute md:-inset-y-12 md:inset-x-0 md:mt-0">
                         <div className="border-border/50 relative rounded-2xl border border-dotted p-2">
-                            <div className="flex h-64 items-center justify-center rounded-[12px] bg-muted/50 text-muted-foreground md:h-80">
-                                <span className="text-sm">Environmental Dashboard</span>
-                            </div>
+                            <img
+                                className="rounded-[12px] w-full h-auto"
+                                src="/dashboard-monitoring.png"
+                                alt="Environmental Monitoring Dashboard"
+                            />
                         </div>
                     </div>
                 </div>
