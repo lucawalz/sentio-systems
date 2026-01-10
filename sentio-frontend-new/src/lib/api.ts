@@ -120,6 +120,16 @@ export const devicesApi = {
     getRadar: (deviceId: string) => api.get(`/api/devices/${deviceId}/radar`),
     getSightings: (deviceId: string, limit = 20) =>
         api.get(`/api/devices/${deviceId}/sightings`, { params: { limit } }),
+    getStreamUrl: (deviceId: string) =>
+        api.get<StreamUrlResponse>(`/api/stream/url/${deviceId}`),
+}
+
+// Stream URL response type
+export interface StreamUrlResponse {
+    streamUrl: string
+    isStreaming: boolean
+    deviceId: string
+    accessToken: string  // Access token for MediaMTX auth
 }
 
 // Device registration response type

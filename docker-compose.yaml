@@ -29,7 +29,7 @@ services:
     networks:
       - sentio-network
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}" ]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -79,7 +79,11 @@ services:
       backend:
         condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "mosquitto_sub -t '$$SYS/#' -C 1 -i healthcheck -W 3 || exit 0"]
+      test:
+        [
+          "CMD-SHELL",
+          "mosquitto_sub -t '$$SYS/#' -C 1 -i healthcheck -W 3 || exit 0",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -223,6 +227,28 @@ services:
       - "${SPECIESNET_PORT:-8081}:8081"
     networks:
       - sentio-network
+    restart: unless-stopped
+
+  # MediaMTX - Video Streaming Server
+  # Receives RTMP from devices, serves HLS to browsers
+  mediamtx:
+    image: bluenviron/mediamtx:1.11.3-ffmpeg
+    container_name: sentio-mediamtx
+    ports:
+      - "${MEDIAMTX_RTMP_PORT:-1935}:1935" # RTMP input from devices
+      - "${MEDIAMTX_HLS_PORT:-8888}:8888" # HLS output to browsers
+    volumes:
+      - ./mediamtx.yml:/mediamtx.yml:ro
+    networks:
+      - sentio-network
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8888"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     restart: unless-stopped
 
 networks:

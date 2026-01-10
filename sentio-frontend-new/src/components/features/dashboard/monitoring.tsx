@@ -12,8 +12,7 @@ import { SmartInsightCard } from './components/smart-insight-card'
 import { AIMonitoringAnalysis } from './components/ai-monitoring-analysis'
 import { ActivityHeatmap } from './components/activity-heatmap'
 import { SpeciesGallery, getSpeciesEmoji } from './components/species-gallery'
-
-const PI_STREAM_URL = import.meta.env.VITE_PI_STREAM_URL || 'http://192.168.2.194:8080/video_feed'
+import { HlsPlayer } from '@/components/ui/hls-player'
 
 export default function MonitoringPage() {
     const { selectedDevice } = useDevices()
@@ -199,14 +198,12 @@ export default function MonitoringPage() {
                                     Retry
                                 </Button>
                             </div>
+                        ) : selectedDevice?.id ? (
+                            <HlsPlayer deviceId={selectedDevice.id} />
                         ) : (
-                            <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
-                                <img
-                                    src={PI_STREAM_URL}
-                                    alt="Pi Camera Stream"
-                                    className="w-full h-full object-contain"
-                                    onError={() => setStreamError(true)}
-                                />
+                            <div className="flex flex-col items-center justify-center h-64 bg-muted rounded-lg">
+                                <Video className="h-12 w-12 text-muted-foreground mb-4" />
+                                <p className="text-muted-foreground">Select a device to view its stream</p>
                             </div>
                         )}
                     </CardContent>

@@ -112,6 +112,13 @@ public class Device {
     @Column(name = "pairing_code_expires_at")
     private LocalDateTime pairingCodeExpiresAt;
 
+    /**
+     * Whether the device is currently streaming video.
+     * Updated by the stream auth service when streams start/end.
+     */
+    @Column(name = "stream_active")
+    private Boolean streamActive = false;
+
     @PrePersist
     protected void onCreate() {
         if (createdAt == null) {
