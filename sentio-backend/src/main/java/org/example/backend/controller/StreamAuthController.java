@@ -51,10 +51,12 @@ public class StreamAuthController {
         String action = (String) request.get("action");
         String query = (String) request.get("query");
         String protocol = (String) request.get("protocol");
+        String sourceIp = (String) request.get("ip");
 
         // Debug: log full request for troubleshooting
         log.info("Stream auth request received: {}", request);
-        log.info("Stream auth request: action={}, path={}, protocol={}, query={}", action, path, protocol, query);
+        log.debug("Stream auth request: action={}, path={}, protocol={}, query={}, ip={}",
+                action, path, protocol, query, sourceIp);
 
         // Extract device ID from path (format: live/{deviceId})
         String deviceId = extractDeviceIdFromPath(path);
@@ -72,8 +74,8 @@ public class StreamAuthController {
 
         boolean authorized;
         if ("publish".equals(action)) {
-            // Device pushing RTMP stream - validate device token
-            authorized = streamService.validatePublishAuth(deviceId, token);
+            // Device pushing RTMP stream - validate device token with IP check
+            authorized = streamService.validatePublishAuth(deviceId, token, sourceIp);
         } else if ("read".equals(action) || "playback".equals(action)) {
             // User watching HLS stream - validate playback token
             authorized = streamService.validatePlaybackAuth(deviceId, token);

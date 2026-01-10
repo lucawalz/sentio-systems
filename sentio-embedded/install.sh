@@ -623,7 +623,7 @@ ${ANIMALS_LIST}
 streaming:
   enabled: ${STREAM_ENABLED:-false}
   headless: ${STREAM_HEADLESS:-true}
-  media_server_url: "${RTMP_SERVER_URL:-rtmp://media.syslabs.dev}"
+  media_server_url: "${RTMP_SERVER_URL:-rtmps://media.syslabs.dev:1936}"
 EOF
 fi
 

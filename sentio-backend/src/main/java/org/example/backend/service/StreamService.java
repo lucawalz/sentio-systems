@@ -11,6 +11,8 @@ import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.time.Instant;
 
 /**
  * Service for video stream authentication.
@@ -29,17 +31,33 @@ public class StreamService {
     @Value("${mediamtx.base-url:http://localhost:8888}")
     private String mediamtxBaseUrl;
 
+    // Rate limiting: track failed auth attempts per IP
+    private static final int MAX_ATTEMPTS_PER_MINUTE = 5;
+    private final ConcurrentHashMap<String, RateLimitEntry> rateLimitMap = new ConcurrentHashMap<>();
+
+    private static class RateLimitEntry {
+        int attempts = 0;
+        Instant windowStart = Instant.now();
+    }
+
     /**
      * Validate device token for RTMP publish.
      * Called by MediaMTX auth webhook when a device tries to push a stream.
      * 
      * @param deviceId    Device ID from stream path
      * @param deviceToken Device token from query parameter
+     * @param sourceIp    Source IP address of the connection
      * @return true if the device is authorized to publish
      */
-    public boolean validatePublishAuth(String deviceId, String deviceToken) {
+    public boolean validatePublishAuth(String deviceId, String deviceToken, String sourceIp) {
         if (deviceId == null || deviceToken == null) {
             log.warn("Stream publish auth failed: missing deviceId or token");
+            return false;
+        }
+
+        // Check rate limit first
+        if (isRateLimited(sourceIp)) {
+            log.warn("Stream publish auth blocked: rate limit exceeded for IP {}", sourceIp);
             return false;
         }
 
@@ -47,14 +65,27 @@ public class StreamService {
         boolean valid = deviceService.validateMqttToken(deviceId, deviceToken);
 
         if (valid) {
-            log.info("Stream publish auth successful for device: {}", deviceId);
-            // Mark device as streaming
-            deviceRepository.findById(deviceId).ifPresent(device -> {
+            // Verify IP matches device's last known IP (soft check - warn only)
+            Optional<Device> deviceOpt = deviceRepository.findById(deviceId);
+            if (deviceOpt.isPresent()) {
+                Device device = deviceOpt.get();
+                String knownIp = device.getIpAddress();
+                if (knownIp != null && !knownIp.isEmpty() && !knownIp.equals(sourceIp)) {
+                    log.warn("Stream publish: IP mismatch for device {} - known: {}, actual: {}",
+                            deviceId, knownIp, sourceIp);
+                    // Still allow - IP may have changed legitimately
+                }
+
                 device.setStreamActive(true);
                 deviceRepository.save(device);
-            });
+            }
+
+            log.info("Stream publish auth successful for device: {} from IP: {}", deviceId, sourceIp);
+            recordSuccessfulAuth(sourceIp);
         } else {
-            log.warn("Stream publish auth failed for device: {}", deviceId);
+            log.warn("Stream publish auth FAILED for device: {} from IP: {} - invalid token",
+                    deviceId, sourceIp);
+            recordFailedAuth(sourceIp);
         }
 
         return valid;
@@ -145,5 +176,35 @@ public class StreamService {
             deviceRepository.save(device);
             log.info("Stream ended for device: {}", deviceId);
         });
+    }
+
+    // --- Rate Limiting Helpers ---
+
+    private boolean isRateLimited(String ip) {
+        if (ip == null)
+            return false;
+
+        RateLimitEntry entry = rateLimitMap.computeIfAbsent(ip, k -> new RateLimitEntry());
+
+        // Reset window if expired (1 minute)
+        if (Instant.now().isAfter(entry.windowStart.plusSeconds(60))) {
+            entry.attempts = 0;
+            entry.windowStart = Instant.now();
+        }
+
+        return entry.attempts >= MAX_ATTEMPTS_PER_MINUTE;
+    }
+
+    private void recordSuccessfulAuth(String ip) {
+        // Reset on success
+        rateLimitMap.remove(ip);
+    }
+
+    private void recordFailedAuth(String ip) {
+        if (ip == null)
+            return;
+
+        RateLimitEntry entry = rateLimitMap.computeIfAbsent(ip, k -> new RateLimitEntry());
+        entry.attempts++;
     }
 }
