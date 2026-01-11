@@ -1,4 +1,3 @@
-
 # Build stage
 FROM node:24-alpine AS build
 
@@ -26,7 +25,7 @@ FROM nginx:alpine
 # Copy built assets from build stage
 COPY --from=build /app/dist /usr/share/nginx/html
 
-# Copy nginx configuration if you have a custom one
+# Copy nginx configuration
 COPY ./nginx.conf /etc/nginx/conf.d/default.conf
 
 # Expose port
