@@ -244,7 +244,8 @@ if [ "$ACTION_MODE" == "1" ]; then
         PKGS="python3-pip python3-venv python3-dev mosquitto mosquitto-clients uuid-runtime"
         
         if [ "$INSTALL_ANIMAL" = true ]; then
-            PKGS="$PKGS libopencv-dev v4l-utils"
+            # Animal Detection needs OpenCV, video tools, and GStreamer RTMP plugins for cloud streaming
+            PKGS="$PKGS libopencv-dev v4l-utils gstreamer1.0-plugins-ugly gstreamer1.0-plugins-bad gstreamer1.0-libav"
         fi
         if [ "$INSTALL_WEATHER" = true ]; then
              # Weather needs I2C tools and openblas for numpy
@@ -426,7 +427,7 @@ if [ "$DEPLOY_MODE" == "1" ]; then
     MQTT_PORT="443"
     MQTT_TRANSPORT="websockets"
     MQTT_TLS="true"
-    BACKEND_URL="https://backend.syslabs.dev"
+    BACKEND_URL="https://sentio.syslabs.dev"
 else
     # Development mode - plain TCP to local broker
     print_info "Development Mode: Local MQTT Broker"
@@ -437,6 +438,8 @@ else
     MQTT_TLS="false"
     read -p "Backend URL [http://${MQTT_HOST}:8083]: " BACKEND_URL
     BACKEND_URL=${BACKEND_URL:-"http://${MQTT_HOST}:8083"}
+    # RTMP server URL for local MediaMTX (same host as MQTT broker)
+    RTMP_SERVER_URL="rtmp://${MQTT_HOST}"
     print_ok "Configured for development: mqtt://${MQTT_HOST}:${MQTT_PORT}"
 fi
 
@@ -616,12 +619,11 @@ detection:
   target_animals:
 ${ANIMALS_LIST}
 
-# Web Streaming Configuration
+# Cloud RTMP Streaming Configuration
 streaming:
   enabled: ${STREAM_ENABLED:-false}
   headless: ${STREAM_HEADLESS:-true}
-  port: ${STREAM_PORT:-8080}
-  quality: ${STREAM_QUALITY:-80}
+  media_server_url: "${RTMP_SERVER_URL:-rtmps://media.syslabs.dev:1936}"
 EOF
 fi
 
