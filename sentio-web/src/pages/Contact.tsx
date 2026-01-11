@@ -1,12 +1,5 @@
-import {Navigation} from "../components/layout/navigation.tsx"
-export default function Contact(){
+import ContactForm from '@/components/features/contact/ContactForm'
 
-    return(
-        <>
-        <div className="bg-black text-white">
-            <Navigation/>
-
-        </div>
-        </>
-    )
+export default function Contact() {
+    return <ContactForm />
 }

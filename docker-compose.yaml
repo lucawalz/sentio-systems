@@ -163,7 +163,7 @@ services:
   # Frontend Service (React + Vite + Nginx)
   frontend:
     build:
-      context: ./sentio-frontend-new
+      context: ./sentio-web
       dockerfile: Dockerfile
       args:
         VITE_API_BASE_URL: ""
