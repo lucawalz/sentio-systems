@@ -312,6 +312,7 @@ class WeatherMQTTPublisher:
                 "temperature": data.get("temperature"),
                 "humidity": data.get("humidity"),
                 "pressure": data.get("pressure"),
+                "gas_resistance": data.get("gas_resistance"),
                 "lux": data.get("lux"),
                 "uvi": data.get("uvi")
             }
