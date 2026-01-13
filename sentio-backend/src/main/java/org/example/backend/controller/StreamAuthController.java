@@ -53,10 +53,8 @@ public class StreamAuthController {
         String protocol = (String) request.get("protocol");
         String sourceIp = (String) request.get("ip");
 
-        // Debug: log full request for troubleshooting
-        log.info("Stream auth request received: {}", request);
-        log.debug("Stream auth request: action={}, path={}, protocol={}, query={}, ip={}",
-                action, path, protocol, query, sourceIp);
+        // Log request without sensitive token data (DEBUG level to avoid clutter)
+        log.debug("Stream auth: action={}, path={}, protocol={}, ip={}", action, path, protocol, sourceIp);
 
         // Extract device ID from path (format: live/{deviceId})
         String deviceId = extractDeviceIdFromPath(path);
