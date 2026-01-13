@@ -31,13 +31,13 @@ class RTMPStreamConfig:
         Initialize RTMP stream configuration.
         
         Args:
-            media_server_url: Base URL of MediaMTX server (e.g., rtmp://media.syslabs.dev)
+            media_server_url: Base URL of MediaMTX server (e.g., rtmp://stream.syslabs.dev)
             device_id: Device UUID
             device_token: Device auth token
             secrets_file: Path to secrets file containing device credentials
         """
         self.media_server_url = media_server_url or os.environ.get(
-            "MEDIA_SERVER_URL", "rtmps://media.syslabs.dev:1936"
+            "MEDIA_SERVER_URL", "rtmps://stream.syslabs.dev:1936"
         )
         
         # Load device credentials
@@ -76,7 +76,7 @@ class RTMPStreamConfig:
             logger.error("Missing device_id or device_token for RTMP streaming")
             return None
         
-        # URL format: rtmp://media.syslabs.dev/live/{deviceId}?token={deviceToken}
+        # URL format: rtmp://stream.syslabs.dev/live/{deviceId}?token={deviceToken}
         url = f"{self.media_server_url}/live/{self.device_id}?token={self.device_token}"
         return url
     

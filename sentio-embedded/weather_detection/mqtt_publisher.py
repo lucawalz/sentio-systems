@@ -126,7 +126,7 @@ class WeatherMQTTPublisher:
         """Setup MQTT client with callbacks"""
         try:
             # Create client with paho-mqtt v2 API
-            client_id = f"{self.device_id}_{int(time.time())}"
+            client_id = f"{self.device_id}_weather_{int(time.time())}"
 
             self.client = mqtt.Client(
                 client_id=client_id,

@@ -179,63 +179,152 @@ if [ "$ACTION_MODE" == "1" ]; then
     if [ "$INSTALL_ANIMAL" = true ]; then
         HAILO_APPS_PATH="$REAL_HOME/hailo-apps"
         
-        # Step 1: Install Hailo runtime (hailo-all) - must be done before hailo-apps
+        # ════════════════════════════════════════════════════════════
+        # Official Hailo + RPi 5 Installation Flow
+        # ════════════════════════════════════════════════════════════
+        
+        print_info "Checking system requirements for Hailo..."
+        
+        # Check if hailo-all is already installed
         if dpkg -l | grep -q "hailo-all"; then
-            print_success "Hailo runtime (hailo-all) is installed"
+            print_success "Hailo driver (hailo-all) is installed"
         else
-            print_warning "Hailo runtime not found. Installing dkms and hailo-all..."
-            print_info "This may take a few minutes..."
-            apt update -qq || true
-            apt install -y dkms hailo-all || {
-                print_error "Could not install hailo-all."
-                print_info "Make sure you've run: sudo apt update && sudo apt full-upgrade"
-                print_info "Visit: https://hailo.ai/developer-zone/ for requirements"
-                read -p "Continue anyway? (y/N): " -n 1 -r
+            # System update - check kernel version first
+            KERNEL_BEFORE=$(uname -r)
+            print_info "Updating system packages..."
+            apt update -qq && apt full-upgrade -y
+            
+            # Check if kernel was updated by seeing if the running kernel still matches an installed one
+            # After full-upgrade, if a new kernel was installed, the running kernel modules dir might be gone
+            # or there might be a newer kernel installed that we need to boot into
+            KERNEL_AFTER=$(uname -r)
+            
+            # Check if modules exist for the running kernel (they should exist after upgrade)
+            if [ ! -d "/lib/modules/$KERNEL_AFTER" ]; then
+                # Running kernel's modules directory doesn't exist - definitely need reboot
+                NEEDS_REBOOT=true
+            else
+                # Check if there's a newer kernel version installed (for the same architecture)
+                # Pi 5 uses -2712 suffix
+                KERNEL_ARCH_SUFFIX=$(echo "$KERNEL_AFTER" | grep -oE '\+rpt-rpi-[^[:space:]]+$' || echo "")
+                if [ -n "$KERNEL_ARCH_SUFFIX" ]; then
+                    LATEST_FOR_ARCH=$(ls -1 /lib/modules/ | grep -E "${KERNEL_ARCH_SUFFIX}$" | sort -V | tail -1)
+                    if [ -n "$LATEST_FOR_ARCH" ] && [ "$KERNEL_AFTER" != "$LATEST_FOR_ARCH" ]; then
+                        NEEDS_REBOOT=true
+                        print_warning "Kernel updated: $KERNEL_AFTER → $LATEST_FOR_ARCH"
+                    fi
+                fi
+            fi
+            
+            if [ "${NEEDS_REBOOT:-false}" = true ]; then
+                print_warning "You MUST reboot before installing Hailo drivers."
+                print_info "This ensures DKMS builds drivers for the correct kernel."
+                print_info ""
+                print_info "After reboot, run this script again to continue installation."
                 echo
-                if [[ ! $REPLY =~ ^[Yy]$ ]]; then exit 1; fi
+                read -p "Reboot now? (y/N): " -n 1 -r
+                echo
+                if [[ $REPLY =~ ^[Yy]$ ]]; then
+                    reboot
+                    exit 0
+                else
+                    print_warning "Please reboot manually, then run this script again."
+                    exit 1
+                fi
+            fi
+            
+            # Install Hailo driver (kernel is now current)
+            print_info "Installing Hailo driver (hailo-all)..."
+            apt install -y dkms hailo-all || {
+                print_error "Failed to install hailo-all."
+                print_info "Please check your internet connection and try again."
+                exit 1
             }
-            print_success "Hailo runtime installed"
-            print_warning "IMPORTANT: A reboot is recommended after installing hailo-all."
+            print_success "Hailo driver installed"
+            
+            # Enable PCIe Gen 3 for better performance
+            print_info "Enabling PCIe Gen 3.0..."
+            raspi-config nonint do_pci_speed 1 2>/dev/null || true
+            
+            # Reboot required after driver installation
+            print_warning "IMPORTANT: Reboot required to load Hailo drivers."
             read -p "Reboot now? (y/N): " -n 1 -r
             echo
             if [[ $REPLY =~ ^[Yy]$ ]]; then
-                print_info "Rebooting... Run this script again after reboot."
-                sudo reboot
+                reboot
                 exit 0
+            else
+                print_warning "Please reboot manually before running this script again."
+                exit 1
             fi
         fi
         
-        # Verify Hailo hardware is detected
+        # Verify driver is loaded
+        if ! lsmod | grep -q "hailo_pci"; then
+            print_info "Loading Hailo driver..."
+            if ! modprobe hailo_pci 2>/dev/null; then
+                print_error "Failed to load hailo_pci module."
+                print_info "This usually means you need to reboot after installation."
+                print_info "If you've already rebooted, try: sudo dkms autoinstall && sudo modprobe hailo_pci"
+                exit 1
+            fi
+            print_success "Driver loaded"
+        fi
+        
+        # Verify hardware responds
         if command -v hailortcli &> /dev/null; then
             if hailortcli fw-control identify &> /dev/null; then
-                print_success "Hailo hardware detected and working"
+                print_success "Hailo hardware verified (Driver loaded & Device active)"
             else
-                print_warning "Hailo hardware not detected. Make sure AI HAT+ is connected."
-                print_info "Run: hailortcli fw-control identify"
-            fi
-        fi
-        
-        # Step 2: Clone and install hailo-apps (Python applications layer)
-        print_info "Checking for Hailo Apps..."
-        if [ -d "$HAILO_APPS_PATH" ]; then
-            print_success "Hailo Apps found at $HAILO_APPS_PATH"
-        else
-            print_warning "Hailo Apps not found. Cloning repository..."
-            sudo -u "$REAL_USER" git clone https://github.com/hailo-ai/hailo-apps.git "$HAILO_APPS_PATH"
-            if [ $? -eq 0 ]; then
-                print_success "Hailo Apps cloned successfully"
-                print_info "Running Hailo Apps installer..."
-                cd "$HAILO_APPS_PATH"
-                ./install.sh
-                cd - > /dev/null
-                print_success "Hailo Apps installed successfully"
-            else
-                print_error "Failed to clone hailo-apps. Check your internet connection."
+                print_error "Hailo driver loaded but device not responding."
+                print_info "Troubleshooting:"
+                print_info "  1. Have you rebooted after installation?"
+                print_info "  2. Is the AI HAT+ properly seated on the GPIO header?"
+                print_info "  3. Check power supply (5V 5A recommended)"
+                echo
                 read -p "Continue anyway? (y/N): " -n 1 -r
                 echo
                 if [[ ! $REPLY =~ ^[Yy]$ ]]; then exit 1; fi
             fi
+        else
+            print_warn "hailortcli not found (will be installed by hailo-apps)"
         fi
+
+        # Handover to Official Hailo Apps Installer
+        print_info "Preparing Hailo Apps environment..."
+        if [ -d "$HAILO_APPS_PATH" ]; then
+            print_success "Hailo Apps found at $HAILO_APPS_PATH"
+            # Ensure correct ownership (in case previously run as root)
+            chown -R "$REAL_USER:$REAL_USER" "$HAILO_APPS_PATH"
+        else
+            print_info "Cloning hailo-apps repository..."
+            sudo -u "$REAL_USER" git clone https://github.com/hailo-ai/hailo-apps.git "$HAILO_APPS_PATH" || {
+                 print_error "Failed to clone hailo-apps"
+                 exit 1
+            }
+        fi
+        
+        # Clean up any root-owned build artifacts that could cause permission issues
+        rm -rf "$HAILO_APPS_PATH/hailo_apps.egg-info" 2>/dev/null || true
+        rm -rf "$HAILO_APPS_PATH/build" 2>/dev/null || true
+        chown -R "$REAL_USER:$REAL_USER" "$HAILO_APPS_PATH"
+        
+        print_info "Running official Hailo Apps installer..."
+        print_info "This sets up the Python environment and Tappas libraries."
+        
+        # Run their installer with sudo (it requires root for system packages)
+        # We'll fix ownership of user files afterwards
+        cd "$HAILO_APPS_PATH"
+        ./install.sh || {
+            print_error "Hailo Apps installation failed."
+            print_info "Try running manually: cd $HAILO_APPS_PATH && sudo ./install.sh"
+            exit 1
+        }
+        cd - > /dev/null
+        
+        # Fix ownership of all hailo-apps files (installer runs as root, creates root-owned files)
+        chown -R "$REAL_USER:$REAL_USER" "$HAILO_APPS_PATH"
+        print_success "Hailo Apps installation complete"
     fi
 
     # 1. System Dependencies (APT)
@@ -623,7 +712,7 @@ ${ANIMALS_LIST}
 streaming:
   enabled: ${STREAM_ENABLED:-false}
   headless: ${STREAM_HEADLESS:-true}
-  media_server_url: "${RTMP_SERVER_URL:-rtmps://media.syslabs.dev:1936}"
+  media_server_url: "${RTMP_SERVER_URL:-rtmps://stream.syslabs.dev:1936}"
 EOF
 fi
 

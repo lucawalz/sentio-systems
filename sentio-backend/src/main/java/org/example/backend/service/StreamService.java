@@ -28,7 +28,7 @@ public class StreamService {
     private final DeviceService deviceService;
     private final JwtDecoder jwtDecoder;
 
-    @Value("${mediamtx.base-url:http://localhost:8888}")
+    @Value("${mediamtx.base-url:https://media.syslabs.dev}")
     private String mediamtxBaseUrl;
 
     // Rate limiting: track failed auth attempts per IP
