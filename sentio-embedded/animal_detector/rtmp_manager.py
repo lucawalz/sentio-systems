@@ -33,8 +33,8 @@ class RTMPStreamManager:
     def __init__(
         self,
         rtmp_config: RTMPStreamConfig,
-        width: int = 1280,
-        height: int = 720,
+        width: int = 960,
+        height: int = 540,
         framerate: int = 30,
         max_reconnect_delay: int = 30,
         initial_reconnect_delay: int = 2
@@ -60,6 +60,7 @@ class RTMPStreamManager:
         # State management
         self._running = False
         self._connected = False
+        self._streaming_enabled = False  # On-demand: don't stream until explicitly enabled
         self._pipeline = None
         self._appsrc = None
         self._main_loop = None
@@ -87,7 +88,24 @@ class RTMPStreamManager:
         self._running = True
         self._thread = threading.Thread(target=self._run_loop, daemon=True)
         self._thread.start()
-        logger.info("RTMP stream manager started")
+        logger.info("RTMP stream manager started (waiting for stream enable command)")
+        
+    def enable_streaming(self):
+        """Enable streaming (called when a viewer starts watching)."""
+        if not self._streaming_enabled:
+            logger.info("Streaming enabled by command")
+            self._streaming_enabled = True
+            
+    def disable_streaming(self):
+        """Disable streaming (called when viewer stops watching)."""
+        if self._streaming_enabled:
+            logger.info("Streaming disabled by command")
+            self._streaming_enabled = False
+            self._stop_pipeline()
+            
+    def is_streaming_enabled(self) -> bool:
+        """Check if streaming is currently enabled."""
+        return self._streaming_enabled
         
     def stop(self):
         """Stop the RTMP streaming manager."""
@@ -134,6 +152,13 @@ class RTMPStreamManager:
     def _run_loop(self):
         """Main loop that manages connection and reconnection."""
         while self._running:
+            # Wait until streaming is enabled
+            while self._running and not self._streaming_enabled:
+                time.sleep(1.0)
+                
+            if not self._running:
+                break
+                
             try:
                 # Attempt to connect and stream
                 self._start_pipeline()
@@ -144,7 +169,7 @@ class RTMPStreamManager:
                     self._connected = True
                     logger.info("RTMP connected successfully")
                     
-                    # Run the streaming loop
+                    # Run the streaming loop (exits when streaming disabled or error)
                     self._stream_loop()
                     
             except Exception as e:
@@ -158,7 +183,12 @@ class RTMPStreamManager:
             if not self._running:
                 break
                 
-            # Exponential backoff for reconnection
+            # If streaming was disabled, don't reconnect - wait for re-enable
+            if not self._streaming_enabled:
+                logger.info("Streaming disabled, waiting for enable command...")
+                continue
+                
+            # Exponential backoff for reconnection (only on errors)
             logger.info(f"Reconnecting in {self._reconnect_delay}s...")
             time.sleep(self._reconnect_delay)
             self._reconnect_delay = min(

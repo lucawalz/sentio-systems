@@ -698,9 +698,10 @@ if [ "$INSTALL_ANIMAL" = true ]; then
     cat >> config.yaml << EOF
 
 # Animal Detector Configuration
+# Resolution: 960x540 optimized for Pi 5 software encoding (no hardware H264)
 camera:
-  width: 1280
-  height: 720
+  width: 960
+  height: 540
   framerate: 30
 detection:
   confidence_threshold: ${ANIMAL_CONFIDENCE}

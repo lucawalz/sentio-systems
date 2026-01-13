@@ -136,4 +136,22 @@ public class MqttConfig {
             }
         };
     }
+
+    // --- Outbound channel for publishing to devices ---
+
+    @Bean
+    public MessageChannel mqttOutboundChannel() {
+        return new DirectChannel();
+    }
+
+    @Bean
+    @ServiceActivator(inputChannel = "mqttOutboundChannel")
+    public MessageHandler mqttOutboundHandler() {
+        org.springframework.integration.mqtt.outbound.MqttPahoMessageHandler handler = new org.springframework.integration.mqtt.outbound.MqttPahoMessageHandler(
+                mqttClientId + "-outbound", mqttClientFactory());
+        handler.setAsync(true);
+        handler.setDefaultQos(1);
+        // Topic is set per-message via header
+        return handler;
+    }
 }

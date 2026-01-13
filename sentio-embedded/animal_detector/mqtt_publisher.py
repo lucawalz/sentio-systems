@@ -66,6 +66,12 @@ class MQTTPublisher:
         # Worker thread
         self.worker_thread = None
         self.running = False
+        
+        # Stream manager for on-demand streaming
+        self.stream_manager = None
+        
+        # Command subscription topic
+        self.command_topic = f"device/{self.device_id}/stream/command"
 
         self.logger = logging.getLogger("mqtt_publisher")
 
@@ -119,6 +125,7 @@ class MQTTPublisher:
             self.client.on_connect = self._on_connect
             self.client.on_disconnect = self._on_disconnect
             self.client.on_publish = self._on_publish
+            self.client.on_message = self._on_message
 
             # Connect to broker
             self.client.connect(self.broker_host, self.broker_port, 60)
@@ -131,6 +138,10 @@ class MQTTPublisher:
         if rc == 0:
             self.connected = True
             self.logger.info(f"Connected to MQTT broker at {self.broker_host}:{self.broker_port}")
+            
+            # Subscribe to stream command topic for on-demand streaming
+            self.client.subscribe(self.command_topic)
+            self.logger.info(f"Subscribed to stream command topic: {self.command_topic}")
         else:
             self.logger.error(f"Failed to connect to MQTT broker: {rc}")
 
@@ -142,6 +153,32 @@ class MQTTPublisher:
     def _on_publish(self, client, userdata, mid, *args):
         """MQTT publish callback"""
         self.logger.debug(f"Message {mid} published successfully")
+        
+    def _on_message(self, client, userdata, message):
+        """Handle incoming MQTT messages (stream commands)"""
+        try:
+            if message.topic == self.command_topic:
+                payload = json.loads(message.payload.decode())
+                command = payload.get("command")
+                
+                self.logger.info(f"Received stream command: {command}")
+                
+                if self.stream_manager:
+                    if command == "start":
+                        self.stream_manager.enable_streaming()
+                    elif command == "stop":
+                        self.stream_manager.disable_streaming()
+                    else:
+                        self.logger.warning(f"Unknown stream command: {command}")
+                else:
+                    self.logger.warning("Stream command received but no stream manager configured")
+        except Exception as e:
+            self.logger.error(f"Error handling stream command: {e}")
+            
+    def set_stream_manager(self, stream_manager):
+        """Set the RTMPStreamManager for on-demand streaming control."""
+        self.stream_manager = stream_manager
+        self.logger.info("Stream manager configured for on-demand streaming")
 
     def publish_detection(self, animal_type: str, confidence: float,
                           bbox: tuple, frame: np.ndarray, trigger_reason: str = "motion"):

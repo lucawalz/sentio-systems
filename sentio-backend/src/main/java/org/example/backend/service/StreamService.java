@@ -1,10 +1,13 @@
 package org.example.backend.service;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.backend.model.Device;
 import org.example.backend.repository.DeviceRepository;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.integration.mqtt.support.MqttHeaders;
+import org.springframework.integration.support.MessageBuilder;
+import org.springframework.messaging.MessageChannel;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtException;
@@ -20,13 +23,13 @@ import java.time.Instant;
  * playback.
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class StreamService {
 
     private final DeviceRepository deviceRepository;
     private final DeviceService deviceService;
     private final JwtDecoder jwtDecoder;
+    private final MessageChannel mqttOutboundChannel;
 
     @Value("${mediamtx.base-url:https://media.syslabs.dev}")
     private String mediamtxBaseUrl;
@@ -38,6 +41,17 @@ public class StreamService {
     private static class RateLimitEntry {
         int attempts = 0;
         Instant windowStart = Instant.now();
+    }
+
+    public StreamService(
+            DeviceRepository deviceRepository,
+            DeviceService deviceService,
+            JwtDecoder jwtDecoder,
+            @Qualifier("mqttOutboundChannel") MessageChannel mqttOutboundChannel) {
+        this.deviceRepository = deviceRepository;
+        this.deviceService = deviceService;
+        this.jwtDecoder = jwtDecoder;
+        this.mqttOutboundChannel = mqttOutboundChannel;
     }
 
     /**
@@ -206,5 +220,47 @@ public class StreamService {
 
         RateLimitEntry entry = rateLimitMap.computeIfAbsent(ip, k -> new RateLimitEntry());
         entry.attempts++;
+    }
+
+    // --- On-Demand Stream Control ---
+
+    /**
+     * Request device to start streaming.
+     * Publishes MQTT command to device/{deviceId}/stream/command topic.
+     * 
+     * @param deviceId Device ID
+     * @return true if message was sent successfully
+     */
+    public boolean requestStreamStart(String deviceId) {
+        return sendStreamCommand(deviceId, "start");
+    }
+
+    /**
+     * Request device to stop streaming.
+     * Publishes MQTT command to device/{deviceId}/stream/command topic.
+     * 
+     * @param deviceId Device ID
+     * @return true if message was sent successfully
+     */
+    public boolean requestStreamStop(String deviceId) {
+        return sendStreamCommand(deviceId, "stop");
+    }
+
+    private boolean sendStreamCommand(String deviceId, String command) {
+        try {
+            String topic = String.format("device/%s/stream/command", deviceId);
+            String payload = String.format("{\"command\": \"%s\"}", command);
+
+            mqttOutboundChannel.send(
+                    MessageBuilder.withPayload(payload)
+                            .setHeader(MqttHeaders.TOPIC, topic)
+                            .build());
+
+            log.info("Sent stream command '{}' to device {} on topic {}", command, deviceId, topic);
+            return true;
+        } catch (Exception e) {
+            log.error("Failed to send stream command to device {}: {}", deviceId, e.getMessage());
+            return false;
+        }
     }
 }

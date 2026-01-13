@@ -160,6 +160,12 @@ public class DeviceMqttAuthController {
             return ""; // Empty string = always allowed
         }
 
+        // Stream command topics: device/{deviceId}/stream/command
+        // Allow devices to subscribe to receive start/stop commands from backend
+        if (topic.startsWith("device/") && topic.endsWith("/stream/command")) {
+            return "animal_detector"; // Streaming requires animal_detector service
+        }
+
         // Data/event topics require the corresponding service
         if (topic.startsWith("weather/")) {
             return "weather_station";

@@ -71,8 +71,8 @@ class StreamingDetectionApp(GStreamerDetectionApp):
         if self.stream_enabled and self.rtmp_config:
             self.rtmp_manager = RTMPStreamManager(
                 rtmp_config=self.rtmp_config,
-                width=1280,
-                height=720,
+                width=960,
+                height=540,
                 framerate=30
             )
         
@@ -156,9 +156,10 @@ class StreamingDetectionApp(GStreamerDetectionApp):
             
             # Appsink branch for fault-tolerant RTMP streaming
             # Frames go to appsink → RTMPStreamManager (separate pipeline)
+            # Resolution: 960x540 optimized for Pi 5 software encoding
             stream_branch = (
                 f"queue leaky=downstream max-size-buffers=3 max-size-bytes=0 max-size-time=0 ! "
-                f"videoscale ! video/x-raw,width=1280,height=720 ! "
+                f"videoscale ! video/x-raw,width=960,height=540 ! "
                 f"videoconvert ! video/x-raw,format=I420 ! "
                 f"appsink name=rtmp_sink emit-signals=true max-buffers=2 drop=true sync=false "
             )
@@ -502,6 +503,12 @@ def main():
                 streaming_config=streaming_config,
                 rtmp_config=rtmp_config
             )
+            
+            # Connect MQTT publisher to stream manager for on-demand streaming
+            if app.rtmp_manager:
+                user_data.mqtt_publisher.set_stream_manager(app.rtmp_manager)
+                logger.info("Connected MQTT publisher to stream manager for on-demand streaming")
+            
             logger.info(f"Starting Hailo Animal Detector with MQTT and RTMP Cloud Streaming")
             if rtmp_config.is_configured():
                 logger.info(f"RTMP endpoint: {rtmp_config.media_server_url}/live/{rtmp_config.device_id}")
