@@ -159,6 +159,62 @@ public class StreamAuthController {
     }
 
     /**
+     * Request device to start streaming (on-demand).
+     * Called by frontend when user opens the stream viewer.
+     */
+    @PostMapping("/{deviceId}/start")
+    @Operation(summary = "Start stream", description = "Request device to start RTMP streaming")
+    public ResponseEntity<Map<String, Object>> startStream(
+            @PathVariable String deviceId,
+            @CookieValue(name = "access_token", required = false) String accessToken) {
+
+        if (accessToken == null || accessToken.isEmpty()) {
+            return ResponseEntity.status(401).build();
+        }
+
+        if (!deviceService.hasAccessToDevice(deviceId)) {
+            log.warn("Stream start denied: user does not own device {}", deviceId);
+            return ResponseEntity.status(403).build();
+        }
+
+        boolean success = streamService.requestStreamStart(deviceId);
+        log.info("Stream start requested for device {}: {}", deviceId, success ? "sent" : "failed");
+
+        return ResponseEntity.ok(Map.of(
+                "deviceId", deviceId,
+                "command", "start",
+                "sent", success));
+    }
+
+    /**
+     * Request device to stop streaming (on-demand).
+     * Called by frontend when user leaves the stream viewer.
+     */
+    @PostMapping("/{deviceId}/stop")
+    @Operation(summary = "Stop stream", description = "Request device to stop RTMP streaming")
+    public ResponseEntity<Map<String, Object>> stopStream(
+            @PathVariable String deviceId,
+            @CookieValue(name = "access_token", required = false) String accessToken) {
+
+        if (accessToken == null || accessToken.isEmpty()) {
+            return ResponseEntity.status(401).build();
+        }
+
+        if (!deviceService.hasAccessToDevice(deviceId)) {
+            log.warn("Stream stop denied: user does not own device {}", deviceId);
+            return ResponseEntity.status(403).build();
+        }
+
+        boolean success = streamService.requestStreamStop(deviceId);
+        log.info("Stream stop requested for device {}: {}", deviceId, success ? "sent" : "failed");
+
+        return ResponseEntity.ok(Map.of(
+                "deviceId", deviceId,
+                "command", "stop",
+                "sent", success));
+    }
+
+    /**
      * Extract device ID from MediaMTX path.
      * Path format: live/{deviceId} or live/{deviceId}/...
      */

@@ -122,6 +122,10 @@ export const devicesApi = {
         api.get(`/api/devices/${deviceId}/sightings`, { params: { limit } }),
     getStreamUrl: (deviceId: string) =>
         api.get<StreamUrlResponse>(`/api/stream/url/${deviceId}`),
+
+    // On-demand streaming control
+    startStream: (deviceId: string) => api.post(`/api/stream/${deviceId}/start`),
+    stopStream: (deviceId: string) => api.post(`/api/stream/${deviceId}/stop`),
 }
 
 // Stream URL response type

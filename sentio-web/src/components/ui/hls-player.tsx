@@ -140,13 +140,34 @@ export function HlsPlayer({ deviceId, className }: HlsPlayerProps) {
     }
 
     useEffect(() => {
-        loadStream()
+        devicesApi.startStream(deviceId)
+            .then(() => {
+                console.log('[HLS] Stream start requested for device:', deviceId)
+                setTimeout(() => {
+                    loadStream()
+                }, 2000)
+            })
+            .catch((err) => {
+                console.warn('[HLS] Failed to request stream start:', err)
+                loadStream()
+            })
+
+        const handleBeforeUnload = () => {
+            const url = `/api/stream/${deviceId}/stop`
+            navigator.sendBeacon(url)
+        }
+        window.addEventListener('beforeunload', handleBeforeUnload)
 
         return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload)
+
             if (hlsRef.current) {
                 hlsRef.current.destroy()
                 hlsRef.current = null
             }
+            devicesApi.stopStream(deviceId)
+                .then(() => console.log('[HLS] Stream stop requested for device:', deviceId))
+                .catch((err) => console.warn('[HLS] Failed to request stream stop:', err))
         }
     }, [deviceId])
 
