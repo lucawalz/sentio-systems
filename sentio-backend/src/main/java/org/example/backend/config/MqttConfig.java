@@ -114,14 +114,12 @@ public class MqttConfig {
 
             try {
                 // Route messages based on topic
-                if (topic.equals("weather/data") || topic.equals("weather")) {
+                if (topic.equals("weather/data")) {
                     raspiWeatherDataHandler.processWeatherData(payload);
-                } else if (topic.equals("weather/status")) {
-                    deviceStatusHandler.processStatusUpdate(payload);
-                    System.out.println("Weather status: " + payload);
-                } else if (topic.equals("animal_detection/events")) {
+                } else if (topic.equals("animals/data")) {
                     animalDetectionHandler.processAnimalDetection(payload);
-                } else if (topic.equals("animal_detection/status") || topic.endsWith("/status")) {
+                } else if (topic.startsWith("device/") && topic.endsWith("/status")) {
+                    // Unified device status: device/{deviceId}/status
                     deviceStatusHandler.processStatusUpdate(payload);
                     System.out.println("Device status: " + payload);
                 } else if (topic.equals("camera")) {

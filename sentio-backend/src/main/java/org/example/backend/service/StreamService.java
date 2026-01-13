@@ -226,7 +226,7 @@ public class StreamService {
 
     /**
      * Request device to start streaming.
-     * Publishes MQTT command to device/{deviceId}/stream/command topic.
+     * Publishes MQTT command to device/{deviceId}/command topic.
      * 
      * @param deviceId Device ID
      * @return true if message was sent successfully
@@ -237,7 +237,7 @@ public class StreamService {
 
     /**
      * Request device to stop streaming.
-     * Publishes MQTT command to device/{deviceId}/stream/command topic.
+     * Publishes MQTT command to device/{deviceId}/command topic.
      * 
      * @param deviceId Device ID
      * @return true if message was sent successfully
@@ -248,8 +248,10 @@ public class StreamService {
 
     private boolean sendStreamCommand(String deviceId, String command) {
         try {
-            String topic = String.format("device/%s/stream/command", deviceId);
-            String payload = String.format("{\"command\": \"%s\"}", command);
+            // Use unified command topic (changed from device/{id}/stream/command)
+            String topic = String.format("device/%s/command", deviceId);
+            // Include service field for command routing on Pi
+            String payload = String.format("{\"service\": \"stream\", \"command\": \"%s\"}", command);
 
             mqttOutboundChannel.send(
                     MessageBuilder.withPayload(payload)

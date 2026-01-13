@@ -129,7 +129,7 @@ services:
       MQTT_ENABLED: ${MQTT_ENABLED:-true}
       MQTT_BROKER: tcp://mosquitto:1883
       MQTT_CLIENT_ID: sentioBackend
-      MQTT_TOPICS: ${MQTT_TOPICS:-weather/data,weather/status,animal_detection/events,animal_detection/status}
+      MQTT_TOPICS: ${MQTT_TOPICS:-weather/data,animals/data,device/+/status}
       MQTT_USERNAME: ${MQTT_USERNAME:-}
       MQTT_PASSWORD: ${MQTT_PASSWORD:-}
 

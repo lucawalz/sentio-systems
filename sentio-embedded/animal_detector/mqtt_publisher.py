@@ -1,35 +1,27 @@
 #!/usr/bin/env python3
+"""
+Animal Detection MQTT Publisher
+
+Handles publishing animal detection events to MQTT.
+Uses shared DeviceClient for connection management and status.
+"""
+
 import json
 import base64
 import logging
-import os
-import threading
 import queue
-import time
+import threading
 from datetime import datetime
 from typing import Dict, Any, Optional
-import paho.mqtt.client as mqtt
 import cv2
 import numpy as np
 
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from shared import DeviceClient
+
 logger = logging.getLogger("mqtt_publisher")
-
-
-def load_device_token(secrets_file: Optional[str]) -> Optional[str]:
-    """Load device token from secrets file."""
-    if not secrets_file or not os.path.exists(secrets_file):
-        return None
-    
-    try:
-        with open(secrets_file, 'r') as f:
-            for line in f:
-                line = line.strip()
-                if line.startswith('DEVICE_TOKEN='):
-                    return line.split('=', 1)[1]
-    except Exception as e:
-        logger.error(f"Failed to read secrets file: {e}")
-    
-    return None
 
 
 class MQTTPublisher:
@@ -37,52 +29,46 @@ class MQTTPublisher:
 
     def __init__(self, config: Dict[str, Any]):
         self.config = config
-        self.mqtt_config = config.get("mqtt", {})
         self.device_config = config.get("device", {})
-
-        # MQTT settings
-        self.broker_host = self.mqtt_config.get("broker_host", "localhost")
-        self.broker_port = self.mqtt_config.get("broker_port", 1883)
-        self.transport = self.mqtt_config.get("transport", "tcp")  # "tcp" or "websockets"
-        self.use_tls = self.mqtt_config.get("use_tls", False)
-        self.username = self.mqtt_config.get("username")
         
-        # Load password from secrets file or fallback to config
-        secrets_file = self.mqtt_config.get("secrets_file")
-        self.password = load_device_token(secrets_file) or self.mqtt_config.get("password")
-        
-        # Support unified config with specific key, fallback to generic
-        self.topic = self.mqtt_config.get("animal_topic", self.mqtt_config.get("topic", "animal_detection/events"))
+        # Device info
         self.device_id = self.device_config.get("id", "animal_detector")
         self.location = self.device_config.get("location", "Unknown")
+
+        # Detection topic (new simplified name)
+        self.topic = "animals/data"
 
         # Queue for detection events
         self.event_queue = queue.Queue(maxsize=100)
 
-        # MQTT client
-        self.client = None
-        self.connected = False
-
         # Worker thread
-        self.worker_thread = None
+        self.worker_thread: Optional[threading.Thread] = None
         self.running = False
         
         # Stream manager for on-demand streaming
         self.stream_manager = None
         
-        # Command subscription topic
-        self.command_topic = f"device/{self.device_id}/stream/command"
+        # Shared device client
+        self.device_client: Optional[DeviceClient] = None
 
         self.logger = logging.getLogger("mqtt_publisher")
 
     def start(self):
-        """Start the MQTT publisher in a separate thread"""
+        """Start the MQTT publisher"""
         if self.running:
             return
 
         self.running = True
-        self._setup_mqtt_client()
+        
+        # Initialize DeviceClient with service name for unique MQTT client ID
+        self.device_client = DeviceClient(self.config, service_name="animal")
+        self.device_client.start()
+        
+        # Register as animal_detector service with stream command handler
+        self.device_client.register_service("animal_detector")
+        self.device_client.register_command_handler("stream", self._handle_stream_command)
 
+        # Start worker thread for processing detection events
         self.worker_thread = threading.Thread(target=self._worker_loop, daemon=True)
         self.worker_thread.start()
 
@@ -94,86 +80,25 @@ class MQTTPublisher:
 
         if self.worker_thread:
             self.worker_thread.join(timeout=5)
-
-        if self.client:
-            self.client.disconnect()
+        
+        if self.device_client:
+            self.device_client.unregister_service("animal_detector")
 
         self.logger.info("MQTT Publisher stopped")
 
-    def _setup_mqtt_client(self):
-        """Setup MQTT client with callbacks"""
-        try:
-            client_id = f"{self.device_id}_animal_{int(time.time())}"
-            
-            # Use paho-mqtt v2 API
-            self.client = mqtt.Client(
-                client_id=client_id,
-                transport=self.transport,
-                callback_api_version=mqtt.CallbackAPIVersion.VERSION2
-            )
-
-            # Set authentication if provided
-            if self.username and self.password:
-                self.client.username_pw_set(self.username, self.password)
-
-            # Enable TLS if configured (for production WSS connections)
-            if self.use_tls:
-                import ssl
-                self.client.tls_set(cert_reqs=ssl.CERT_REQUIRED, tls_version=ssl.PROTOCOL_TLS)
-                self.logger.info("TLS enabled for secure connection")
-
-            self.client.on_connect = self._on_connect
-            self.client.on_disconnect = self._on_disconnect
-            self.client.on_publish = self._on_publish
-            self.client.on_message = self._on_message
-
-            # Connect to broker
-            self.client.connect(self.broker_host, self.broker_port, 60)
-            self.client.loop_start()
-        except Exception as e:
-            self.logger.error(f"Failed to connect to MQTT broker: {e}")
-
-    def _on_connect(self, client, userdata, flags, rc, *args):
-        """MQTT connection callback"""
-        if rc == 0:
-            self.connected = True
-            self.logger.info(f"Connected to MQTT broker at {self.broker_host}:{self.broker_port}")
-            
-            # Subscribe to stream command topic for on-demand streaming
-            self.client.subscribe(self.command_topic)
-            self.logger.info(f"Subscribed to stream command topic: {self.command_topic}")
-        else:
-            self.logger.error(f"Failed to connect to MQTT broker: {rc}")
-
-    def _on_disconnect(self, client, userdata, rc, *args):
-        """MQTT disconnection callback"""
-        self.connected = False
-        self.logger.warning("Disconnected from MQTT broker")
-
-    def _on_publish(self, client, userdata, mid, *args):
-        """MQTT publish callback"""
-        self.logger.debug(f"Message {mid} published successfully")
+    def _handle_stream_command(self, command: str, payload: Dict):
+        """Handle stream start/stop commands."""
+        self.logger.info(f"Received stream command: {command}")
         
-    def _on_message(self, client, userdata, message):
-        """Handle incoming MQTT messages (stream commands)"""
-        try:
-            if message.topic == self.command_topic:
-                payload = json.loads(message.payload.decode())
-                command = payload.get("command")
-                
-                self.logger.info(f"Received stream command: {command}")
-                
-                if self.stream_manager:
-                    if command == "start":
-                        self.stream_manager.enable_streaming()
-                    elif command == "stop":
-                        self.stream_manager.disable_streaming()
-                    else:
-                        self.logger.warning(f"Unknown stream command: {command}")
-                else:
-                    self.logger.warning("Stream command received but no stream manager configured")
-        except Exception as e:
-            self.logger.error(f"Error handling stream command: {e}")
+        if self.stream_manager:
+            if command == "start":
+                self.stream_manager.enable_streaming()
+            elif command == "stop":
+                self.stream_manager.disable_streaming()
+            else:
+                self.logger.warning(f"Unknown stream command: {command}")
+        else:
+            self.logger.warning("Stream command received but no stream manager configured")
             
     def set_stream_manager(self, stream_manager):
         """Set the RTMPStreamManager for on-demand streaming control."""
@@ -182,9 +107,7 @@ class MQTTPublisher:
 
     def publish_detection(self, animal_type: str, confidence: float,
                           bbox: tuple, frame: np.ndarray, trigger_reason: str = "motion"):
-        """
-        Queue a detection event for publishing (non-blocking)
-        """
+        """Queue a detection event for publishing (non-blocking)"""
         if not self.running:
             return
 
@@ -201,11 +124,11 @@ class MQTTPublisher:
                 "confidence": confidence,
                 "bbox": bbox,
                 "frame": frame.copy(),
-                "trigger_reason": trigger_reason,
-                "timestamp": datetime.now()
+                "timestamp": datetime.now(),
+                "trigger_reason": trigger_reason
             }
 
-            # Add to queue
+            # Add to queue (non-blocking)
             self.event_queue.put_nowait(event)
             self.logger.debug(f"Queued detection: {animal_type} ({confidence:.2f}) bbox: {bbox}")
 
@@ -213,44 +136,9 @@ class MQTTPublisher:
             self.logger.error(f"Error queuing detection: {e}")
 
     def publish_status(self, ip_address: str, status: str = "online", gps_data: Dict = None):
-        """
-        Publish device status including IP address and GPS coordinates.
-        
-        Args:
-            ip_address: Device IP address
-            status: Status string (online/offline)
-            gps_data: Optional GPS data dict with latitude/longitude
-        """
-        if not self.client:
-            return
-
-        try:
-            payload = {
-                "device_id": self.device_id,
-                "ip": ip_address,
-                "status": status,
-                "service": "animal_detector",
-                "timestamp": datetime.now().isoformat()
-            }
-            
-            # Add GPS coordinates if available
-            if gps_data:
-                if gps_data.get('latitude') is not None:
-                    payload['latitude'] = gps_data['latitude']
-                if gps_data.get('longitude') is not None:
-                    payload['longitude'] = gps_data['longitude']
-                if gps_data.get('altitude') is not None:
-                    payload['altitude'] = gps_data['altitude']
-                if gps_data.get('satellites') is not None:
-                    payload['satellites'] = gps_data['satellites']
-            
-            topic = f"{self.topic.split('/')[0]}/status" # e.g. animal_detection/status
-            
-            self.client.publish(topic, json.dumps(payload), retain=True)
-            self.logger.info(f"Published status: IP={ip_address}, Status={status}, GPS={gps_data is not None}")
-            
-        except Exception as e:
-            self.logger.error(f"Error publishing status: {e}")
+        """Publish device status (delegates to DeviceClient)."""
+        if self.device_client:
+            self.device_client.update_status(ip_address=ip_address, gps_data=gps_data)
 
     def _worker_loop(self):
         """Worker thread that processes queued detection events"""
@@ -258,8 +146,8 @@ class MQTTPublisher:
             try:
                 # Get event from queue with timeout
                 event = self.event_queue.get(timeout=1.0)
-
-                if self.connected:
+                
+                if self.device_client and self.device_client.is_connected():
                     self._process_and_send_event(event)
                 else:
                     self.logger.warning("Not connected to MQTT broker, dropping event")
@@ -330,15 +218,12 @@ class MQTTPublisher:
                 }]
             }
 
-            json_payload = json.dumps(payload)
-
-            result = self.client.publish(self.topic, json_payload)
-
-            if result.rc == mqtt.MQTT_ERR_SUCCESS:
+            # Publish via DeviceClient to new topic
+            if self.device_client.publish_data(self.topic, payload):
                 self.logger.info(
                     f"Published detection: {event['animal_type']} ({event['confidence']:.2f}) - Image size: {len(encoded_img)} bytes")
             else:
-                self.logger.error(f"Failed to publish detection: {result.rc}")
+                self.logger.error("Failed to publish detection")
 
         except Exception as e:
             self.logger.error(f"Error processing detection event: {e}")

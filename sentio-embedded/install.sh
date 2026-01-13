@@ -687,10 +687,9 @@ mqtt:
   secrets_file: "${SECRETS_FILE}"
   qos: 1
   keepalive: 60
-  # Unified Topics
-  animal_topic: "animal_detection/events"
+  # Unified Topics (new naming scheme)
+  animal_topic: "animals/data"
   weather_topic: "weather/data"
-  weather_status_topic: "weather/status"
 
 EOF
 
