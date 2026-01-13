@@ -97,7 +97,7 @@ class MQTTPublisher:
     def _setup_mqtt_client(self):
         """Setup MQTT client with callbacks"""
         try:
-            client_id = f"{self.device_id}_{int(time.time())}"
+            client_id = f"{self.device_id}_animal_{int(time.time())}"
             
             # Use paho-mqtt v2 API
             self.client = mqtt.Client(
