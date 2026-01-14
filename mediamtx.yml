@@ -15,18 +15,17 @@ rtmpAddress: :1935
 rtmpEncryption: "no"
 
 ###############################################
-# HLS server settings
+# WebRTC server settings
 
-hls: true
-hlsAddress: :8888
-hlsEncryption: false
-hlsAlwaysRemux: true
-hlsVariant: mpegts # Regular HLS (more stable than LL-HLS)
-hlsSegmentCount: 3
-hlsSegmentDuration: 1s
-hlsPartDuration: 200ms
-hlsSegmentMaxSize: 50M
-hlsAllowOrigin: "*"
+webrtc: true
+webrtcAddress: :8889
+webrtcEncryption: false
+webrtcAllowOrigin: "*"
+
+# ICE-TCP for local development
+webrtcICEServers2: []
+webrtcICEUDPMuxAddress: ""
+webrtcICETCPMuxAddress: :8189
 
 ###############################################
 # Authentication - use HTTP webhook for all auth

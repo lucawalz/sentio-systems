@@ -230,13 +230,14 @@ services:
     restart: unless-stopped
 
   # MediaMTX - Video Streaming Server
-  # Receives RTMP from devices, serves HLS to browsers
+  # Receives RTMP from devices, serves WebRTC to browsers
   mediamtx:
     image: bluenviron/mediamtx:1.11.3-ffmpeg
     container_name: sentio-mediamtx
     ports:
       - "${MEDIAMTX_RTMP_PORT:-1935}:1935" # RTMP input from devices
-      - "${MEDIAMTX_HLS_PORT:-8888}:8888" # HLS output to browsers
+      - "${MEDIAMTX_WEBRTC_PORT:-8889}:8889" # WebRTC/WHEP output
+      - "${MEDIAMTX_ICE_TCP_PORT:-8189}:8189" # ICE-TCP for WebRTC
     volumes:
       - ./mediamtx.yml:/mediamtx.yml:ro
     networks:
@@ -244,7 +245,7 @@ services:
     depends_on:
       - backend
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8888"]
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8889"]
       interval: 30s
       timeout: 10s
       retries: 3
