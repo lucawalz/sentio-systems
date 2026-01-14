@@ -10,6 +10,7 @@ import SignUp from '@/pages/SignUp'
 import ForgotPassword from '@/pages/ForgotPassword'
 import Contact from '@/pages/Contact'
 import DashboardPage from '@/pages/Dashboard'
+import Privacy from "@/pages/Privacy.tsx";
 import { AuthProvider } from '@/context/auth-context'
 import { DeviceProvider } from '@/context/device-context'
 import { ProtectedRoute } from '@/components/common/ProtectedRoute'
@@ -59,6 +60,7 @@ function PublicLayout() {
             <Route path="/signup" element={<SignUp />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/contact" element={<Contact />} />
+            <Route path="/privacy" element={<Privacy/>}/>
           </Routes>
         </motion.div>
       </AnimatePresence>
