@@ -42,7 +42,7 @@ DEFAULT_CONFIG = {
         'broker_host': 'localhost',
         'broker_port': 1883,
         'topic': 'weather/data',
-        'status_topic': 'weather/status',
+        # status_topic removed - handled by shared DeviceClient
         'username': None,
         'password': None,
         'qos': 1,
