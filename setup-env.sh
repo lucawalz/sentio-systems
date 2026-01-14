@@ -32,6 +32,7 @@ DB_PASSWORD=$(openssl rand -base64 32 | tr -d '=')
 KC_ADMIN_PASSWORD=$(openssl rand -base64 32 | tr -d '=')
 KC_CLIENT_SECRET=$(openssl rand -hex 32)
 N8N_CLIENT_SECRET=$(openssl rand -hex 32)
+MQTT_PASSWORD=$(openssl rand -hex 16)
 
 # Update .env file with generated passwords (macOS compatible)
 if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -40,12 +41,14 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
     sed -i '' "s|KEYCLOAK_ADMIN_PASSWORD=.*|KEYCLOAK_ADMIN_PASSWORD=${KC_ADMIN_PASSWORD}|" .env
     sed -i '' "s|KEYCLOAK_ADMIN_CLIENT_SECRET=.*|KEYCLOAK_ADMIN_CLIENT_SECRET=${KC_CLIENT_SECRET}|" .env
     sed -i '' "s|N8N_CLIENT_SECRET=.*|N8N_CLIENT_SECRET=${N8N_CLIENT_SECRET}|" .env
+    sed -i '' "s|MQTT_PASSWORD=.*|MQTT_PASSWORD=${MQTT_PASSWORD}|" .env
 else
     # Linux
     sed -i "s|POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=${DB_PASSWORD}|" .env
     sed -i "s|KEYCLOAK_ADMIN_PASSWORD=.*|KEYCLOAK_ADMIN_PASSWORD=${KC_ADMIN_PASSWORD}|" .env
     sed -i "s|KEYCLOAK_ADMIN_CLIENT_SECRET=.*|KEYCLOAK_ADMIN_CLIENT_SECRET=${KC_CLIENT_SECRET}|" .env
     sed -i "s|N8N_CLIENT_SECRET=.*|N8N_CLIENT_SECRET=${N8N_CLIENT_SECRET}|" .env
+    sed -i "s|MQTT_PASSWORD=.*|MQTT_PASSWORD=${MQTT_PASSWORD}|" .env
 fi
 
 echo "SUCCESS: Environment file created!"
@@ -56,6 +59,7 @@ echo "Database Password:        ${DB_PASSWORD}"
 echo "Keycloak Admin Password:  ${KC_ADMIN_PASSWORD}"
 echo "Keycloak Client Secret:   ${KC_CLIENT_SECRET}"
 echo "n8n Client Secret:        ${N8N_CLIENT_SECRET}"
+echo "MQTT Service Password:    ${MQTT_PASSWORD}"
 echo ""
 echo ""
 echo "IMPORTANT: Save these credentials securely!"

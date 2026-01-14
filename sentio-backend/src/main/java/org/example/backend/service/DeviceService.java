@@ -3,17 +3,22 @@ package org.example.backend.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.backend.dto.AuthDTOs;
+import org.example.backend.dto.DeviceRegistrationResponse;
 import org.example.backend.event.DeviceRegisteredEvent;
 import org.example.backend.event.DeviceUnregisteredEvent;
 import org.example.backend.model.Device;
 import org.example.backend.repository.DeviceRepository;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.security.crypto.bcrypt.BCrypt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -23,6 +28,12 @@ public class DeviceService {
     private final DeviceRepository deviceRepository;
     private final AuthService authService;
     private final ApplicationEventPublisher eventPublisher;
+
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private static final String MQTT_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // No I, O, 0, 1
+
+    @Value("${mqtt.external-url:mqtt://localhost:1883}")
+    private String mqttExternalUrl;
 
     /**
      * Registers a device to the current user.
@@ -70,6 +81,185 @@ public class DeviceService {
         }
 
         return savedDevice;
+    }
+
+    /**
+     * Registers a new device with expiring pairing code.
+     * Used by the frontend - user only provides a name.
+     * 
+     * @param name User-friendly name for the device
+     * @return Registration response with device ID and pairing code (valid 15 min)
+     */
+    @Transactional
+    public DeviceRegistrationResponse registerDeviceWithCredentials(String name) {
+        AuthDTOs.UserInfo currentUser = authService.getCurrentUser();
+        String userId = currentUser.getId();
+
+        // Generate device ID
+        String deviceId = UUID.randomUUID().toString();
+
+        // Generate expiring pairing code (format: XXXX-XXXX)
+        String pairingCode = generateMqttCode();
+        LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(15);
+
+        log.info("Registering new device {} with 15-min pairing code for user {}", deviceId, userId);
+
+        Device device = new Device();
+        device.setId(deviceId);
+        device.setName(name);
+        device.setOwnerId(userId);
+        device.setCreatedAt(LocalDateTime.now());
+        device.setPairingCode(pairingCode);
+        device.setPairingCodeExpiresAt(expiresAt);
+        // mqttTokenHash is null until pairing is completed
+
+        Device savedDevice = deviceRepository.save(device);
+
+        log.info("Publishing DeviceRegisteredEvent for device {} user {}", deviceId, userId);
+        eventPublisher.publishEvent(new DeviceRegisteredEvent(this, savedDevice, userId));
+
+        return DeviceRegistrationResponse.builder()
+                .deviceId(deviceId)
+                .name(name)
+                .pairingCode(pairingCode)
+                .pairingCodeExpiresAt(expiresAt)
+                .mqttUrl(mqttExternalUrl)
+                .build();
+    }
+
+    /**
+     * Regenerate pairing code for an existing device.
+     * Used when the original code expires or is lost.
+     * 
+     * @param deviceId The device ID
+     * @return New registration response with fresh pairing code
+     */
+    @Transactional
+    public DeviceRegistrationResponse regeneratePairingCode(String deviceId) {
+        AuthDTOs.UserInfo currentUser = authService.getCurrentUser();
+        String userId = currentUser.getId();
+
+        Device device = deviceRepository.findById(deviceId)
+                .filter(d -> d.getOwnerId().equals(userId))
+                .orElseThrow(() -> new IllegalArgumentException("Device not found or not owned by user"));
+
+        // Generate new expiring pairing code
+        String pairingCode = generateMqttCode();
+        LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(15);
+
+        device.setPairingCode(pairingCode);
+        device.setPairingCodeExpiresAt(expiresAt);
+        // Clear existing token on regenerate - device needs to re-pair
+        device.setMqttTokenHash(null);
+
+        Device savedDevice = deviceRepository.save(device);
+
+        log.info("Regenerated pairing code for device {} (expires {})", deviceId, expiresAt);
+
+        return DeviceRegistrationResponse.builder()
+                .deviceId(savedDevice.getId())
+                .name(savedDevice.getName())
+                .pairingCode(pairingCode)
+                .pairingCodeExpiresAt(expiresAt)
+                .mqttUrl(mqttExternalUrl)
+                .build();
+    }
+
+    /**
+     * Exchange pairing code for permanent device token.
+     * Called by the device during setup.
+     * This is a PUBLIC endpoint - no user auth required.
+     * 
+     * @param deviceId    The device ID
+     * @param pairingCode The pairing code from the dashboard
+     * @return Permanent device token for MQTT authentication
+     */
+    @Transactional
+    public String exchangePairingCode(String deviceId, String pairingCode) {
+        if (deviceId == null || pairingCode == null) {
+            throw new IllegalArgumentException("Device ID and pairing code are required");
+        }
+
+        Device device = deviceRepository.findById(deviceId)
+                .orElseThrow(() -> new IllegalArgumentException("Device not found"));
+
+        // Check pairing code matches
+        if (device.getPairingCode() == null || !device.getPairingCode().equals(pairingCode)) {
+            throw new IllegalArgumentException("Invalid pairing code");
+        }
+
+        // Check if expired
+        if (device.getPairingCodeExpiresAt() == null ||
+                LocalDateTime.now().isAfter(device.getPairingCodeExpiresAt())) {
+            throw new IllegalArgumentException("Pairing code has expired. Generate a new one in the dashboard.");
+        }
+
+        // Generate permanent device token
+        String deviceToken = UUID.randomUUID().toString().replace("-", "");
+        String hashedToken = BCrypt.hashpw(deviceToken, BCrypt.gensalt());
+
+        device.setMqttTokenHash(hashedToken);
+        // Clear pairing code after use (one-time use)
+        device.setPairingCode(null);
+        device.setPairingCodeExpiresAt(null);
+
+        deviceRepository.save(device);
+
+        log.info("Device {} successfully paired. Pairing code exchanged for permanent token.", deviceId);
+
+        return deviceToken;
+    }
+
+    /**
+     * Generate a human-readable MQTT code (format: XXXX-XXXX).
+     */
+    private String generateMqttCode() {
+        StringBuilder code = new StringBuilder(9);
+        for (int i = 0; i < 8; i++) {
+            if (i == 4)
+                code.append('-');
+            code.append(MQTT_CODE_CHARS.charAt(SECURE_RANDOM.nextInt(MQTT_CODE_CHARS.length())));
+        }
+        return code.toString();
+    }
+
+    /**
+     * Validate MQTT credentials for device authentication.
+     * Called by the MQTT auth plugin.
+     * 
+     * @param deviceId    The device ID (username)
+     * @param deviceToken The permanent device token (password)
+     * @return true if valid
+     */
+    public boolean validateMqttToken(String deviceId, String deviceToken) {
+        if (deviceId == null || deviceToken == null) {
+            return false;
+        }
+
+        return deviceRepository.findById(deviceId)
+                .map(device -> {
+                    if (device.getMqttTokenHash() == null) {
+                        return false;
+                    }
+                    return BCrypt.checkpw(deviceToken, device.getMqttTokenHash());
+                })
+                .orElse(false);
+    }
+
+    /**
+     * Get active services for a device.
+     * Used for MQTT ACL checks to determine topic permissions.
+     * 
+     * @param deviceId The device ID
+     * @return Set of active service names, or empty set if device not found
+     */
+    public java.util.Set<String> getDeviceServices(String deviceId) {
+        if (deviceId == null) {
+            return java.util.Collections.emptySet();
+        }
+        return deviceRepository.findById(deviceId)
+                .map(Device::getActiveServices)
+                .orElse(java.util.Collections.emptySet());
     }
 
     /**

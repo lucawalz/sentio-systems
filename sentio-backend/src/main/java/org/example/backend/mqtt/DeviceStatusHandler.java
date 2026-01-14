@@ -34,7 +34,6 @@ public class DeviceStatusHandler {
 
             String deviceId = root.path("device_id").asText();
             String ipAddress = root.path("ip").asText();
-            String service = root.has("service") ? root.path("service").asText() : null;
 
             // Extract GPS coordinates if present
             Double latitude = root.has("latitude") ? root.path("latitude").asDouble() : null;
@@ -45,7 +44,7 @@ public class DeviceStatusHandler {
                 return;
             }
 
-            log.debug("Received status for device {}: {} (Service: {})", deviceId, ipAddress, service);
+            log.debug("Received status for device {}: {}", deviceId, ipAddress);
 
             Optional<Device> deviceOpt = deviceRepository.findById(deviceId);
             if (deviceOpt.isPresent()) {
@@ -58,10 +57,24 @@ public class DeviceStatusHandler {
                     log.info("Device {} IP changed to {}", deviceId, ipAddress);
                 }
 
-                if (service != null && !device.getActiveServices().contains(service)) {
-                    device.getActiveServices().add(service);
+                // Support both new "services" array and legacy single "service" field
+                if (root.has("services") && root.get("services").isArray()) {
+                    // New format: services array - replace all active services
+                    device.getActiveServices().clear();
+                    for (JsonNode serviceNode : root.get("services")) {
+                        String serviceName = serviceNode.asText();
+                        device.getActiveServices().add(serviceName);
+                    }
                     needsUpdate = true;
-                    log.info("New service '{}' detected on device {}", service, deviceId);
+                    log.info("Device {} services updated: {}", deviceId, device.getActiveServices());
+                } else if (root.has("service")) {
+                    // Legacy format: single service - add if not present
+                    String service = root.path("service").asText();
+                    if (!device.getActiveServices().contains(service)) {
+                        device.getActiveServices().add(service);
+                        needsUpdate = true;
+                        log.info("New service '{}' detected on device {}", service, deviceId);
+                    }
                 }
 
                 if (needsUpdate || device.getLastSeen() == null ||
@@ -69,7 +82,7 @@ public class DeviceStatusHandler {
 
                     device.setLastSeen(LocalDateTime.now());
                     deviceRepository.save(device);
-                    log.info("Updated status for device {} (Service: {})", deviceId, service);
+                    log.info("Updated status for device {} (Services: {})", deviceId, device.getActiveServices());
                 } else {
                     log.debug("Ignoring status update for {} - throttled", deviceId);
                 }
