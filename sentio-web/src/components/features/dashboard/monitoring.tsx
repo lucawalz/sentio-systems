@@ -12,7 +12,7 @@ import { SmartInsightCard } from './components/smart-insight-card'
 import { AIMonitoringAnalysis } from './components/ai-monitoring-analysis'
 import { ActivityHeatmap } from './components/activity-heatmap'
 import { SpeciesGallery, getSpeciesEmoji } from './components/species-gallery'
-import { WebRTCPlayer } from '@/components/ui/webrtc-player'
+import { HlsPlayer } from '@/components/ui/hls-player'
 
 export default function MonitoringPage() {
     const { selectedDevice } = useDevices()
@@ -199,7 +199,7 @@ export default function MonitoringPage() {
                                 </Button>
                             </div>
                         ) : selectedDevice?.id ? (
-                            <WebRTCPlayer deviceId={selectedDevice.id} />
+                            <HlsPlayer deviceId={selectedDevice.id} />
                         ) : (
                             <div className="flex flex-col items-center justify-center h-64 bg-muted rounded-lg">
                                 <Video className="h-12 w-12 text-muted-foreground mb-4" />
