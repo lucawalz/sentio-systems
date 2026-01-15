@@ -1,40 +1,39 @@
 import { Link } from 'react-router-dom'
+import lucaImg from '../../../assets/Luca Walz.jpg';
+import lillyImg from '../../../assets/LillyLuna.jpg';
+import ekinImg from '../../../assets/Ekin.jpg';
+import philippImg from '../../../assets/Phillip.jpg';
+import raffaelImg from '../../../assets/rb.jpg';
 
 const members = [
     {
-        name: 'Liam Brown',
+        name: 'Luca Walz',
         role: 'Founder - CEO',
-        avatar: 'https://alt.tailus.io/images/team/member-one.webp',
-        link: '#',
+        avatar: lucaImg,
+        link: 'https://de.linkedin.com/in/luca-walz',
     },
     {
-        name: 'Elijah Jones',
+        name: 'Lilly Luna Polzer',
         role: 'Co-Founder - CTO',
-        avatar: 'https://alt.tailus.io/images/team/member-two.webp',
-        link: '#',
+        avatar: lillyImg,
+        link: 'https://de.linkedin.com/in/lilly-luna-polzer-a69966226',
     },
     {
-        name: 'Isabella Garcia',
+        name: 'Ekin Baca',
         role: 'Sales Manager',
-        avatar: 'https://alt.tailus.io/images/team/member-three.webp',
+        avatar: ekinImg,
         link: '#',
     },
     {
-        name: 'Henry Lee',
+        name: 'Philipp Reßin',
         role: 'UX Engeneer',
-        avatar: 'https://alt.tailus.io/images/team/member-four.webp',
-        link: '#',
+        avatar: philippImg,
+        link: 'https://de.linkedin.com/in/philipp-mika-re%C3%9Fin-502187263',
     },
     {
-        name: 'Ava Williams',
+        name: 'Raffael Bucureasa',
         role: 'Interaction Designer',
-        avatar: 'https://alt.tailus.io/images/team/member-five.webp',
-        link: '#',
-    },
-    {
-        name: 'Olivia Miller',
-        role: 'Visual Designer',
-        avatar: 'https://alt.tailus.io/images/team/member-six.webp',
+        avatar: raffaelImg,
         link: '#',
     },
 ]
