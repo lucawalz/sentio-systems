@@ -8,10 +8,7 @@ import os
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
+# Environment variables are passed via docker-compose
 
 # Configure logging
 log_level = os.getenv('LOG_LEVEL', 'INFO')
@@ -21,10 +18,10 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="Animal Detection Preprocessing Service")
 
 # Configuration from environment variables
-SERVICE_HOST = os.getenv('SERVICE_HOST', '0.0.0.0')
-SERVICE_PORT = int(os.getenv('SERVICE_PORT', '8082'))
-BIRD_CLASSIFIER_URL = os.getenv('BIRD_CLASSIFIER_URL', 'http://localhost:8000/detect')
-SPECIES_CLASSIFIER_URL = os.getenv('SPECIES_CLASSIFIER_URL', 'http://localhost:8081/detect')
+HOST = os.getenv('HOST', '0.0.0.0')
+PORT = int(os.getenv('PORT', '8082'))
+BIRD_CLASSIFIER_URL = os.getenv('BIRD_CLASSIFIER_URL', 'http://birder:8000/detect')
+SPECIES_CLASSIFIER_URL = os.getenv('SPECIES_CLASSIFIER_URL', 'http://speciesnet:8081/detect')
 
 # Image saving configuration
 SAVE_IMAGES = os.getenv('SAVE_IMAGES', 'true').lower() == 'true'
@@ -417,4 +414,4 @@ async def preprocess_only(file: UploadFile = File(...)):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host=SERVICE_HOST, port=SERVICE_PORT, log_level=log_level.lower())
+    uvicorn.run(app, host=HOST, port=PORT, log_level=log_level.lower())
