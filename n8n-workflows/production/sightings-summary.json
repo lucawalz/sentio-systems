@@ -78,7 +78,7 @@
     },
     {
       "parameters": {
-        "model": "models/gemini-2.0-flash",
+        "model": "models/gemma-3-27b-it",
         "options": {
           "temperature": 0.7,
           "maxOutputTokens": 1024
