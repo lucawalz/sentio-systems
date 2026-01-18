@@ -140,34 +140,63 @@ export function HlsPlayer({ deviceId, className }: HlsPlayerProps) {
     }
 
     useEffect(() => {
+        let sessionId: string | null = null
+        let heartbeatInterval: ReturnType<typeof setInterval> | null = null
+
+        // Start stream and get session ID
         devicesApi.startStream(deviceId)
-            .then(() => {
-                console.log('[HLS] Stream start requested for device:', deviceId)
+            .then((response) => {
+                sessionId = response.data.sessionId
+                console.log('[HLS] Stream started, sessionId:', sessionId, 'viewers:', response.data.viewerCount)
+
+                // Start heartbeat interval (every 15 seconds)
+                heartbeatInterval = setInterval(() => {
+                    if (sessionId) {
+                        devicesApi.heartbeat(deviceId, sessionId)
+                            .then(() => console.debug('[HLS] Heartbeat sent'))
+                            .catch((err) => console.warn('[HLS] Heartbeat failed:', err))
+                    }
+                }, 15000)
+
+                // Wait a bit for stream to be ready, then load
                 setTimeout(() => {
                     loadStream()
                 }, 2000)
             })
             .catch((err) => {
                 console.warn('[HLS] Failed to request stream start:', err)
-                loadStream()
+                loadStream() // Try to load anyway
             })
 
+        // Handle page unload - send stop beacon with sessionId
         const handleBeforeUnload = () => {
-            const url = `/api/stream/${deviceId}/stop`
-            navigator.sendBeacon(url)
+            if (sessionId) {
+                const url = `/api/stream/${deviceId}/stop?sessionId=${encodeURIComponent(sessionId)}`
+                navigator.sendBeacon(url)
+            }
         }
         window.addEventListener('beforeunload', handleBeforeUnload)
 
         return () => {
             window.removeEventListener('beforeunload', handleBeforeUnload)
 
+            // Clear heartbeat interval
+            if (heartbeatInterval) {
+                clearInterval(heartbeatInterval)
+            }
+
+            // Destroy HLS instance
             if (hlsRef.current) {
                 hlsRef.current.destroy()
                 hlsRef.current = null
             }
-            devicesApi.stopStream(deviceId)
-                .then(() => console.log('[HLS] Stream stop requested for device:', deviceId))
-                .catch((err) => console.warn('[HLS] Failed to request stream stop:', err))
+
+            // Send stop request with sessionId
+            if (sessionId) {
+                devicesApi.stopStream(deviceId, sessionId)
+                    .then((res) => console.log('[HLS] Stream stop requested, viewers remaining:', res.data?.viewerCount))
+                    .catch((err) => console.warn('[HLS] Failed to request stream stop:', err))
+            }
         }
     }, [deviceId])
 

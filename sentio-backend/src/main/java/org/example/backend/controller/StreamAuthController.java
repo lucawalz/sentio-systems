@@ -161,6 +161,7 @@ public class StreamAuthController {
     /**
      * Request device to start streaming (on-demand).
      * Called by frontend when user opens the stream viewer.
+     * Returns a sessionId that must be used for heartbeat and stop requests.
      */
     @PostMapping("/{deviceId}/start")
     @Operation(summary = "Start stream", description = "Request device to start RTMP streaming")
@@ -177,13 +178,19 @@ public class StreamAuthController {
             return ResponseEntity.status(403).build();
         }
 
-        boolean success = streamService.requestStreamStart(deviceId);
-        log.info("Stream start requested for device {}: {}", deviceId, success ? "sent" : "failed");
+        // Create a unique session ID for this viewer
+        String sessionId = streamService.createViewerSession();
+        boolean success = streamService.requestStreamStart(deviceId, sessionId);
+        long viewerCount = streamService.getViewerCount(deviceId);
+
+        log.info("Stream start requested for device {}: session={}, viewers={}",
+                deviceId, sessionId, viewerCount);
 
         return ResponseEntity.ok(Map.of(
                 "deviceId", deviceId,
-                "command", "start",
-                "sent", success));
+                "sessionId", sessionId,
+                "viewerCount", viewerCount,
+                "success", success));
     }
 
     /**
@@ -194,6 +201,7 @@ public class StreamAuthController {
     @Operation(summary = "Stop stream", description = "Request device to stop RTMP streaming")
     public ResponseEntity<Map<String, Object>> stopStream(
             @PathVariable String deviceId,
+            @RequestParam(required = false) String sessionId,
             @CookieValue(name = "access_token", required = false) String accessToken) {
 
         if (accessToken == null || accessToken.isEmpty()) {
@@ -205,13 +213,50 @@ public class StreamAuthController {
             return ResponseEntity.status(403).build();
         }
 
-        boolean success = streamService.requestStreamStop(deviceId);
-        log.info("Stream stop requested for device {}: {}", deviceId, success ? "sent" : "failed");
+        if (sessionId == null || sessionId.isEmpty()) {
+            log.warn("Stream stop request missing sessionId for device {}", deviceId);
+            return ResponseEntity.badRequest().body(Map.of(
+                    "error", "sessionId is required"));
+        }
+
+        boolean success = streamService.requestStreamStop(deviceId, sessionId);
+        long viewerCount = streamService.getViewerCount(deviceId);
+
+        log.info("Stream stop requested for device {}: session={}, viewers={}",
+                deviceId, sessionId, viewerCount);
 
         return ResponseEntity.ok(Map.of(
                 "deviceId", deviceId,
-                "command", "stop",
-                "sent", success));
+                "sessionId", sessionId,
+                "viewerCount", viewerCount,
+                "success", success));
+    }
+
+    /**
+     * Heartbeat to keep viewer session alive.
+     * Called by frontend every 15 seconds while viewing.
+     */
+    @PostMapping("/{deviceId}/heartbeat")
+    @Operation(summary = "Stream heartbeat", description = "Keep viewer session alive")
+    public ResponseEntity<Map<String, Object>> heartbeat(
+            @PathVariable String deviceId,
+            @RequestParam String sessionId,
+            @CookieValue(name = "access_token", required = false) String accessToken) {
+
+        if (accessToken == null || accessToken.isEmpty()) {
+            return ResponseEntity.status(401).build();
+        }
+
+        if (!deviceService.hasAccessToDevice(deviceId)) {
+            return ResponseEntity.status(403).build();
+        }
+
+        boolean extended = streamService.heartbeat(deviceId, sessionId);
+
+        return ResponseEntity.ok(Map.of(
+                "deviceId", deviceId,
+                "sessionId", sessionId,
+                "extended", extended));
     }
 
     /**
