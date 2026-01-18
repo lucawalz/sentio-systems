@@ -37,7 +37,7 @@ class RTMPStreamConfig:
             secrets_file: Path to secrets file containing device credentials
         """
         self.media_server_url = media_server_url or os.environ.get(
-            "MEDIA_SERVER_URL", "rtmps://stream.syslabs.dev:1936"
+            "MEDIA_SERVER_URL", "rtmps://stream.syslabs.dev:443"
         )
         
         # Load device credentials

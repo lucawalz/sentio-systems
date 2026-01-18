@@ -1,5 +1,5 @@
 {
-    "name": "Sentio AI Agent",
+    "name": "Sentio AI Agent (Groq)",
     "nodes": [
         {
             "id": "webhook-trigger",
@@ -10,10 +10,10 @@
                 0,
                 200
             ],
-            "webhookId": "sentio-ai-agent",
+            "webhookId": "sentio-ai-agent-groq",
             "parameters": {
                 "httpMethod": "POST",
-                "path": "sentio-ai-agent",
+                "path": "sentio-ai-agent-groq",
                 "responseMode": "lastNode",
                 "options": {}
             }
@@ -36,24 +36,24 @@
             }
         },
         {
-            "id": "gemini-model",
-            "name": "Google Gemini Model",
-            "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+            "id": "groq-model",
+            "name": "Groq Chat Model",
+            "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
             "typeVersion": 1,
             "position": [
                 0,
                 400
             ],
             "parameters": {
-                "model": "models/gemini-2.0-flash",
+                "model": "openai/gpt-oss-20b",
                 "options": {
                     "temperature": 0.7
                 }
             },
             "credentials": {
-                "googleGeminiApi": {
-                    "id": "GEMINI_CREDENTIAL_ID",
-                    "name": "Google Gemini API"
+                "groqApi": {
+                    "id": "GROQ_CREDENTIAL_ID",
+                    "name": "Groq API"
                 }
             }
         },
@@ -202,7 +202,7 @@
                 ]
             ]
         },
-        "Google Gemini Model": {
+        "Groq Chat Model": {
             "ai_languageModel": [
                 [
                     {
@@ -290,6 +290,9 @@
         },
         {
             "name": "agent"
+        },
+        {
+            "name": "groq"
         }
     ],
     "triggerCount": 1,

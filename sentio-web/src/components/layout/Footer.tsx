@@ -25,7 +25,7 @@ const links = [
     {
         title: 'Privacy',
         to: '/privacy'
-    },
+    }
 ]
 
 export default function FooterSection() {

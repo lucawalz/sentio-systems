@@ -30,11 +30,7 @@ import uvicorn
 from PIL import Image
 import io
 
-# Environment configuration
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv('speciesnet_ai.env')
+# Environment variables are passed via docker-compose
 
 # Configure logging
 logging.basicConfig(
@@ -245,9 +241,9 @@ async def root():
 
 
 def main():
-    host = os.getenv("API_HOST", "0.0.0.0")
-    port = int(os.getenv("API_PORT", "8000"))
-    reload_enabled = os.getenv("API_RELOAD", "true").lower() == "true"
+    host = os.getenv("HOST", "0.0.0.0")
+    port = int(os.getenv("PORT", "8081"))
+    reload_enabled = os.getenv("RELOAD", "false").lower() == "true"
 
     logger.info("Starting SpeciesNet Server...")
     uvicorn.run("speciesnet_ai:app", host=host, port=port, reload=reload_enabled)

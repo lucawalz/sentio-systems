@@ -29,11 +29,7 @@ from PIL import Image
 import numpy as np
 import io
 
-# Environment configuration
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv('birder_ai.env')
+# Environment variables are passed via docker-compose
 
 # Configure logging
 logging.basicConfig(
@@ -365,9 +361,9 @@ async def root():
 
 def main():
     """Main entry point for the application"""
-    host = os.getenv('API_HOST', '0.0.0.0')
-    port = int(os.getenv('API_PORT', '8000'))
-    reload_enabled = os.getenv('API_RELOAD', 'true').lower() == 'true'
+    host = os.getenv('HOST', '0.0.0.0')
+    port = int(os.getenv('PORT', '8000'))
+    reload_enabled = os.getenv('RELOAD', 'false').lower() == 'true'
 
     logger.info("Starting Bird Classification Server...")
     logger.info("Available endpoints:")
