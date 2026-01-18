@@ -35,6 +35,21 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # Redis for distributed session/viewer tracking
+  redis:
+    image: redis:7-alpine
+    container_name: sentio-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    networks:
+      - sentio-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
   # Keycloak Identity Provider
   keycloak:
     image: quay.io/keycloak/keycloak:23.0.7
@@ -147,6 +162,10 @@ services:
 
       # n8n Workflow Integration
       N8N_WEBHOOK_BASE_URL: ${N8N_WEBHOOK_BASE_URL:-https://n8n.syslabs.dev/webhook}
+
+      # Redis Configuration
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
     ports:
       - "${BACKEND_PORT:-8083}:8080"
     networks:

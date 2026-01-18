@@ -29,6 +29,7 @@ public class StreamService {
     private final DeviceRepository deviceRepository;
     private final DeviceService deviceService;
     private final JwtDecoder jwtDecoder;
+    private final ViewerSessionService viewerSessionService;
     private final MessageChannel mqttOutboundChannel;
 
     @Value("${mediamtx.base-url:https://media.syslabs.dev}")
@@ -47,10 +48,12 @@ public class StreamService {
             DeviceRepository deviceRepository,
             DeviceService deviceService,
             JwtDecoder jwtDecoder,
+            ViewerSessionService viewerSessionService,
             @Qualifier("mqttOutboundChannel") MessageChannel mqttOutboundChannel) {
         this.deviceRepository = deviceRepository;
         this.deviceService = deviceService;
         this.jwtDecoder = jwtDecoder;
+        this.viewerSessionService = viewerSessionService;
         this.mqttOutboundChannel = mqttOutboundChannel;
     }
 
@@ -222,28 +225,71 @@ public class StreamService {
         entry.attempts++;
     }
 
-    // --- On-Demand Stream Control ---
+    // --- On-Demand Stream Control with Session Tracking ---
+
+    /**
+     * Create a new viewer session ID.
+     */
+    public String createViewerSession() {
+        return viewerSessionService.createSessionId();
+    }
 
     /**
      * Request device to start streaming.
-     * Publishes MQTT command to device/{deviceId}/command topic.
+     * Only sends MQTT command when first viewer joins.
      * 
-     * @param deviceId Device ID
-     * @return true if message was sent successfully
+     * @param deviceId  Device ID
+     * @param sessionId Viewer session ID
+     * @return true if viewer was registered successfully
      */
-    public boolean requestStreamStart(String deviceId) {
-        return sendStreamCommand(deviceId, "start");
+    public boolean requestStreamStart(String deviceId, String sessionId) {
+        boolean isFirstViewer = viewerSessionService.joinStream(deviceId, sessionId);
+
+        if (isFirstViewer) {
+            log.info("First viewer joined - sending start command to device {}", deviceId);
+            return sendStreamCommand(deviceId, "start");
+        }
+
+        log.debug("Additional viewer joined for device {} - stream already active", deviceId);
+        return true; // Viewer registered, stream already running
     }
 
     /**
      * Request device to stop streaming.
-     * Publishes MQTT command to device/{deviceId}/command topic.
+     * Only sends MQTT command when last viewer leaves.
      * 
-     * @param deviceId Device ID
-     * @return true if message was sent successfully
+     * @param deviceId  Device ID
+     * @param sessionId Viewer session ID
+     * @return true if viewer was unregistered successfully
      */
-    public boolean requestStreamStop(String deviceId) {
-        return sendStreamCommand(deviceId, "stop");
+    public boolean requestStreamStop(String deviceId, String sessionId) {
+        boolean wasLastViewer = viewerSessionService.leaveStream(deviceId, sessionId);
+
+        if (wasLastViewer) {
+            log.info("Last viewer left - sending stop command to device {}", deviceId);
+            return sendStreamCommand(deviceId, "stop");
+        }
+
+        log.debug("Viewer left for device {} - other viewers still watching", deviceId);
+        return true; // Viewer unregistered, others still watching
+    }
+
+    /**
+     * Extend viewer session TTL (heartbeat).
+     * 
+     * @param deviceId  Device ID
+     * @param sessionId Viewer session ID
+     * @return true if session was extended
+     */
+    public boolean heartbeat(String deviceId, String sessionId) {
+        return viewerSessionService.heartbeat(deviceId, sessionId);
+    }
+
+    /**
+     * Get current viewer count for a device.
+     */
+    public long getViewerCount(String deviceId) {
+        return viewerSessionService.getViewerCount(deviceId);
     }
 
     private boolean sendStreamCommand(String deviceId, String command) {

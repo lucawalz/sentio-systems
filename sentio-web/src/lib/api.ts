@@ -123,9 +123,13 @@ export const devicesApi = {
     getStreamUrl: (deviceId: string) =>
         api.get<StreamUrlResponse>(`/api/stream/url/${deviceId}`),
 
-    // On-demand streaming control
-    startStream: (deviceId: string) => api.post(`/api/stream/${deviceId}/start`),
-    stopStream: (deviceId: string) => api.post(`/api/stream/${deviceId}/stop`),
+    // On-demand streaming control with session tracking
+    startStream: (deviceId: string) =>
+        api.post<StreamStartResponse>(`/api/stream/${deviceId}/start`),
+    stopStream: (deviceId: string, sessionId: string) =>
+        api.post(`/api/stream/${deviceId}/stop`, null, { params: { sessionId } }),
+    heartbeat: (deviceId: string, sessionId: string) =>
+        api.post(`/api/stream/${deviceId}/heartbeat`, null, { params: { sessionId } }),
 }
 
 // Stream URL response type
@@ -134,6 +138,14 @@ export interface StreamUrlResponse {
     isStreaming: boolean
     deviceId: string
     accessToken: string  // Access token for MediaMTX auth
+}
+
+// Stream start response type
+export interface StreamStartResponse {
+    deviceId: string
+    sessionId: string
+    viewerCount: number
+    success: boolean
 }
 
 // Device registration response type

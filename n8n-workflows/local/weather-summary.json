@@ -83,6 +83,27 @@
         },
         {
             "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT wf.forecast_date_time, wf.temperature, wf.apparent_temperature, wf.humidity, wf.precipitation_probability, wf.precipitation, wf.rain, wf.snowfall, wf.cloud_cover, wf.wind_speed, wf.wind_gusts, wf.description, wf.weather_main, wf.city FROM weather_forecasts wf JOIN devices d ON wf.device_id = d.id WHERE d.owner_id = '{{ $json.body.userId }}' AND wf.forecast_date_time >= NOW() AND wf.forecast_date_time <= NOW() + INTERVAL '48 hours' ORDER BY wf.forecast_date_time ASC LIMIT 24",
+                "options": {}
+            },
+            "id": "get-forecasts",
+            "name": "Get Weather Forecasts",
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.5,
+            "position": [
+                220,
+                700
+            ],
+            "credentials": {
+                "postgres": {
+                    "id": "POSTGRES_CREDENTIAL_ID",
+                    "name": "Sentio PostgreSQL"
+                }
+            }
+        },
+        {
+            "parameters": {
                 "mode": "chooseBranch"
             },
             "id": "merge-1",
@@ -109,7 +130,7 @@
         },
         {
             "parameters": {
-                "jsCode": "// Safely get data from each query node (handles empty results)\nlet weatherData = [];\nlet weatherStats = [];\nlet weatherAlerts = [];\n\ntry { weatherData = $('Get Weather Data').all().map(i => i.json); } catch(e) { weatherData = []; }\ntry { weatherStats = $('Get Weather Stats').all().map(i => i.json); } catch(e) { weatherStats = []; }\ntry { weatherAlerts = $('Get Weather Alerts').all().map(i => i.json); } catch(e) { weatherAlerts = []; }\n\nconst userId = $('Webhook').first().json.body?.userId || 'anonymous';\n\n// Return exactly ONE item to ensure only ONE LLM call\nreturn [{\n  json: {\n    recentWeather: weatherData,\n    statistics: weatherStats,\n    alerts: weatherAlerts,\n    userId: userId,\n    hasData: weatherData.length > 0 || weatherStats.length > 0 || weatherAlerts.length > 0\n  }\n}];"
+                "jsCode": "// Safely get data from each query node (handles empty results)\nlet weatherData = [];\nlet weatherStats = [];\nlet weatherAlerts = [];\nlet weatherForecasts = [];\n\ntry { weatherData = $('Get Weather Data').all().map(i => i.json); } catch(e) { weatherData = []; }\ntry { weatherStats = $('Get Weather Stats').all().map(i => i.json); } catch(e) { weatherStats = []; }\ntry { weatherAlerts = $('Get Weather Alerts').all().map(i => i.json); } catch(e) { weatherAlerts = []; }\ntry { weatherForecasts = $('Get Weather Forecasts').all().map(i => i.json); } catch(e) { weatherForecasts = []; }\n\nconst userId = $('Webhook').first().json.body?.userId || 'anonymous';\n\n// Return exactly ONE item to ensure only ONE LLM call\nreturn [{\n  json: {\n    sensorReadings: weatherData,\n    sensorStatistics: weatherStats,\n    alerts: weatherAlerts,\n    forecasts: weatherForecasts,\n    userId: userId,\n    hasData: weatherData.length > 0 || weatherStats.length > 0 || weatherAlerts.length > 0 || weatherForecasts.length > 0\n  }\n}];"
             },
             "id": "aggregate-data",
             "name": "Aggregate All Data",
@@ -146,7 +167,7 @@
         {
             "parameters": {
                 "promptType": "define",
-                "text": "=You are Sentio AI 🌤️, a friendly and enthusiastic weather monitoring assistant!\n\n## Recent Weather Readings (Last 24h)\n{{ JSON.stringify($json.recentWeather, null, 2) }}\n\n## Weather Statistics (Last 24h)\n{{ JSON.stringify($json.statistics, null, 2) }}\n\n## Active Weather Alerts\n{{ JSON.stringify($json.alerts, null, 2) }}\n\n## Instructions\nStart with a warm greeting! 👋 Then create an engaging weather summary:\n\n1. 🌡️ **Current Conditions**: Temperature, humidity, pressure with a friendly vibe\n2. 📊 **Today's Trends**: Notable patterns or changes\n3. ⚠️ **Alerts**: Any active warnings (keep calm but informative)\n4. 🦜 **Wildlife Tips**: How weather affects wildlife viewing opportunities\n\nStyle Guidelines:\n- Use emojis throughout to add warmth and visual appeal ☀️🌧️\n- Be conversational and upbeat - like a friendly weather buddy\n- Convert technical readings to relatable descriptions\n- Keep it concise (2-3 short paragraphs)\n- If conditions are challenging, stay positive with indoor tips\n- End with something encouraging! 🌈"
+                "text": "=You are Sentio AI, a knowledgeable weather analyst for a garden and wildlife monitoring system.\n\n## Local Sensor Readings (Last 24h)\nReal-time outdoor measurements from the garden's Raspberry Pi weather station (temperature, humidity, pressure, UV index, light levels):\n{{ JSON.stringify($json.sensorReadings, null, 2) }}\n\n## Sensor Statistics (Last 24h)\nAggregated stats from the local sensors:\n{{ JSON.stringify($json.sensorStatistics, null, 2) }}\n\n## Weather Forecast (Next 48h)\nMeteorological forecast data from weather services:\n{{ JSON.stringify($json.forecasts, null, 2) }}\n\n## Active Weather Alerts\nOfficial warnings and advisories:\n{{ JSON.stringify($json.alerts, null, 2) }}\n\n## Analysis Instructions\n\n**Data Sources**:\n1. **Local sensors** = Real-time ground truth from the garden (temperature, humidity, pressure, UV, light)\n2. **Forecasts** = Predicted weather from meteorological services\n3. **Alerts** = Official warnings (frost, storms, etc.)\n\n**Key Analysis Tasks**:\n\n1. **Compare local sensors vs forecast** - If there's a significant difference (e.g., sensor shows 5°C but forecast says -2°C), highlight this discrepancy and explain possible reasons (microclimate, forecast lag, sensor location)\n\n2. **🌡️ Current Conditions** (use sensor data as ground truth)\n   - Report actual temperature, humidity, pressure from sensors\n   - Note UV index and light levels if significant\n\n3. **⚠️ Alerts** (if any active)\n   - Highlight severity and practical implications\n   - Cross-reference with sensor readings (e.g., \"Frost warning issued, and sensors confirm it's currently X°C\")\n\n4. **🔮 Forecast & Trends**\n   - Upcoming temperature changes, precipitation, wind from forecast data\n   - How sensor readings compare to what was predicted\n\n5. **🦊 Wildlife Impact**\n   - How current and forecasted conditions affect wildlife activity\n\n**Style**: Professional, analytical. Compare data sources. Note discrepancies. Minimal emojis (headers only). 2-3 paragraphs."
             },
             "id": "llm-chain",
             "name": "Generate Summary",
@@ -265,6 +286,22 @@
                     },
                     {
                         "node": "Get Weather Alerts",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "Get Weather Forecasts",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Get Weather Forecasts": {
+            "main": [
+                [
+                    {
+                        "node": "Aggregate All Data",
                         "type": "main",
                         "index": 0
                     }
