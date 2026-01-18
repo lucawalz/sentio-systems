@@ -85,7 +85,7 @@ device/{deviceId}/command: For subscribing to backend commands (e.g., configurat
   "location": "garden",
   "timestamp": "2026-01-10T12:00:00Z",
   "temperature": 4.2,
-  "humidity": 87,
+  "humidity": 67,
   "pressure": 1013.5,
   "lux": 1500,
   "uvi": 2.5
@@ -250,8 +250,78 @@ sequenceDiagram
 
 ## Error Handling Strategies
 
-### Async Processing
+### Backend
+
+#### Exception Logging and Non-Blocking Processing
+- Critical operations like MQTT message handling in `RaspiWeatherDataHandler` and AI Classification in `AnimalClassifierService` unse try/catch blocks
+- Errors get logged with details but don't stop the programs execution
+- Invalid messages are discarded
+- Async tasks continue without propagating exceptions back to callers
+
+#### Validation and Early Returns
+- Input validation (for example required fields in weather data) prevents malformed payloads
+- Warnings get logged
+- Graceful exit
+
+#### Resilience Patterns
+**Circuit Breakers**: 
+- Are applied to external AI service calls using Resilience4j
+- If failures exceed thresholds, requests fall back to skipping AI classification
+- Logs warnings and marks detections as unprocessed
+
+**Async Error Isolation**:
+- `@Async` methods run in background threads
+- Exceptions logged locally, don't affect main flow
 - As described in the paragraph Error Handling under @AsyncProcessing
+
+### Embedded
+
+#### Sensor and Hardware Resilience
+- In `weather_sensors.py` and `main.py`, try-except blocks handle sensor initialization failures
+- Logs errors and continues with available sensors
+
+#### Graceful Degradation
+- GPS or sensor reading failures are caught
+- Get logged and retried in background threads
+- Doesn't stop data collection
+
+#### Configuration Loading
+- Try-except for YAML config parsing
+- Fallbacks to default and error logging
+
+### AI Services
+
+#### Preprocessing and Classification
+- Similar to embedded code, try-except around image processing and API calls
+- Logging for failures, continuation of workflow
+
+### Frontend
+
+#### HTTP Error Handling
+Axios interceptors manage API responses:
+- Automatic token refresh on 401 errors
+- Queueing failed requests during refresh
+- Redirect to login on refresh failures
+
+#### No Explicit Try-Catch in Components
+- Relies on framework-level error boundaries (aren't visible in the code)
+- Service-lazer handling for user-facing errors
+
+### Overall Strategies / Error Handling Summary
+
+#### Logging Centric
+- Errors are primarily logged with SLF4J rather than thrown
+- Ensures that the system remains operational for IoT deployment
+
+#### Retry and Fallback
+- Circuit breakers and async isolation prevent cascading failures
+- External API calls use caching or skip on errors
+
+#### Validation Over Crashing
+Strict input checks avoid downstream issues
+
+#### No Global Error Recovery
+Failures in non-critical paths don't block core functionalities like data ingestion
 
 ---
 
