@@ -3,6 +3,7 @@ package org.example.backend.config;
 import lombok.RequiredArgsConstructor;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.example.backend.mqtt.AnimalDetectionHandler;
+import org.example.backend.mqtt.DeviceStatusHandler;
 import org.example.backend.mqtt.RaspiWeatherDataHandler;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -25,6 +26,7 @@ public class MqttConfig {
 
     private final RaspiWeatherDataHandler raspiWeatherDataHandler;
     private final AnimalDetectionHandler animalDetectionHandler;
+    private final DeviceStatusHandler deviceStatusHandler;
 
     @Value("${mqtt.broker}")
     private String mqttBroker;
@@ -112,14 +114,14 @@ public class MqttConfig {
 
             try {
                 // Route messages based on topic
-                if (topic.equals("weather/data") || topic.equals("weather")) {
+                if (topic.equals("weather/data")) {
                     raspiWeatherDataHandler.processWeatherData(payload);
-                } else if (topic.equals("weather/status")) {
-                    System.out.println("Weather status: " + payload);
-                } else if (topic.equals("animal_detection/events")) {
+                } else if (topic.equals("animals/data")) {
                     animalDetectionHandler.processAnimalDetection(payload);
-                } else if (topic.equals("animal_detection/status")) {
-                    System.out.println("Animal detector status: " + payload);
+                } else if (topic.startsWith("device/") && topic.endsWith("/status")) {
+                    // Unified device status: device/{deviceId}/status
+                    deviceStatusHandler.processStatusUpdate(payload);
+                    System.out.println("Device status: " + payload);
                 } else if (topic.equals("camera")) {
                     System.out.println(
                             "Camera data received: " + payload.substring(0, Math.min(100, payload.length())) + "...");
@@ -131,5 +133,23 @@ public class MqttConfig {
                 e.printStackTrace();
             }
         };
+    }
+
+    // --- Outbound channel for publishing to devices ---
+
+    @Bean
+    public MessageChannel mqttOutboundChannel() {
+        return new DirectChannel();
+    }
+
+    @Bean
+    @ServiceActivator(inputChannel = "mqttOutboundChannel")
+    public MessageHandler mqttOutboundHandler() {
+        org.springframework.integration.mqtt.outbound.MqttPahoMessageHandler handler = new org.springframework.integration.mqtt.outbound.MqttPahoMessageHandler(
+                mqttClientId + "-outbound", mqttClientFactory());
+        handler.setAsync(true);
+        handler.setDefaultQos(1);
+        // Topic is set per-message via header
+        return handler;
     }
 }

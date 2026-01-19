@@ -23,4 +23,11 @@ public interface AuthService {
      * @return UserInfo containing username and email
      */
     AuthDTOs.UserInfo getUserFromToken(String accessToken);
+
+    /**
+     * Gets the currently authenticated user from the security context.
+     * 
+     * @return UserInfo containing username and email
+     */
+    AuthDTOs.UserInfo getCurrentUser();
 }

@@ -4,7 +4,6 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -17,7 +16,6 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
 
-//ToDo Fix: my api/contact is not accepted. Something is wrong
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
@@ -26,17 +24,22 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .csrf(csrf -> csrf.disable())
+                .csrf(csrf -> csrf.disable()) // CSRF disabled for now, relying on SameSite=Lax cookies
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/").permitAll()
-                        .requestMatchers("/api/contact").permitAll()
-                        .requestMatchers("/api/").authenticated()
+                        .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/api/internal/mqtt/**").permitAll() // Called by Mosquitto auth plugin
+                        .requestMatchers("/api/stream/auth").permitAll() // Called by MediaMTX auth webhook
+                        .requestMatchers("/api/stream/ready").permitAll() // Stream ready notification
+                        .requestMatchers("/api/stream/not-ready").permitAll() // Stream ended notification
+                        .requestMatchers("/api/devices/pair").permitAll() // Device pairing (no auth required)
+                        .requestMatchers("/ws/**").permitAll() // WebSocket handshake
+                        .requestMatchers("/api/**").authenticated() // Require auth for other API endpoints
                         .requestMatchers("/swagger-ui.html",
-                                "/swagger-ui/",
-                                "/v3/api-docs/",
-                                "/api-docs/",
-                                "/swagger-resources/",
+                                "/swagger-ui/**",
+                                "/v3/api-docs/**",
+                                "/api-docs/**",
+                                "/swagger-resources/**",
                                 "/webjars/**")
                         .permitAll()
                         .anyRequest().authenticated())
@@ -74,7 +77,8 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(Arrays.asList("http://localhost:5173", "http://localhost:3000"));
+        configuration.setAllowedOrigins(
+                Arrays.asList("http://localhost:5173", "http://localhost:3000", "https://sentio.syslabs.dev"));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("*"));
         configuration.setAllowCredentials(true);

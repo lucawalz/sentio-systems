@@ -32,7 +32,10 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Slf4j
-@Table(name = "raspi_weather_data")
+@Table(name = "raspi_weather_data", indexes = {
+        @Index(name = "idx_weather_data_device", columnList = "device_id"),
+        @Index(name = "idx_weather_data_device_time", columnList = "device_id, timestamp DESC")
+})
 public class RaspiWeatherData {
 
     @Id
@@ -66,6 +69,10 @@ public class RaspiWeatherData {
     /** UV index measurement (0-11+ scale) */
     @Column(nullable = false)
     private Float uvi;
+
+    /** Gas resistance from BME688 sensor in Ohms (air quality indicator) */
+    @Column(name = "gas_resistance")
+    private Integer gasResistance;
 
     /** Timestamp when the measurement was recorded by the sensor */
     @Column(nullable = false)
