@@ -6,6 +6,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
+import org.example.backend.util.EmailTemplateBuilder;
+
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.Base64;
@@ -100,7 +102,7 @@ public class PasswordResetService {
         String resetUrl = frontendUrl + "/reset-password?token=" + token;
 
         String subject = "Reset your password";
-        String htmlContent = org.example.backend.util.EmailTemplateBuilder.buildPasswordResetEmail(resetUrl);
+        String htmlContent = EmailTemplateBuilder.buildPasswordResetEmail(resetUrl);
 
         try {
             emailService.sendHtmlEmail(email, subject, htmlContent, null);

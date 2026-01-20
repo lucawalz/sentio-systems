@@ -24,12 +24,12 @@ public class AuthController {
     private final EmailVerificationService emailVerificationService;
 
     @PostMapping("/register")
-    public ResponseEntity<RegisterResponse> register(@RequestBody AuthDTOs.RegisterRequest request) {
+    public ResponseEntity<AuthDTOs.RegisterResponse> register(@RequestBody AuthDTOs.RegisterRequest request) {
         authService.register(request);
         // Send custom verification email
         emailVerificationService.createVerificationToken(request.getEmail());
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(new RegisterResponse(true, "Account created! Please check your email to verify your account."));
+                .body(new AuthDTOs.RegisterResponse(true, "Account created! Please check your email to verify your account."));
     }
 
     @PostMapping("/login")
@@ -119,7 +119,7 @@ public class AuthController {
     // ==================== PASSWORD RESET ====================
 
     @PostMapping("/forgot-password")
-    public ResponseEntity<Void> forgotPassword(@RequestBody ForgotPasswordRequest request) {
+    public ResponseEntity<Void> forgotPassword(@RequestBody AuthDTOs.ForgotPasswordRequest request) {
         if (authService.userExistsByEmail(request.email())) {
             passwordResetService.createResetToken(request.email());
         }
@@ -127,65 +127,65 @@ public class AuthController {
     }
 
     @GetMapping("/validate-reset-token")
-    public ResponseEntity<TokenValidationResponse> validateResetToken(@RequestParam String token) {
+    public ResponseEntity<AuthDTOs.TokenValidationResponse> validateResetToken(@RequestParam String token) {
         String email = passwordResetService.validateToken(token);
         if (email == null) {
             return ResponseEntity.badRequest()
-                    .body(new TokenValidationResponse(false, null, "Invalid or expired token"));
+                    .body(new AuthDTOs.TokenValidationResponse(false, null, "Invalid or expired token"));
         }
-        return ResponseEntity.ok(new TokenValidationResponse(true, maskEmail(email), null));
+        return ResponseEntity.ok(new AuthDTOs.TokenValidationResponse(true, maskEmail(email), null));
     }
 
     @PostMapping("/reset-password")
-    public ResponseEntity<MessageResponse> resetPassword(@RequestBody ResetPasswordRequest request) {
+    public ResponseEntity<AuthDTOs.MessageResponse> resetPassword(@RequestBody AuthDTOs.ResetPasswordRequest request) {
         String email = passwordResetService.validateToken(request.token());
         if (email == null) {
             return ResponseEntity.badRequest()
-                    .body(new MessageResponse(false, "Invalid or expired token. Please request a new reset link."));
+                    .body(new AuthDTOs.MessageResponse(false, "Invalid or expired token. Please request a new reset link."));
         }
 
         if (request.password() == null || request.password().length() < 8) {
             return ResponseEntity.badRequest()
-                    .body(new MessageResponse(false, "Password must be at least 8 characters"));
+                    .body(new AuthDTOs.MessageResponse(false, "Password must be at least 8 characters"));
         }
 
         if (!request.password().equals(request.confirmPassword())) {
             return ResponseEntity.badRequest()
-                    .body(new MessageResponse(false, "Passwords do not match"));
+                    .body(new AuthDTOs.MessageResponse(false, "Passwords do not match"));
         }
 
         try {
             authService.updatePassword(email, request.password());
             passwordResetService.invalidateToken(request.token());
-            return ResponseEntity.ok(new MessageResponse(true, "Password updated successfully"));
+            return ResponseEntity.ok(new AuthDTOs.MessageResponse(true, "Password updated successfully"));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new MessageResponse(false, "Failed to update password. Please try again."));
+                    .body(new AuthDTOs.MessageResponse(false, "Failed to update password. Please try again."));
         }
     }
 
     // ==================== EMAIL VERIFICATION ====================
 
     @GetMapping("/verify-email")
-    public ResponseEntity<MessageResponse> verifyEmail(@RequestParam String token) {
+    public ResponseEntity<AuthDTOs.MessageResponse> verifyEmail(@RequestParam String token) {
         String email = emailVerificationService.validateToken(token);
         if (email == null) {
             return ResponseEntity.badRequest()
-                    .body(new MessageResponse(false, "Invalid or expired verification link."));
+                    .body(new AuthDTOs.MessageResponse(false, "Invalid or expired verification link."));
         }
 
         try {
             authService.markEmailVerified(email);
             emailVerificationService.invalidateToken(token);
-            return ResponseEntity.ok(new MessageResponse(true, "Email verified successfully! You can now sign in."));
+            return ResponseEntity.ok(new AuthDTOs.MessageResponse(true, "Email verified successfully! You can now sign in."));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new MessageResponse(false, "Failed to verify email. Please try again."));
+                    .body(new AuthDTOs.MessageResponse(false, "Failed to verify email. Please try again."));
         }
     }
 
     @PostMapping("/resend-verification")
-    public ResponseEntity<Void> resendVerification(@RequestBody ResendVerificationRequest request) {
+    public ResponseEntity<Void> resendVerification(@RequestBody AuthDTOs.ResendVerificationRequest request) {
         if (authService.userExistsByEmail(request.email())) {
             emailVerificationService.createVerificationToken(request.email());
         }
@@ -198,24 +198,5 @@ public class AuthController {
             return "***" + email.substring(atIndex);
         }
         return email.substring(0, 2) + "***" + email.substring(atIndex);
-    }
-
-    // DTOs
-    public record RegisterResponse(boolean success, String message) {
-    }
-
-    public record ForgotPasswordRequest(String email) {
-    }
-
-    public record TokenValidationResponse(boolean valid, String email, String error) {
-    }
-
-    public record ResetPasswordRequest(String token, String password, String confirmPassword) {
-    }
-
-    public record MessageResponse(boolean success, String message) {
-    }
-
-    public record ResendVerificationRequest(String email) {
     }
 }

@@ -6,6 +6,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
+import org.example.backend.util.EmailTemplateBuilder;
+
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.Base64;
@@ -99,7 +101,7 @@ public class EmailVerificationService {
         String verifyUrl = frontendUrl + "/verify-email?token=" + token;
 
         String subject = "Verify your email address";
-        String htmlContent = org.example.backend.util.EmailTemplateBuilder.buildVerificationEmail(verifyUrl);
+        String htmlContent = EmailTemplateBuilder.buildVerificationEmail(verifyUrl);
 
         try {
             emailService.sendHtmlEmail(email, subject, htmlContent, null);
