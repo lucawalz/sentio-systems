@@ -150,7 +150,7 @@ export default function SignUpPage() {
 
         try {
             await authApi.register(formData)
-            navigate('/login', { state: { message: 'Account created! Please sign in.' } })
+            navigate('/login', { state: { message: 'Account created! Please check your email to verify your account before signing in.' } })
         } catch (err: unknown) {
             console.error('Registration failed:', err)
             setError(getErrorMessage(err))
