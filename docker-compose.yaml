@@ -4,13 +4,15 @@ services:
     image: alpine:latest
     container_name: sentio-init-realm
     command: >
-      sh -c "apk add --no-cache gettext sed && echo 'Generating Keycloak realm configuration...' && sed -e 's|KEYCLOAK_CLIENT_SECRET_PLACEHOLDER|'\"$${KEYCLOAK_ADMIN_CLIENT_SECRET}\"'|g' -e 's|N8N_CLIENT_SECRET_PLACEHOLDER|'\"$${N8N_CLIENT_SECRET}\"'|g' /init-scripts/sentio-realm.json.template > /realm_data/sentio-realm.json && echo 'Realm configuration generated successfully.'"
+      sh -c "apk add --no-cache gettext sed && echo 'Generating Keycloak realm configuration...' && sed -e 's|KEYCLOAK_CLIENT_SECRET_PLACEHOLDER|'\"$${KEYCLOAK_ADMIN_CLIENT_SECRET}\"'|g' -e 's|N8N_CLIENT_SECRET_PLACEHOLDER|'\"$${N8N_CLIENT_SECRET}\"'|g' -e 's|RESEND_API_KEY_PLACEHOLDER|'\"$${RESEND_API_KEY}\"'|g' -e 's|RESEND_FROM_EMAIL_PLACEHOLDER|'\"$${RESEND_FROM_EMAIL}\"'|g' /init-scripts/sentio-realm.json.template > /realm_data/sentio-realm.json && echo 'Realm configuration generated successfully.'"
     volumes:
       - ./init-scripts:/init-scripts:ro
       - realm_data:/realm_data
     environment:
       KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET}
       N8N_CLIENT_SECRET: ${N8N_CLIENT_SECRET}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-noreply@syslabs.dev}
     networks:
       - sentio-network
 
@@ -166,6 +168,11 @@ services:
       # Redis Configuration
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
+
+      # Resend Email Configuration
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-noreply@syslabs.dev}
+      CONTACT_EMAIL_TO: ${CONTACT_EMAIL_TO:-team@syslabs.dev}
     ports:
       - "${BACKEND_PORT:-8083}:8080"
     networks:

@@ -1,32 +1,32 @@
 package org.example.backend.service;
 
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.example.backend.dto.ContactRequest;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 
+/**
+ * Service to handle contact form submissions.
+ * Sends emails via Resend API to the configured recipient.
+ */
 @Service
+@RequiredArgsConstructor
+@Slf4j
 public class ContactService {
-    private final JavaMailSender mailSender;
 
-    @Value("${contact.mail.to}")
+    private final ResendEmailService emailService;
+
+    @Value("${contact.mail.to:team@syslabs.dev}")
     private String contactTo;
 
-    public ContactService(JavaMailSender mailSender) {
-        this.mailSender = mailSender;
-    }
-
+    /**
+     * Send a contact form submission as an email.
+     */
     public void sendContactMail(ContactRequest request) {
-        SimpleMailMessage msg = new SimpleMailMessage();
-        msg.setFrom("SentioSystems@outlook.com");
-        msg.setTo(contactTo);
-        msg.setSubject("New contact message: " + safe(request.getReference()));
+        log.info("Processing contact form submission from: {}", request.getMail());
 
-        // set sender as Reply-To if able to
-        if (request.getMail() != null && !request.getMail().isBlank()) {
-            msg.setReplyTo(request.getMail());
-        }
+        String subject = "New contact message: " + safe(request.getReference());
 
         String text = """
                 New contact message from Sentio website:
@@ -42,16 +42,15 @@ public class ContactService {
                 safe(request.getName()),
                 safe(request.getSurname()),
                 safe(request.getMail()),
-                safe(request.getMessage())
-        );
+                safe(request.getMessage()));
 
-        msg.setText(text);
+        // Send email with user's email as reply-to
+        emailService.sendEmail(contactTo, subject, text, request.getMail());
 
-        mailSender.send(msg);
+        log.info("Contact form email sent successfully to {}", contactTo);
     }
 
     private String safe(String value) {
         return value == null ? "" : value;
     }
-
 }

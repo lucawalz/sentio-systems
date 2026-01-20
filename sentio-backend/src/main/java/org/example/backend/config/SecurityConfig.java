@@ -33,6 +33,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/stream/ready").permitAll() // Stream ready notification
                         .requestMatchers("/api/stream/not-ready").permitAll() // Stream ended notification
                         .requestMatchers("/api/devices/pair").permitAll() // Device pairing (no auth required)
+                        .requestMatchers("/api/contact/**").permitAll() // Contact form (public)
                         .requestMatchers("/ws/**").permitAll() // WebSocket handshake
                         .requestMatchers("/api/**").authenticated() // Require auth for other API endpoints
                         .requestMatchers("/swagger-ui.html",
