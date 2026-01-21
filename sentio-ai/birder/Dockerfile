@@ -16,6 +16,7 @@ RUN pip install --upgrade pip && \
 
 # Copy application files
 COPY birder_ai.py .
+COPY worker.py .
 COPY entrypoint.sh .
 RUN chmod +x entrypoint.sh
 

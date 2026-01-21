@@ -10,3 +10,11 @@ certifi
 # Image processing
 Pillow
 numpy
+
+# ML (required for SpeciesNetClassifier)
+torch
+
+# Redis queue support
+arq>=0.25
+redis>=4.0
+msgpack

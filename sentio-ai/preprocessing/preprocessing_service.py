@@ -319,12 +319,6 @@ async def forward_to_classifier(
         )
 
 
-@app.get("/health")
-async def health_check():
-    """Health check endpoint."""
-    return {"status": "healthy", "service": "preprocessing-service"}
-
-
 @app.post("/preprocess-and-classify")
 async def preprocess_and_classify(
         file: UploadFile = File(...),
@@ -409,6 +403,52 @@ async def preprocess_only(file: UploadFile = File(...)):
             status_code=500,
             detail=f"Error preprocessing image: {str(e)}"
         )
+
+
+# ============ Redis Queue Stats ============
+
+@app.get("/queue/stats")
+async def queue_stats():
+    """Get Redis queue statistics across all AI services."""
+    try:
+        import redis.asyncio as aioredis
+        r = aioredis.Redis(
+            host=os.getenv("REDIS_HOST", "redis"),
+            port=int(os.getenv("REDIS_PORT", "6379"))
+        )
+        
+        # Get queue info
+        queue_len = await r.llen("arq:queue")
+        info = await r.info("clients")
+        
+        await r.close()
+        
+        return {
+            "queue_name": "arq:queue",
+            "pending_jobs": queue_len,
+            "redis_clients": info.get("connected_clients", 0),
+            "redis_host": os.getenv("REDIS_HOST", "redis"),
+            "classifiers": {
+                "bird": BIRD_CLASSIFIER_URL,
+                "species": SPECIES_CLASSIFIER_URL
+            }
+        }
+    except Exception as e:
+        logger.warning(f"Could not get queue stats: {e}")
+        return {"error": str(e)}
+
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint."""
+    return {
+        "status": "healthy",
+        "redis_host": os.getenv("REDIS_HOST", "redis"),
+        "classifiers": {
+            "bird": BIRD_CLASSIFIER_URL,
+            "species": SPECIES_CLASSIFIER_URL
+        }
+    }
 
 
 if __name__ == "__main__":
