@@ -11,6 +11,14 @@ if [ "${WORKER_MODE:-true}" = "true" ]; then
     echo "ARQ worker started with PID: $WORKER_PID"
 fi
 
+# Start Queue Bridge for Java backend integration if BRIDGE_MODE is enabled
+if [ "${BRIDGE_MODE:-true}" = "true" ]; then
+    echo "Starting Queue Bridge for Java backend..."
+    python queue_bridge.py &
+    BRIDGE_PID=$!
+    echo "Queue Bridge started with PID: $BRIDGE_PID"
+fi
+
 # Start the FastAPI server
 echo "Starting FastAPI server..."
 exec python birder_ai.py
