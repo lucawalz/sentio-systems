@@ -159,7 +159,34 @@ The application connects to MQTT brokers to receive data from IoT devices:
 - **Weather Data**: Temperature, humidity, pressure from Raspberry Pi sensors
 - **Bird Detection**: Bird images and detection results from camera systems
 
+
+## Database Management
+
+The project uses Flyway for database migrations to manage schema changes.
+
+### Migrations
+Migration scripts are located in `src/main/resources/db/migration`.
+- `V1__initial_schema.sql`: Sets up the initial database schema (tables, indexes, constraints).
+- Migrations run automatically on application startup.
+
+### Resetting the Database
+To reset the database (useful for development):
+
+1. **Stop the application.**
+2. **Drop all tables** in your local PostgreSQL database (or drop the schema).
+3. **Restart the application**. Flyway will automatically recreate the schema.
+
+### Demo Data Seeding
+To populate the database with realistic demo data for development:
+
+1. Run the application with the `dev` profile:
+   ```shell
+   ./mvnw spring-boot:run -Dspring.profiles.active=dev
+   ```
+2. The `DemoDataSeeder` will automatically populate empty tables with sample data (Devices, Locations, Weather Data, Alerts, etc.).
+
 ## Code Style & Best Practices
+
 
 This project follows modern Java and Spring best practices:
 
@@ -174,13 +201,22 @@ This project follows modern Java and Spring best practices:
 
 The project (includes) various tests:
 
+### Running Tests
 ```shell script
 # Run all tests
 ./mvnw test
 
 # Run specific test class
-./mvnw test -Dtest=SentioApplicationTests
+./mvnw test -Dtest=LocationDataRepositoryTest
+
+# Run all repository integration tests
+./mvnw test -Dtest="*RepositoryTest"
 ```
+
+### Test Configuration
+- Tests run with an H2 in-memory database by default (configured via `@DataJpaTest`).
+- Test configuration is located in `src/test/resources/application-test.properties`.
+- Flyway migrations are automatically applied to the in-memory database during tests.
 
 
 
@@ -193,9 +229,7 @@ TODO: Add CI/CD documentation once pipeline is established.
 
 The application is configured via `application.properties`. Key configurations include:
 
-You're right, exposing real IP addresses and passwords in configuration files isn't a good practice. Let me revise the README to make the configuration examples more generic and provide advice on securing sensitive information.
 
-Here's an updated and more generic version for the configuration section:
 
 ## Environment Configuration
 

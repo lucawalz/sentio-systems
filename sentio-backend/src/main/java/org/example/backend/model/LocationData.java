@@ -92,7 +92,9 @@ public class LocationData {
     @PrePersist
     protected void onCreate() {
         LocalDateTime now = LocalDateTime.now();
-        this.createdAt = now;
+        if (this.createdAt == null) {
+            this.createdAt = now;
+        }
         this.updatedAt = now;
         log.debug("LocationData entity created for IP: {} at {}", this.ipAddress, now);
     }

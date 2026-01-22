@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 import static org.junit.jupiter.api.Assertions.*;
 
 @DataJpaTest
-class WeatherForecastRepositoryTest {
+class WeatherForecastModelTest {
 
     @Autowired
     private WeatherForecastRepository repository;
@@ -50,7 +50,7 @@ class WeatherForecastRepositoryTest {
         Thread.sleep(1100); // <--Large enough (1.1s) for DB precision
 
         wf.setDescription("Updated");
-        WeatherForecast saved = repository.saveAndFlush(wf); //<-- flush forces @PreUpdate
+        WeatherForecast saved = repository.saveAndFlush(wf); // <-- flush forces @PreUpdate
 
         assertEquals(created, saved.getCreatedAt());
         assertTrue(saved.getUpdatedAt().isAfter(updated));

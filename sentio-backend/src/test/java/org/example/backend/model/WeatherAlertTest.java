@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
 import static org.junit.jupiter.api.Assertions.*;
 
 @DataJpaTest
-class WeatherAlertRepositoryTest {
+class WeatherAlertModelTest {
 
     @Autowired
     private WeatherAlertRepository repository;
@@ -21,15 +21,17 @@ class WeatherAlertRepositoryTest {
     @Autowired
     private EntityManager em;
 
-    /**Helper method to create a base WeatherAlert entity.
+    /**
+     * Helper method to create a base WeatherAlert entity.
      * Fills only the required mandatory fields for testing.
-     * This keeps individual tests small and focused.*/
+     * This keeps individual tests small and focused.
+     */
     private WeatherAlert createBaseAlert() {
         WeatherAlert wa = new WeatherAlert();
         wa.setAlertId("alert-12345"); // Required unique identifier
         wa.setBrightSkyId(42);// Additional sample metadata
         wa.setStatus("actual");
-        LocalDateTime now = LocalDateTime.now();  // Use "now" so tests behave consistently
+        LocalDateTime now = LocalDateTime.now(); // Use "now" so tests behave consistently
         // Set effective/expiry times to make alert active by default
         wa.setEffective(now.minusMinutes(5));
         wa.setOnset(now.minusMinutes(5));
@@ -73,7 +75,7 @@ class WeatherAlertRepositoryTest {
         LocalDateTime updated = wa.getUpdatedAt();
 
         // Small delay to ensure timestamp difference
-        Thread.sleep(1100);  // Wait briefly so timestamps differ
+        Thread.sleep(1100); // Wait briefly so timestamps differ
 
         // Trigger update
         wa.setHeadlineEn("Updated headline");
@@ -117,13 +119,13 @@ class WeatherAlertRepositoryTest {
     @Test
     void testIsActiveTrueWhenNoEffectiveOrNoExpires() {
         WeatherAlert wa1 = createBaseAlert();
-        wa1.setEffective(null);             // no effective -> treated as active start
+        wa1.setEffective(null); // no effective -> treated as active start
         wa1.setExpires(LocalDateTime.now().plusHours(1));
         assertTrue(wa1.isActive(), "Alert with null effective and future expires should be active");
 
         WeatherAlert wa2 = createBaseAlert();
         wa2.setEffective(LocalDateTime.now().minusHours(1));
-        wa2.setExpires(null);              // no expires -> treated as no expiry
+        wa2.setExpires(null); // no expires -> treated as no expiry
         assertTrue(wa2.isActive(), "Alert with null expires should be active");
     }
 
@@ -152,7 +154,8 @@ class WeatherAlertRepositoryTest {
 
     /**
      * Tests that the unique constraint on alertId is enforced.
-     * Two alerts with the same alertId must cause a DataIntegrityViolationException.
+     * Two alerts with the same alertId must cause a
+     * DataIntegrityViolationException.
      */
     @Test
     void testUniqueConstraintOnAlertId() {
@@ -164,7 +167,8 @@ class WeatherAlertRepositoryTest {
 
         repository.saveAndFlush(wa1);
 
-        // Spring Data translates the DB/Hibernate exception into DataIntegrityViolationException
+        // Spring Data translates the DB/Hibernate exception into
+        // DataIntegrityViolationException
         assertThrows(DataIntegrityViolationException.class, () -> {
             repository.saveAndFlush(wa2);
         });
