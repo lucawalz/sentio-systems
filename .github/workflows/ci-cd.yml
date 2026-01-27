@@ -175,7 +175,7 @@ jobs:
         with:
           name: backend-jar-${{ needs.version.outputs.short_sha }}
           path: sentio-backend/target/*.jar
-          retention-days: 30
+          retention-days: 7
   backend-build:
     name: Backend - Build & Push Image
     runs-on: ubuntu-latest
@@ -271,7 +271,7 @@ jobs:
         with:
           name: frontend-build-${{ needs.version.outputs.short_sha }}
           path: sentio-web/dist/
-          retention-days: 30
+          retention-days: 7
   frontend-build:
     name: Frontend - Build & Push Image
     runs-on: ubuntu-latest
