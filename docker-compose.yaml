@@ -31,7 +31,7 @@ services:
     networks:
       - sentio-network
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}" ]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -96,7 +96,11 @@ services:
       backend:
         condition: service_started
     healthcheck:
-      test: [ "CMD-SHELL", "mosquitto_sub -t '$$SYS/#' -C 1 -i healthcheck -W 3 || exit 0" ]
+      test:
+        [
+          "CMD-SHELL",
+          "mosquitto_sub -t '$$SYS/#' -C 1 -i healthcheck -W 3 || exit 0",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -169,6 +173,9 @@ services:
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
 
+      # Queue Configuration (Redis-based AI classification with EDA)
+      QUEUE_ENABLED: ${QUEUE_ENABLED:-true}
+
       # Resend Email Configuration
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-noreply@syslabs.dev}
@@ -213,6 +220,8 @@ services:
       BIRD_CLASSIFIER_URL: ${BIRD_CLASSIFIER_URL:-http://birder:8000/detect}
       SPECIES_CLASSIFIER_URL: ${SPECIES_CLASSIFIER_URL:-http://speciesnet:8081/detect}
       SAVE_IMAGES: ${SAVE_IMAGES:-false}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
     ports:
       - "${PREPROCESSING_PORT:-8082}:8082"
     networks:
@@ -235,6 +244,8 @@ services:
       MIN_BIRD_CONFIDENCE: ${MIN_CONFIDENCE:-0.001}
       MAX_PREDICTIONS: ${MAX_PREDICTIONS:-5}
       PRELOAD_MODELS: ${PRELOAD_MODELS:-true}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
     ports:
       - "${BIRDER_PORT:-8000}:8000"
     networks:
@@ -256,6 +267,8 @@ services:
       CLASSIFICATION_THRESHOLD: ${CLASSIFICATION_THRESHOLD:-0.01}
       MIN_ANIMAL_CONFIDENCE: ${MIN_CONFIDENCE:-0.001}
       MAX_PREDICTIONS: ${MAX_PREDICTIONS:-5}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
     ports:
       - "${SPECIESNET_PORT:-8081}:8081"
     networks:
@@ -277,7 +290,7 @@ services:
     depends_on:
       - backend
     healthcheck:
-      test: [ "CMD-SHELL", "pgrep -f mediamtx || exit 1" ]
+      test: ["CMD-SHELL", "pgrep -f mediamtx || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

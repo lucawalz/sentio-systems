@@ -142,6 +142,41 @@ export function HlsPlayer({ deviceId, className }: HlsPlayerProps) {
     useEffect(() => {
         let sessionId: string | null = null
         let heartbeatInterval: ReturnType<typeof setInterval> | null = null
+        let isTabVisible = true
+
+        const sendHeartbeat = () => {
+            if (sessionId && isTabVisible) {
+                devicesApi.heartbeat(deviceId, sessionId)
+                    .then(() => console.debug('[HLS] Heartbeat sent'))
+                    .catch((err) => console.warn('[HLS] Heartbeat failed:', err))
+            }
+        }
+
+        const startHeartbeat = () => {
+            if (heartbeatInterval) clearInterval(heartbeatInterval)
+            // Heartbeat every 45 seconds (TTL is 120s, so 2-3 missed is OK)
+            heartbeatInterval = setInterval(sendHeartbeat, 45000)
+        }
+
+        // Handle tab visibility - pause heartbeat when hidden
+        const handleVisibilityChange = () => {
+            isTabVisible = !document.hidden
+            if (isTabVisible) {
+                // Tab visible again - send immediate heartbeat and restart interval
+                console.debug('[HLS] Tab visible - resuming heartbeat')
+                sendHeartbeat()
+                startHeartbeat()
+            } else {
+                // Tab hidden - stop heartbeat to save resources
+                // Session TTL (120s) is long enough to survive being hidden
+                console.debug('[HLS] Tab hidden - pausing heartbeat')
+                if (heartbeatInterval) {
+                    clearInterval(heartbeatInterval)
+                    heartbeatInterval = null
+                }
+            }
+        }
+        document.addEventListener('visibilitychange', handleVisibilityChange)
 
         // Start stream and get session ID
         devicesApi.startStream(deviceId)
@@ -149,14 +184,8 @@ export function HlsPlayer({ deviceId, className }: HlsPlayerProps) {
                 sessionId = response.data.sessionId
                 console.log('[HLS] Stream started, sessionId:', sessionId, 'viewers:', response.data.viewerCount)
 
-                // Start heartbeat interval (every 15 seconds)
-                heartbeatInterval = setInterval(() => {
-                    if (sessionId) {
-                        devicesApi.heartbeat(deviceId, sessionId)
-                            .then(() => console.debug('[HLS] Heartbeat sent'))
-                            .catch((err) => console.warn('[HLS] Heartbeat failed:', err))
-                    }
-                }, 15000)
+                // Start heartbeat
+                startHeartbeat()
 
                 // Wait a bit for stream to be ready, then load
                 setTimeout(() => {
@@ -179,6 +208,7 @@ export function HlsPlayer({ deviceId, className }: HlsPlayerProps) {
 
         return () => {
             window.removeEventListener('beforeunload', handleBeforeUnload)
+            document.removeEventListener('visibilitychange', handleVisibilityChange)
 
             // Clear heartbeat interval
             if (heartbeatInterval) {

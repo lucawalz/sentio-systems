@@ -3,7 +3,6 @@ package org.example.backend.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.backend.dto.AnimalDetectionDTO;
 import org.example.backend.model.AnimalDetection;
@@ -33,12 +32,15 @@ import java.util.Optional;
  * Routes images through preprocessing service before classification.
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class AnimalClassifierService {
 
     @Value("${preprocessing.service.url}")
     private String preprocessingServiceUrl;
+
+    @Value("${queue.enabled:true}")
+    private boolean queueEnabled;
+
     private static final int MAX_ALTERNATE_SPECIES = 4;
     private static final String DETECTION_KEY = "detection";
     private static final String CLASSIFICATION_KEY = "classification";
@@ -54,6 +56,23 @@ public class AnimalClassifierService {
     private final RestTemplate restTemplate;
     private final ImageStorageService imageStorageService;
     private final ObjectMapper objectMapper;
+    private final RedisQueueService redisQueueService;
+    private final ClassificationResultProcessor resultProcessor;
+
+    public AnimalClassifierService(
+            AnimalDetectionRepository animalDetectionRepository,
+            RestTemplate restTemplate,
+            ImageStorageService imageStorageService,
+            ObjectMapper objectMapper,
+            RedisQueueService redisQueueService,
+            ClassificationResultProcessor resultProcessor) {
+        this.animalDetectionRepository = animalDetectionRepository;
+        this.restTemplate = restTemplate;
+        this.imageStorageService = imageStorageService;
+        this.objectMapper = objectMapper;
+        this.redisQueueService = redisQueueService;
+        this.resultProcessor = resultProcessor;
+    }
 
     /**
      * Asynchronously classifies animal species and updates the detection record.
@@ -80,7 +99,16 @@ public class AnimalClassifierService {
                 return;
             }
 
-            // Call preprocessing service which will forward to appropriate classifier
+            // Use EDA: submit to queue and return immediately
+            // Result will be processed by ClassificationResultListener
+            if (queueEnabled && redisQueueService.isAvailable()) {
+                log.debug("Using event-driven queue for classification");
+                submitToQueueAsync(detection, imageFile.get());
+                return; // Result will be processed asynchronously via Pub/Sub
+            }
+
+            // Fallback to synchronous HTTP if queue is disabled or unavailable
+            log.debug("Using HTTP preprocessing service for classification");
             Map<String, Object> responseBody = callPreprocessingService(imageFile.get(), detection.getAnimalType());
             if (responseBody != null) {
                 processClassificationResponse(detection, responseBody);
@@ -88,6 +116,35 @@ public class AnimalClassifierService {
         } catch (Exception e) {
             log.error("Error during AI classification for detection ID {}: {}",
                     detection.getId(), e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Submit classification job to queue (EDA - fire and forget).
+     * Result will be received via Redis Pub/Sub.
+     */
+    private void submitToQueueAsync(AnimalDetection detection, File imageFile) {
+        try {
+            byte[] imageBytes = java.nio.file.Files.readAllBytes(imageFile.toPath());
+
+            redisQueueService.submitClassificationJobAsync(
+                    imageBytes,
+                    imageFile.getName(),
+                    detection.getAnimalType(),
+                    detection.getId(),
+                    resultProcessor);
+
+            log.info("Submitted detection {} to queue for async classification", detection.getId());
+
+        } catch (Exception e) {
+            log.warn("Queue submission failed for detection {}: {}, falling back to HTTP",
+                    detection.getId(), e.getMessage());
+
+            // Fallback to sync HTTP
+            Map<String, Object> responseBody = callPreprocessingService(imageFile, detection.getAnimalType());
+            if (responseBody != null) {
+                processClassificationResponse(detection, responseBody);
+            }
         }
     }
 

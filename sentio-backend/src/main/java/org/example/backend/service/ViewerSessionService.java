@@ -23,7 +23,7 @@ public class ViewerSessionService {
 
     private final StringRedisTemplate redisTemplate;
 
-    private static final Duration SESSION_TTL = Duration.ofSeconds(30);
+    private static final Duration SESSION_TTL = Duration.ofSeconds(120);
     private static final String SESSION_KEY_PREFIX = "stream:session:";
     private static final String COUNT_KEY_PREFIX = "stream:count:";
 

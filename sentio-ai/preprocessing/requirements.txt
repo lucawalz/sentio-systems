@@ -5,3 +5,8 @@ numpy
 httpx
 python-multipart
 python-dotenv
+
+# Redis queue support
+arq>=0.25
+redis>=4.0
+msgpack

@@ -25,6 +25,8 @@ RUN pip install --upgrade pip && \
 
 # Copy application files
 COPY speciesnet_ai.py .
+COPY worker.py .
+COPY queue_bridge.py .
 COPY entrypoint.sh .
 RUN chmod +x entrypoint.sh
 

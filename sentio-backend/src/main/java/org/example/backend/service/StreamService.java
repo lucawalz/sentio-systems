@@ -17,6 +17,10 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.time.Instant;
 
+import org.example.backend.event.StreamStopScheduledEvent;
+import org.example.backend.listener.StreamEventListener;
+import org.springframework.context.ApplicationEventPublisher;
+
 /**
  * Service for video stream authentication.
  * Validates device tokens for RTMP publish and Keycloak tokens for HLS
@@ -31,6 +35,8 @@ public class StreamService {
     private final JwtDecoder jwtDecoder;
     private final ViewerSessionService viewerSessionService;
     private final MessageChannel mqttOutboundChannel;
+    private final ApplicationEventPublisher eventPublisher;
+    private final StreamEventListener streamEventListener;
 
     @Value("${mediamtx.base-url:https://media.syslabs.dev}")
     private String mediamtxBaseUrl;
@@ -49,12 +55,16 @@ public class StreamService {
             DeviceService deviceService,
             JwtDecoder jwtDecoder,
             ViewerSessionService viewerSessionService,
-            @Qualifier("mqttOutboundChannel") MessageChannel mqttOutboundChannel) {
+            @Qualifier("mqttOutboundChannel") MessageChannel mqttOutboundChannel,
+            ApplicationEventPublisher eventPublisher,
+            StreamEventListener streamEventListener) {
         this.deviceRepository = deviceRepository;
         this.deviceService = deviceService;
         this.jwtDecoder = jwtDecoder;
         this.viewerSessionService = viewerSessionService;
         this.mqttOutboundChannel = mqttOutboundChannel;
+        this.eventPublisher = eventPublisher;
+        this.streamEventListener = streamEventListener;
     }
 
     /**
@@ -243,6 +253,9 @@ public class StreamService {
      * @return true if viewer was registered successfully
      */
     public boolean requestStreamStart(String deviceId, String sessionId) {
+        // Cancel any pending stop - new viewer joined
+        streamEventListener.cancelPendingStop(deviceId);
+
         boolean isFirstViewer = viewerSessionService.joinStream(deviceId, sessionId);
 
         if (isFirstViewer) {
@@ -266,8 +279,8 @@ public class StreamService {
         boolean wasLastViewer = viewerSessionService.leaveStream(deviceId, sessionId);
 
         if (wasLastViewer) {
-            log.info("Last viewer left - sending stop command to device {}", deviceId);
-            return sendStreamCommand(deviceId, "stop");
+            log.info("Last viewer left - publishing StreamStopScheduledEvent for device {}", deviceId);
+            eventPublisher.publishEvent(new StreamStopScheduledEvent(this, deviceId));
         }
 
         log.debug("Viewer left for device {} - other viewers still watching", deviceId);

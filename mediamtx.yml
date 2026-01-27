@@ -7,6 +7,11 @@
 logLevel: debug
 logDestinations: [stdout]
 
+# Connection resilience - tolerate brief network interruptions
+readTimeout: 60s
+writeTimeout: 60s
+readBufferCount: 2048
+
 ###############################################
 # RTMP server settings
 
