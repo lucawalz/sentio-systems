@@ -33,10 +33,23 @@ export default function ForgotPasswordPage() {
         }
 
         setIsLoading(true)
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1000))
-        setIsLoading(false)
-        setSuccess(true)
+        try {
+            await fetch('/api/auth/forgot-password', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ email }),
+            })
+
+            // Always show success message to prevent email enumeration
+            setSuccess(true)
+        } catch (error) {
+            // Still show success to prevent email enumeration
+            setSuccess(true)
+        } finally {
+            setIsLoading(false)
+        }
     }
 
     return (

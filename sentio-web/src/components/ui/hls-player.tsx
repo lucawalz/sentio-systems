@@ -140,34 +140,93 @@ export function HlsPlayer({ deviceId, className }: HlsPlayerProps) {
     }
 
     useEffect(() => {
+        let sessionId: string | null = null
+        let heartbeatInterval: ReturnType<typeof setInterval> | null = null
+        let isTabVisible = true
+
+        const sendHeartbeat = () => {
+            if (sessionId && isTabVisible) {
+                devicesApi.heartbeat(deviceId, sessionId)
+                    .then(() => console.debug('[HLS] Heartbeat sent'))
+                    .catch((err) => console.warn('[HLS] Heartbeat failed:', err))
+            }
+        }
+
+        const startHeartbeat = () => {
+            if (heartbeatInterval) clearInterval(heartbeatInterval)
+            // Heartbeat every 45 seconds (TTL is 120s, so 2-3 missed is OK)
+            heartbeatInterval = setInterval(sendHeartbeat, 45000)
+        }
+
+        // Handle tab visibility - pause heartbeat when hidden
+        const handleVisibilityChange = () => {
+            isTabVisible = !document.hidden
+            if (isTabVisible) {
+                // Tab visible again - send immediate heartbeat and restart interval
+                console.debug('[HLS] Tab visible - resuming heartbeat')
+                sendHeartbeat()
+                startHeartbeat()
+            } else {
+                // Tab hidden - stop heartbeat to save resources
+                // Session TTL (120s) is long enough to survive being hidden
+                console.debug('[HLS] Tab hidden - pausing heartbeat')
+                if (heartbeatInterval) {
+                    clearInterval(heartbeatInterval)
+                    heartbeatInterval = null
+                }
+            }
+        }
+        document.addEventListener('visibilitychange', handleVisibilityChange)
+
+        // Start stream and get session ID
         devicesApi.startStream(deviceId)
-            .then(() => {
-                console.log('[HLS] Stream start requested for device:', deviceId)
+            .then((response) => {
+                sessionId = response.data.sessionId
+                console.log('[HLS] Stream started, sessionId:', sessionId, 'viewers:', response.data.viewerCount)
+
+                // Start heartbeat
+                startHeartbeat()
+
+                // Wait a bit for stream to be ready, then load
                 setTimeout(() => {
                     loadStream()
                 }, 2000)
             })
             .catch((err) => {
                 console.warn('[HLS] Failed to request stream start:', err)
-                loadStream()
+                loadStream() // Try to load anyway
             })
 
+        // Handle page unload - send stop beacon with sessionId
         const handleBeforeUnload = () => {
-            const url = `/api/stream/${deviceId}/stop`
-            navigator.sendBeacon(url)
+            if (sessionId) {
+                const url = `/api/stream/${deviceId}/stop?sessionId=${encodeURIComponent(sessionId)}`
+                navigator.sendBeacon(url)
+            }
         }
         window.addEventListener('beforeunload', handleBeforeUnload)
 
         return () => {
             window.removeEventListener('beforeunload', handleBeforeUnload)
+            document.removeEventListener('visibilitychange', handleVisibilityChange)
 
+            // Clear heartbeat interval
+            if (heartbeatInterval) {
+                clearInterval(heartbeatInterval)
+            }
+
+            // Destroy HLS instance
             if (hlsRef.current) {
                 hlsRef.current.destroy()
                 hlsRef.current = null
             }
-            devicesApi.stopStream(deviceId)
-                .then(() => console.log('[HLS] Stream stop requested for device:', deviceId))
-                .catch((err) => console.warn('[HLS] Failed to request stream stop:', err))
+
+            // Send stop request with sessionId
+            if (sessionId) {
+                devicesApi.stopStream(deviceId, sessionId)
+                    .then((res) => console.log('[HLS] Stream stop requested, viewers remaining:', res.data?.viewerCount))
+                    .catch((err) => console.warn('[HLS] Failed to request stream stop:', err))
+            }
         }
     }, [deviceId])
 

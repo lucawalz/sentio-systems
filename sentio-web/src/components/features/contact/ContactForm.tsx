@@ -58,10 +58,32 @@ export default function ContactSection() {
         }
 
         setIsLoading(true)
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1500))
-        setIsLoading(false)
-        setSuccess(true)
+        try {
+            const response = await fetch('/api/contact', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    name: formData.name.split(' ')[0] || '',
+                    surname: formData.name.split(' ').slice(1).join(' ') || '',
+                    mail: formData.email,
+                    reference: formData.job || formData.country || 'General Inquiry',
+                    message: formData.message,
+                }),
+            })
+
+            if (!response.ok) {
+                throw new Error('Failed to send message')
+            }
+
+            setSuccess(true)
+        } catch (error) {
+            console.error('Contact form error:', error)
+            setFieldErrors({ email: 'Failed to send message. Please try again.' })
+        } finally {
+            setIsLoading(false)
+        }
     }
 
     return (

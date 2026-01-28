@@ -8,6 +8,8 @@ import About from '@/pages/About'
 import Login from '@/pages/Login'
 import SignUp from '@/pages/SignUp'
 import ForgotPassword from '@/pages/ForgotPassword'
+import ResetPassword from '@/pages/ResetPassword'
+import VerifyEmail from '@/pages/VerifyEmail'
 import Contact from '@/pages/Contact'
 import DashboardPage from '@/pages/Dashboard'
 import Privacy from "@/pages/Privacy.tsx";
@@ -59,8 +61,10 @@ function PublicLayout() {
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<SignUp />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/verify-email" element={<VerifyEmail />} />
             <Route path="/contact" element={<Contact />} />
-            <Route path="/privacy" element={<Privacy/>}/>
+            <Route path="/privacy" element={<Privacy />} />
           </Routes>
         </motion.div>
       </AnimatePresence>
