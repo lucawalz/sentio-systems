@@ -45,7 +45,7 @@
                 400
             ],
             "parameters": {
-                "model": "openai/gpt-oss-20b",
+                "model": "meta-llama/llama-4-scout-17b-16e-instruct",
                 "options": {
                     "temperature": 0.7
                 }
@@ -151,7 +151,73 @@
                 "operation": "executeQuery",
                 "query": "=SELECT AVG(rw.temperature) as avg_temp, MIN(rw.temperature) as min_temp, MAX(rw.temperature) as max_temp, AVG(rw.humidity) as avg_humidity, MIN(rw.humidity) as min_humidity, MAX(rw.humidity) as max_humidity, AVG(rw.pressure) as avg_pressure FROM raspi_weather_data rw JOIN devices d ON rw.device_id = d.id WHERE d.owner_id = '{{ $fromAI(\"userId\", \"The user ID\") }}' AND rw.timestamp > NOW() - INTERVAL '24 hours'",
                 "descriptionType": "manual",
-                "toolDescription": "Get weather statistics with averages and min/max. Use for weather trends and summaries."
+                "toolDescription": "Get weather SENSOR statistics with averages and min/max from indoor sensors. Use for actual measured conditions."
+            },
+            "credentials": {
+                "postgres": {
+                    "id": "POSTGRES_CREDENTIAL_ID",
+                    "name": "Sentio PostgreSQL"
+                }
+            }
+        },
+        {
+            "id": "tool-weather-forecast",
+            "name": "Query Weather Forecast",
+            "type": "n8n-nodes-base.postgresTool",
+            "typeVersion": 2.5,
+            "position": [
+                750,
+                500
+            ],
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "=SELECT forecast_date, MIN(temperature) as low_temp, MAX(temperature) as high_temp, AVG(temperature) as avg_temp, MAX(description) as conditions FROM weather_forecasts wf JOIN devices d ON wf.device_id = d.id WHERE d.owner_id = '{{ $fromAI(\"userId\", \"The user ID\") }}' AND forecast_date >= CURRENT_DATE GROUP BY forecast_date ORDER BY forecast_date LIMIT 7",
+                "descriptionType": "manual",
+                "toolDescription": "Get weather FORECAST with predicted high/low temperatures for upcoming days. Use when users ask about forecast, predictions, or upcoming weather."
+            },
+            "credentials": {
+                "postgres": {
+                    "id": "POSTGRES_CREDENTIAL_ID",
+                    "name": "Sentio PostgreSQL"
+                }
+            }
+        },
+        {
+            "id": "tool-devices",
+            "name": "Query User Devices",
+            "type": "n8n-nodes-base.postgresTool",
+            "typeVersion": 2.5,
+            "position": [
+                450,
+                650
+            ],
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "=SELECT d.id, d.name, d.latitude, d.longitude, d.last_seen, d.active FROM devices d WHERE d.owner_id = '{{ $fromAI(\"userId\", \"The user ID\") }}' ORDER BY d.last_seen DESC",
+                "descriptionType": "manual",
+                "toolDescription": "Get user's devices with names, locations (GPS), and status. Use when users ask about their devices, cameras, sensors, or locations."
+            },
+            "credentials": {
+                "postgres": {
+                    "id": "POSTGRES_CREDENTIAL_ID",
+                    "name": "Sentio PostgreSQL"
+                }
+            }
+        },
+        {
+            "id": "tool-alerts",
+            "name": "Query Weather Alerts",
+            "type": "n8n-nodes-base.postgresTool",
+            "typeVersion": 2.5,
+            "position": [
+                600,
+                650
+            ],
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "=SELECT wa.event, wa.severity, wa.description, wa.start_time, wa.end_time FROM weather_alerts wa JOIN devices d ON wa.device_id = d.id WHERE d.owner_id = '{{ $fromAI(\"userId\", \"The user ID\") }}' AND wa.end_time > NOW() ORDER BY wa.severity DESC, wa.start_time DESC LIMIT 10",
+                "descriptionType": "manual",
+                "toolDescription": "Get active weather alerts and warnings (severe weather, storms, etc). Use when users ask about alerts, warnings, or dangerous weather."
             },
             "credentials": {
                 "postgres": {
@@ -258,6 +324,39 @@
             ]
         },
         "Query Weather Stats": {
+            "ai_tool": [
+                [
+                    {
+                        "node": "Sentio AI Agent",
+                        "type": "ai_tool",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Query Weather Forecast": {
+            "ai_tool": [
+                [
+                    {
+                        "node": "Sentio AI Agent",
+                        "type": "ai_tool",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Query User Devices": {
+            "ai_tool": [
+                [
+                    {
+                        "node": "Sentio AI Agent",
+                        "type": "ai_tool",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Query Weather Alerts": {
             "ai_tool": [
                 [
                     {
