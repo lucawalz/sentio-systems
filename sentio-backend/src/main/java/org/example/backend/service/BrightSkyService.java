@@ -40,7 +40,7 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class BrightSkyService {
+public class BrightSkyService implements IBrightSkyService {
 
     private final WeatherAlertRepository weatherAlertRepository;
     private final WeatherRadarMetadataRepository weatherRadarMetadataRepository;

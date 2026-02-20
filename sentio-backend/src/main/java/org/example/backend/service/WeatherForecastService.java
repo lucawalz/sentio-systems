@@ -23,7 +23,7 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class WeatherForecastService {
+public class WeatherForecastService implements IWeatherForecastService {
 
     private final WeatherForecastRepository weatherForecastRepository;
     private final DeviceLocationService deviceLocationService;

@@ -6,8 +6,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.backend.model.AnimalDetection;
 import org.example.backend.service.AnimalDetectionCommandService;
+import org.example.backend.service.AnimalClassifierService;
 import org.example.backend.service.ImageStorageService;
-import org.example.backend.service.classification.AnimalClassifierService;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;

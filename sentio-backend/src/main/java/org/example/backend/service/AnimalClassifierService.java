@@ -1,11 +1,11 @@
-package org.example.backend.service.classification;
+package org.example.backend.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.backend.model.AnimalDetection;
-import org.example.backend.service.ClassificationResultProcessor;
-import org.example.backend.service.ImageStorageService;
-import org.example.backend.service.RedisQueueService;
+import org.example.backend.service.classification.AnimalClassificationClient;
+import org.example.backend.service.classification.AnimalClassificationResponseProcessor;
+import org.example.backend.service.classification.AnimalTypePolicy;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -29,7 +29,7 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class AnimalClassifierService {
+public class AnimalClassifierService implements IAnimalClassifierService {
 
     @Value("${queue.enabled:true}")
     private boolean queueEnabled;

@@ -36,7 +36,7 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class HistoricalWeatherService {
+public class HistoricalWeatherService implements IHistoricalWeatherService {
 
     private final HistoricalWeatherRepository historicalWeatherRepository;
     private final DeviceLocationService deviceLocationService;
