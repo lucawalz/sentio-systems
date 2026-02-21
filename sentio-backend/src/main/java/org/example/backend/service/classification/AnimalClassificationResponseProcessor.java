@@ -75,14 +75,28 @@ public class AnimalClassificationResponseProcessor {
     public void processClassificationResponse(AnimalDetection detection, Map<String, Object> responseBody) {
         try {
             if ("bird".equalsIgnoreCase(detection.getAnimalType())) {
-                processBirdClassificationResponse(detection, responseBody);
+                processBirdClassification(detection, responseBody);
                 return;
             }
-            processGenericClassificationResponse(detection, responseBody);
+            processGenericClassification(detection, responseBody);
         } catch (Exception e) {
             log.error("Error processing classification response for detection ID {}: {}",
                     detection.getId(), e.getMessage(), e);
         }
+    }
+
+    /**
+     * Processes bird classification responses.
+     */
+    public void processBirdClassification(AnimalDetection detection, Map<String, Object> responseBody) {
+        processBirdClassificationResponse(detection, responseBody);
+    }
+
+    /**
+     * Processes non-bird (generic) classification responses.
+     */
+    public void processGenericClassification(AnimalDetection detection, Map<String, Object> responseBody) {
+        processGenericClassificationResponse(detection, responseBody);
     }
 
     private void processBirdClassificationResponse(AnimalDetection detection, Map<String, Object> responseBody) {

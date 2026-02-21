@@ -6,6 +6,7 @@ import org.example.backend.model.AnimalDetection;
 import org.example.backend.service.classification.AnimalClassificationClient;
 import org.example.backend.service.classification.AnimalClassificationResponseProcessor;
 import org.example.backend.service.classification.AnimalTypePolicy;
+import org.example.backend.service.classification.ClassificationProcessorFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -38,6 +39,7 @@ public class AnimalClassifierService implements IAnimalClassifierService {
     private final AnimalClassificationClient animalClassificationClient;
     private final AnimalClassificationResponseProcessor responseProcessor;
     private final AnimalTypePolicy animalTypePolicy;
+    private final ClassificationProcessorFactory classificationProcessorFactory;
     private final RedisQueueService redisQueueService;
     private final ClassificationResultProcessor resultProcessor;
 
@@ -76,7 +78,9 @@ public class AnimalClassifierService implements IAnimalClassifierService {
             var responseBody = animalClassificationClient.callPreprocessingService(imageFile.get(),
                     detection.getAnimalType());
             if (responseBody != null) {
-                responseProcessor.processClassificationResponse(detection, responseBody);
+                classificationProcessorFactory
+                        .getProcessor(detection.getAnimalType())
+                        .process(detection, responseBody);
             }
         } catch (Exception e) {
             log.error("Error during AI classification for detection ID {}: {}",
@@ -103,7 +107,9 @@ public class AnimalClassifierService implements IAnimalClassifierService {
 
             var responseBody = animalClassificationClient.callPreprocessingService(imageFile, detection.getAnimalType());
             if (responseBody != null) {
-                responseProcessor.processClassificationResponse(detection, responseBody);
+                classificationProcessorFactory
+                        .getProcessor(detection.getAnimalType())
+                        .process(detection, responseBody);
             }
         }
     }
