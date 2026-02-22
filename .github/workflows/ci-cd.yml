@@ -1,13 +1,21 @@
 name: Sentio CI/CD
 on:
   push:
-    branches: [main, develop, 'release/**']
+    branches: [main, develop, "release/**"]
+    paths-ignore:
+      - "**.md"
+      - ".gitignore"
+      - "docs/**"
   pull_request:
     branches: [main, develop]
+    paths-ignore:
+      - "**.md"
+      - ".gitignore"
+      - "docs/**"
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Deployment environment'
+        description: "Deployment environment"
         required: true
         type: choice
         options:
@@ -15,10 +23,10 @@ on:
           - staging
           - production
       version_bump:
-        description: 'Version bump type'
+        description: "Version bump type"
         required: false
         type: choice
-        default: 'patch'
+        default: "patch"
         options:
           - major
           - minor
@@ -29,23 +37,20 @@ env:
 # Prevent concurrent deployments per environment
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
-  # ============================================
-  # VERSION MANAGEMENT
-  # ============================================
   version:
     name: Calculate Version
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.semver.outputs.version }}
       short_sha: ${{ steps.vars.outputs.short_sha }}
-      
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Full history for proper versioning
+          fetch-depth: 0 # Full history for proper versioning
       - name: Calculate short SHA
         id: vars
         run: |
@@ -66,17 +71,17 @@ jobs:
         id: semver
         run: |
           LATEST_TAG="${{ steps.get_latest_tag.outputs.latest_tag }}"
-          
+
           # Remove the 'v' prefix for calculation
           VERSION=${LATEST_TAG#v}
           IFS='.' read -ra VERSION_PARTS <<< "$VERSION"
           MAJOR=${VERSION_PARTS[0]}
           MINOR=${VERSION_PARTS[1]}
           PATCH=${VERSION_PARTS[2]}
-          
+
           # Determine version bump based on branch or manual input
           BUMP_TYPE="${{ github.event.inputs.version_bump }}"
-          
+
           if [ -z "$BUMP_TYPE" ]; then
             # Auto-determine based on branch
             if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
@@ -85,7 +90,7 @@ jobs:
               BUMP_TYPE="patch"
             fi
           fi
-          
+
           # Apply version bump
           case "$BUMP_TYPE" in
             major)
@@ -101,25 +106,44 @@ jobs:
               PATCH=$((PATCH + 1))
               ;;
           esac
-          
+
           NEW_VERSION="$MAJOR.$MINOR.$PATCH"
-          
+
           # FIX: Use Unix timestamp for pre-release to ensure proper semver ordering
           # Commit hash (e.g., dev.c25d939) doesn't sort chronologically
           # Timestamp (e.g., dev.1703001234) always increases = correct ordering
           TIMESTAMP=$(date +%s)
-          
+
           if [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
             NEW_VERSION="$NEW_VERSION-dev.$TIMESTAMP"
           elif [[ "${{ github.ref }}" == refs/heads/release/* ]]; then
             NEW_VERSION="$NEW_VERSION-rc.$TIMESTAMP"
           fi
-          
+
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "Calculated version: $NEW_VERSION"
-  # ============================================
-  # CODE QUALITY & SECURITY
-  # ============================================
+  changes:
+    name: Detect Changed Paths
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      ai: ${{ steps.filter.outputs.ai }}
+      embedded: ${{ steps.filter.outputs.embedded }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'sentio-backend/**'
+            frontend:
+              - 'sentio-web/**'
+            ai:
+              - 'sentio-ai/**'
+            embedded:
+              - 'sentio-embedded/**'
   code-quality:
     name: Code Quality & Security
     runs-on: ubuntu-latest
@@ -131,56 +155,245 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       - name: Run Trivy filesystem scan
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0
         with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'sarif'
-          output: 'trivy-fs-results.sarif'
-          severity: 'CRITICAL,HIGH,MEDIUM'
+          scan-type: "fs"
+          scan-ref: "."
+          format: "sarif"
+          output: "trivy-fs-results.sarif"
+          severity: "CRITICAL,HIGH,MEDIUM"
           ignore-unfixed: true
+      - name: Print Trivy filesystem results (CI log)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: "fs"
+          scan-ref: "."
+          format: "table"
+          severity: "CRITICAL,HIGH,MEDIUM"
+          ignore-unfixed: true
+        continue-on-error: true
       - name: Upload Trivy results to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         continue-on-error: true
         with:
-          sarif_file: 'trivy-fs-results.sarif'
-          category: 'filesystem'
-  # ============================================
-  # BACKEND SERVICE
-  # ============================================
+          sarif_file: "trivy-fs-results.sarif"
+          category: "filesystem"
   backend-test:
-    name: Backend - Test & Build
+    name: Backend - Test, Coverage & Build
     runs-on: ubuntu-latest
-    needs: [version]
-    timeout-minutes: 30
+    needs: [version, changes]
+    if: |
+      needs.changes.outputs.backend == 'true' ||
+      github.ref == 'refs/heads/main' ||
+      github.ref == 'refs/heads/develop' ||
+      startsWith(github.ref, 'refs/heads/release/')
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # For better coverage diffs
+
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          java-version: '21'
-          distribution: 'temurin'
-          cache: 'maven'
-      - name: Run Maven verify
+          java-version: "21"
+          distribution: "temurin"
+          cache: "maven"
+
+      # Unit tests first (fast, no containers) - see ADR-0013 for rationale
+      - name: Run Unit Tests
         working-directory: ./sentio-backend
-        run: ./mvnw clean verify -DskipTests=false
+        run: |
+          ./mvnw test \
+            -Dtest="*Test,!*IT" \
+            -DfailIfNoTests=false \
+            -B
+        timeout-minutes: 5
+        env:
+          SPRING_PROFILES_ACTIVE: test
+
+      # Integration tests with Testcontainers. SentioApplicationTests is included
+      # here (not above) because it requires a real DB container.
+      # Uses failsafe directly to avoid re-running unit tests from the test phase.
+      - name: Run Integration Tests
+        working-directory: ./sentio-backend
+        run: |
+          ./mvnw failsafe:integration-test failsafe:verify \
+            -Dit.test="*IT,SentioApplicationTests" \
+            -DfailIfNoTests=false \
+            -B
+        timeout-minutes: 10
+        env:
+          SPRING_PROFILES_ACTIVE: test
+          TESTCONTAINERS_REUSE_ENABLE: true
+
+      # Generate JaCoCo coverage report
+      - name: Generate Coverage Report
+        working-directory: ./sentio-backend
+        run: ./mvnw jacoco:report -B
+        if: always()
+
+      - name: Upload Coverage to Codecov
+        uses: codecov/codecov-action@v4
+        if: always()
         continue-on-error: true
+        with:
+          files: ./sentio-backend/target/site/jacoco/jacoco.xml
+          flags: backend
+          name: backend-coverage
+          fail_ci_if_error: false
+
+      - name: Generate Coverage Summary
+        if: always()
+        working-directory: ./sentio-backend
+        run: |
+          if [ -f target/site/jacoco/jacoco.csv ]; then
+            echo "# Test Coverage Report" > coverage-summary.md
+            echo "" >> coverage-summary.md
+            COVERAGE=$(awk -F',' '
+              NR>1 {
+                inst_missed += $4;
+                inst_covered += $5;
+                branch_missed += $6;
+                branch_covered += $7;
+              }
+              END {
+                total_inst = inst_missed + inst_covered;
+                total_branch = branch_missed + branch_covered;
+                inst_pct = (total_inst > 0) ? (inst_covered * 100.0 / total_inst) : 0;
+                branch_pct = (total_branch > 0) ? (branch_covered * 100.0 / total_branch) : 0;
+
+                printf "**Overall Coverage:**\n";
+                printf "- Instruction Coverage: %.1f%% (%d/%d)\n", inst_pct, inst_covered, total_inst;
+                printf "- Branch Coverage: %.1f%% (%d/%d)\n\n", branch_pct, branch_covered, total_branch;
+
+                status = (inst_pct >= 50 && branch_pct >= 35) ? "PASS: Meets minimum threshold" : "FAIL: Below minimum threshold";
+                target = (inst_pct >= 80 && branch_pct >= 75) ? "Meets target" : "Target: 80% instruction, 75% branch";
+
+                printf "**Status:** %s\n", status;
+                printf "**Goal:** %s\n", target;
+              }
+            ' target/site/jacoco/jacoco.csv)
+
+            echo "$COVERAGE" >> coverage-summary.md
+            echo "" >> coverage-summary.md
+            echo "[View Full Coverage Report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> coverage-summary.md
+          fi
+
+      - name: Comment Coverage on PR
+        if: github.event_name == 'pull_request' && always()
+        uses: marocchino/sticky-pull-request-comment@v2
+        continue-on-error: true
+        with:
+          header: coverage
+          path: ./sentio-backend/coverage-summary.md
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results-${{ needs.version.outputs.short_sha }}
+          path: |
+            sentio-backend/target/surefire-reports/
+            sentio-backend/target/failsafe-reports/
+          retention-days: 7
+
+      - name: Upload Coverage Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage-${{ needs.version.outputs.short_sha }}
+          path: sentio-backend/target/site/jacoco/
+          retention-days: 7
+
+      - name: Publish Test Results
+        if: always()
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        continue-on-error: true
+        with:
+          files: |
+            sentio-backend/target/surefire-reports/TEST-*.xml
+            sentio-backend/target/failsafe-reports/TEST-*.xml
+          check_name: Backend Test Results
+          comment_mode: failures
+
+      - name: Check Coverage Threshold
+        if: always()
+        working-directory: ./sentio-backend
+        run: |
+          if [ -f target/site/jacoco/jacoco.csv ]; then
+            INST_COVERAGE=$(awk -F',' '
+              NR>1 {
+                inst_missed += $4;
+                inst_covered += $5;
+              }
+              END {
+                total = inst_missed + inst_covered;
+                if (total > 0) {
+                  print (inst_covered * 100.0 / total);
+                } else {
+                  print 0;
+                }
+              }
+            ' target/site/jacoco/jacoco.csv)
+
+            BRANCH_COVERAGE=$(awk -F',' '
+              NR>1 {
+                branch_missed += $6;
+                branch_covered += $7;
+              }
+              END {
+                total = branch_missed + branch_covered;
+                if (total > 0) {
+                  print (branch_covered * 100.0 / total);
+                } else {
+                  print 0;
+                }
+              }
+            ' target/site/jacoco/jacoco.csv)
+
+            echo "Instruction Coverage: $INST_COVERAGE%"
+            echo "Branch Coverage: $BRANCH_COVERAGE%"
+
+            MIN_INST=50
+            MIN_BRANCH=35
+
+            if (( $(echo "$INST_COVERAGE < $MIN_INST" | bc -l) )); then
+              echo "FAIL: Instruction coverage $INST_COVERAGE% is below minimum threshold $MIN_INST%"
+              exit 1
+            fi
+
+            if (( $(echo "$BRANCH_COVERAGE < $MIN_BRANCH" | bc -l) )); then
+              echo "FAIL: Branch coverage $BRANCH_COVERAGE% is below minimum threshold $MIN_BRANCH%"
+              exit 1
+            fi
+
+            echo "PASS: Coverage meets minimum thresholds"
+          else
+            echo "WARNING: No coverage report found, skipping threshold check"
+          fi
+
       - name: Package application
         working-directory: ./sentio-backend
-        run: ./mvnw package -DskipTests
+        run: ./mvnw package -DskipTests -B
+
       - name: Upload JAR artifact
         uses: actions/upload-artifact@v4
         with:
           name: backend-jar-${{ needs.version.outputs.short_sha }}
           path: sentio-backend/target/*.jar
           retention-days: 7
-  backend-build:
+  backend-docker:
     name: Backend - Build & Push Image
     runs-on: ubuntu-latest
     needs: [version, backend-test, code-quality]
-    if: github.event_name != 'pull_request' && always()
+    if: github.event_name != 'pull_request' && !failure() && !cancelled()
     timeout-minutes: 20
     permissions:
       contents: read
@@ -199,10 +412,10 @@ jobs:
           retry_wait_seconds: 10
           command: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
       - name: Build and push
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: ./sentio-backend
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.REPO }}/sentio-backend:${{ needs.version.outputs.version }}
@@ -219,65 +432,98 @@ jobs:
           provenance: true
           sbom: true
       - name: Run Trivy image scan
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.REPO }}/sentio-backend:${{ needs.version.outputs.version }}
-          format: 'sarif'
-          output: 'trivy-backend.sarif'
-          severity: 'CRITICAL,HIGH'
+          format: "sarif"
+          output: "trivy-backend.sarif"
+          severity: "CRITICAL,HIGH"
+      - name: Print Trivy backend image results (CI log)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.REPO }}/sentio-backend:${{ needs.version.outputs.version }}
+          format: "table"
+          severity: "CRITICAL,HIGH"
+        continue-on-error: true
       - name: Upload Trivy results
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         continue-on-error: true
         with:
-          sarif_file: 'trivy-backend.sarif'
-          category: 'backend-image'
-  # ============================================
-  # FRONTEND SERVICE
-  # ============================================
+          sarif_file: "trivy-backend.sarif"
+          category: "backend-image"
   frontend-test:
-    name: Frontend - Test & Build
+    name: Frontend - Test, Lint & Build
     runs-on: ubuntu-latest
-    needs: [version]
-    timeout-minutes: 30
+    needs: [version, changes]
+    if: |
+      needs.changes.outputs.frontend == 'true' ||
+      github.ref == 'refs/heads/main' ||
+      github.ref == 'refs/heads/develop' ||
+      startsWith(github.ref, 'refs/heads/release/')
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: "npm"
           cache-dependency-path: sentio-web/package-lock.json
+
       - name: Install dependencies
         working-directory: ./sentio-web
         run: npm ci
+        timeout-minutes: 5
+
       - name: Run linter
         working-directory: ./sentio-web
         run: npm run lint
-        continue-on-error: true
+        timeout-minutes: 3
+
       - name: Type check
         working-directory: ./sentio-web
         run: npx tsc --noEmit
+        timeout-minutes: 3
+
       - name: Run tests
         working-directory: ./sentio-web
-        run: npm test --if-present
-        continue-on-error: true
+        run: npm run test:coverage
+        timeout-minutes: 5
+        env:
+          CI: true
+
+      - name: Upload test coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage-${{ needs.version.outputs.short_sha }}
+          path: sentio-web/coverage/
+          retention-days: 7
+
       - name: Build application
         working-directory: ./sentio-web
         run: npm run build
+        timeout-minutes: 5
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: frontend-build-${{ needs.version.outputs.short_sha }}
           path: sentio-web/dist/
           retention-days: 7
-  frontend-build:
+  frontend-docker:
     name: Frontend - Build & Push Image
     runs-on: ubuntu-latest
     needs: [version, frontend-test, code-quality]
-    if: github.event_name != 'pull_request' && always()
-    timeout-minutes: 30
+    if: github.event_name != 'pull_request' && !failure() && !cancelled()
+    timeout-minutes: 15
     permissions:
       contents: read
       packages: write
@@ -295,10 +541,10 @@ jobs:
           retry_wait_seconds: 10
           command: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
       - name: Build and push
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: ./sentio-web
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.REPO }}/sentio-web:${{ needs.version.outputs.version }}
@@ -317,26 +563,28 @@ jobs:
           provenance: true
           sbom: true
       - name: Run Trivy image scan
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.REPO }}/sentio-web:${{ needs.version.outputs.version }}
-          format: 'sarif'
-          output: 'trivy-frontend.sarif'
-          severity: 'CRITICAL,HIGH'
+          format: "sarif"
+          output: "trivy-frontend.sarif"
+          severity: "CRITICAL,HIGH"
       - name: Upload Trivy results
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         continue-on-error: true
         with:
-          sarif_file: 'trivy-frontend.sarif'
-          category: 'frontend-image'
-  # ============================================
-  # AI SERVICES
-  # ============================================
+          sarif_file: "trivy-frontend.sarif"
+          category: "frontend-image"
   ai-services-test:
     name: ${{ matrix.service }} - Test & Build
     runs-on: ubuntu-latest
-    needs: [version]
+    needs: [version, changes]
+    if: |
+      needs.changes.outputs.ai == 'true' ||
+      github.ref == 'refs/heads/main' ||
+      github.ref == 'refs/heads/develop' ||
+      startsWith(github.ref, 'refs/heads/release/')
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -355,39 +603,105 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-          cache: 'pip'
+          python-version: "3.11"
+          cache: "pip"
           cache-dependency-path: sentio-ai/${{ matrix.service }}/requirements.txt
       - name: Install dependencies
         working-directory: ./sentio-ai/${{ matrix.service }}
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
-          if [ "${{ matrix.service }}" == "speciesnet" ]; then
-            pip install speciesnet
-          fi
+          pip install pytest pytest-cov pytest-asyncio httpx
       - name: Run syntax check
         working-directory: ./sentio-ai/${{ matrix.service }}
-        run: python -m py_compile $(find . -name "*.py" -not -path "./venv/*")
-      - name: Run import validation
-        working-directory: ./sentio-ai/${{ matrix.service }}
-        run: python -c "import fastapi; print('FastAPI OK')"
+        run: python -m py_compile $(find . -name "*.py" -not -path "./venv/*" -not -path "./tests/*")
       - name: Run tests
         working-directory: ./sentio-ai/${{ matrix.service }}
+        timeout-minutes: 10
+        run: pytest tests/ --cov --cov-report=xml --cov-report=html --junit-xml=test-results.xml -v
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-${{ matrix.service }}-test-results
+          path: sentio-ai/${{ matrix.service }}/test-results.xml
+          retention-days: 7
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-${{ matrix.service }}-coverage
+          path: sentio-ai/${{ matrix.service }}/htmlcov/
+          retention-days: 7
+  embedded-test:
+    name: Embedded - Test
+    runs-on: ubuntu-latest
+    needs: [version, changes]
+    if: |
+      needs.changes.outputs.embedded == 'true' ||
+      github.ref == 'refs/heads/main' ||
+      github.ref == 'refs/heads/develop' ||
+      startsWith(github.ref, 'refs/heads/release/')
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: sentio-embedded/tests/requirements-test.txt
+
+      - name: Install test dependencies
+        working-directory: ./sentio-embedded
         run: |
-          if [ -d "tests" ]; then
-            pip install pytest pytest-cov
-            pytest tests/ --cov --cov-report=xml
-          else
-            echo "No tests found, skipping..."
-          fi
-        continue-on-error: true
-  ai-services-build:
+          pip install --upgrade pip
+          pip install -r tests/requirements-test.txt
+
+      - name: Run syntax check
+        working-directory: ./sentio-embedded
+        run: python -m py_compile $(find animal_detector shared weather_detection -name "*.py" 2>/dev/null || true)
+
+      - name: Run tests
+        working-directory: ./sentio-embedded/tests
+        timeout-minutes: 10
+        run: |
+          pytest . \
+            --cov=../animal_detector \
+            --cov=../weather_detection \
+            --cov=../shared \
+            --cov-report=xml:coverage.xml \
+            --cov-report=html:htmlcov \
+            --junit-xml=test-results.xml \
+            -v --tb=short \
+            --override-ini="addopts="
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: embedded-test-results-${{ needs.version.outputs.short_sha }}
+          path: sentio-embedded/tests/test-results.xml
+          retention-days: 7
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: embedded-coverage-${{ needs.version.outputs.short_sha }}
+          path: sentio-embedded/tests/htmlcov/
+          retention-days: 7
+
+  ai-services-docker:
     name: ${{ matrix.service }} - Build & Push Image
     runs-on: ubuntu-latest
     needs: [version, ai-services-test, code-quality]
-    if: github.event_name != 'pull_request' && always()
-    timeout-minutes: 40
+    if: github.event_name != 'pull_request' && !failure() && !cancelled()
+    timeout-minutes: 25
     permissions:
       contents: read
       packages: write
@@ -428,10 +742,10 @@ jobs:
           retry_wait_seconds: 10
           command: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
       - name: Build and push
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: ./sentio-ai/${{ matrix.service }}
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.REPO }}/${{ matrix.image_name }}:${{ needs.version.outputs.version }}
@@ -448,30 +762,27 @@ jobs:
           provenance: true
           sbom: true
       - name: Run Trivy image scan
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.REPO }}/${{ matrix.image_name }}:${{ needs.version.outputs.version }}
-          format: 'sarif'
-          output: 'trivy-${{ matrix.service }}.sarif'
-          severity: 'CRITICAL,HIGH'
+          format: "sarif"
+          output: "trivy-${{ matrix.service }}.sarif"
+          severity: "CRITICAL,HIGH"
       - name: Upload Trivy results
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         continue-on-error: true
         with:
-          sarif_file: 'trivy-${{ matrix.service }}.sarif'
-          category: '${{ matrix.service }}-image'
-  # ============================================
-  # CREATE RELEASE (Main branch only)
-  # ============================================
+          sarif_file: "trivy-${{ matrix.service }}.sarif"
+          category: "${{ matrix.service }}-image"
   create-release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    needs: 
+    needs:
       - version
-      - backend-build
-      - frontend-build
-      - ai-services-build
+      - backend-docker
+      - frontend-docker
+      - ai-services-docker
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     permissions:
       contents: write
@@ -479,42 +790,37 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       - name: Create Release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.version.outputs.version }}
-          release_name: Release v${{ needs.version.outputs.version }}
+          name: Release v${{ needs.version.outputs.version }}
           body: |
             ## Release v${{ needs.version.outputs.version }}
-            
+
             **Commit:** ${{ github.sha }}
-            
+
             ### Container Images
             All images are available at `ghcr.io/${{ github.repository }}`
-            
+
             - `sentio-backend:${{ needs.version.outputs.version }}`
             - `sentio-web:${{ needs.version.outputs.version }}`
             - `birder-ai:${{ needs.version.outputs.version }}`
             - `speciesnet-ai:${{ needs.version.outputs.version }}`
             - `preprocessing-service:${{ needs.version.outputs.version }}`
-            
+
             ### Deployment
             Images are automatically rolled out to Kubernetes via Flux GitOps.
           draft: false
           prerelease: false
-  # ============================================
-  # DEPLOYMENT NOTIFICATION
-  # ============================================
   deployment-notification:
     name: Deployment Ready
     runs-on: ubuntu-latest
     needs:
       - version
-      - backend-build
-      - frontend-build
-      - ai-services-build
-    if: github.event_name != 'pull_request'
+      - backend-docker
+      - frontend-docker
+      - ai-services-docker
+    if: github.event_name != 'pull_request' && !failure() && !cancelled()
     steps:
       - name: Deployment Summary
         run: |
@@ -526,7 +832,7 @@ jobs:
           echo "- **Branch:** \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Triggered by:** @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           echo "## Deployment Strategy" >> $GITHUB_STEP_SUMMARY
           if [[ "${{ github.ref_name }}" == "main" ]]; then
             echo "**Environment:** Production" >> $GITHUB_STEP_SUMMARY
@@ -539,7 +845,7 @@ jobs:
             echo "**Auto-Deploy:** Manual verification required" >> $GITHUB_STEP_SUMMARY
           fi
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           echo "## Container Images" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "All images have been built and pushed to GitHub Container Registry:" >> $GITHUB_STEP_SUMMARY
@@ -552,7 +858,7 @@ jobs:
           echo "ghcr.io/${{ github.repository }}/preprocessing-service:${{ needs.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           echo "## Flux GitOps Integration" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Flux ImageUpdateAutomation will automatically detect and deploy these images based on:" >> $GITHUB_STEP_SUMMARY

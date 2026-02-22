@@ -47,6 +47,12 @@ public class StreamEventListener {
         String deviceId = event.getDeviceId();
         Instant scheduledAt = event.getScheduledAt();
 
+        // Validate device ID
+        if (deviceId == null) {
+            log.warn("Received StreamStopScheduledEvent with null deviceId - ignoring");
+            return;
+        }
+
         // Record this stop request
         scheduledStops.put(deviceId, scheduledAt);
         log.info("Stream stop scheduled for device {} at {} - waiting {}s",
@@ -64,7 +70,23 @@ public class StreamEventListener {
             }
 
             // Double-check no viewers currently watching
-            if (viewerSessionService.getViewerCount(deviceId) > 0) {
+            long viewerCount;
+            try {
+                viewerCount = viewerSessionService.getViewerCount(deviceId);
+            } catch (Exception e) {
+                log.error("Failed to get viewer count for device {} - aborting stop: {}", deviceId, e.getMessage());
+                scheduledStops.remove(deviceId);
+                return;
+            }
+
+            // Negative viewer count indicates an error - don't send stop command
+            if (viewerCount < 0) {
+                log.warn("Invalid negative viewer count ({}) for device {} - aborting stop", viewerCount, deviceId);
+                scheduledStops.remove(deviceId);
+                return;
+            }
+
+            if (viewerCount > 0) {
                 log.info("Stream stop cancelled for device {} - viewers present after delay", deviceId);
                 scheduledStops.remove(deviceId);
                 return;

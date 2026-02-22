@@ -51,8 +51,8 @@ class WorkflowResultTest {
 
         invokeLifecycle(result, "onCreate");
 
-        assertEquals(WorkflowType.SUMMARY, result.getWorkflowType(),
-                "workflowType should default to SUMMARY when null");
+        assertEquals(WorkflowType.WEATHER_SUMMARY, result.getWorkflowType(),
+                "workflowType should default to WEATHER_SUMMARY when null");
     }
 
     @Test

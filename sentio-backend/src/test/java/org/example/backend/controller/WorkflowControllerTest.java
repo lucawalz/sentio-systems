@@ -2,6 +2,7 @@ package org.example.backend.controller;
 
 import org.example.backend.model.WorkflowResult;
 import org.example.backend.model.WorkflowType;
+import org.example.backend.service.N8nWorkflowTriggerService;
 import org.example.backend.service.WorkflowService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -31,6 +32,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         OAuth2ResourceServerAutoConfiguration.class
 })
 @Import(WorkflowControllerTest.TestBeans.class)
+@org.springframework.test.context.TestPropertySource(properties = {
+        "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration"
+})
 class WorkflowControllerTest {
 
     @Autowired
@@ -39,9 +43,12 @@ class WorkflowControllerTest {
     @Autowired
     WorkflowService workflowService;
 
+    @Autowired
+    N8nWorkflowTriggerService n8nWorkflowTriggerService;
+
     @AfterEach
     void clearMockInvocations() {
-        clearInvocations(workflowService);
+        clearInvocations(workflowService, n8nWorkflowTriggerService);
     }
 
     @TestConfiguration
@@ -50,6 +57,11 @@ class WorkflowControllerTest {
         WorkflowService workflowService() {
             return mock(WorkflowService.class);
         }
+
+        @Bean
+        N8nWorkflowTriggerService n8nWorkflowTriggerService() {
+            return mock(N8nWorkflowTriggerService.class);
+        }
     }
 
     @Test
@@ -57,7 +69,7 @@ class WorkflowControllerTest {
         WorkflowResult result = new WorkflowResult();
         result.setId(1L);
         result.setAnalysisText("Hello");
-        result.setWorkflowType(WorkflowType.SUMMARY);
+        result.setWorkflowType(WorkflowType.WEATHER_SUMMARY);
         result.setTimestamp(LocalDateTime.of(2025, 12, 18, 10, 0));
 
         when(workflowService.getCurrentResult()).thenReturn(Optional.of(result));
@@ -67,7 +79,7 @@ class WorkflowControllerTest {
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.id").value(1))
                 .andExpect(jsonPath("$.analysisText").value("Hello"))
-                .andExpect(jsonPath("$.workflowType").value("SUMMARY"))
+                .andExpect(jsonPath("$.workflowType").value("WEATHER_SUMMARY"))
                 .andExpect(jsonPath("$.timestamp").value("2025-12-18T10:00:00"));
 
         verify(workflowService, times(1)).getCurrentResult();
@@ -91,7 +103,7 @@ class WorkflowControllerTest {
         WorkflowResult summary = new WorkflowResult();
         summary.setId(1L);
         summary.setAnalysisText("Summary text");
-        summary.setWorkflowType(WorkflowType.SUMMARY);
+        summary.setWorkflowType(WorkflowType.WEATHER_SUMMARY);
         summary.setTimestamp(LocalDateTime.of(2025, 12, 18, 10, 0));
 
         when(workflowService.getCurrentSummary()).thenReturn(Optional.of(summary));
@@ -99,7 +111,7 @@ class WorkflowControllerTest {
         mockMvc.perform(get("/api/workflow/summaries/current"))
                 .andExpect(status().isOk())
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.workflowType").value("SUMMARY"));
+                .andExpect(jsonPath("$.workflowType").value("WEATHER_SUMMARY"));
 
         verify(workflowService).getCurrentSummary();
         verifyNoMoreInteractions(workflowService);
@@ -110,7 +122,7 @@ class WorkflowControllerTest {
         WorkflowResult a = new WorkflowResult();
         a.setId(1L);
         a.setAnalysisText("A");
-        a.setWorkflowType(WorkflowType.SUMMARY);
+        a.setWorkflowType(WorkflowType.WEATHER_SUMMARY);
         a.setTimestamp(LocalDateTime.of(2025, 12, 18, 9, 0));
 
         WorkflowResult b = new WorkflowResult();
@@ -138,14 +150,14 @@ class WorkflowControllerTest {
         WorkflowResult summary = new WorkflowResult();
         summary.setId(1L);
         summary.setAnalysisText("Summary");
-        summary.setWorkflowType(WorkflowType.SUMMARY);
+        summary.setWorkflowType(WorkflowType.WEATHER_SUMMARY);
 
         when(workflowService.getRecentSummaries()).thenReturn(List.of(summary));
 
         mockMvc.perform(get("/api/workflow/summaries/recent"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].workflowType").value("SUMMARY"));
+                .andExpect(jsonPath("$[0].workflowType").value("WEATHER_SUMMARY"));
 
         verify(workflowService).getRecentSummaries();
         verifyNoMoreInteractions(workflowService);
@@ -166,7 +178,7 @@ class WorkflowControllerTest {
         verify(workflowService).saveWorkflowResult(captor.capture());
 
         assertThat(captor.getValue().getTimestamp()).isNotNull();
-        assertThat(captor.getValue().getWorkflowType()).isEqualTo(WorkflowType.SUMMARY);
+        assertThat(captor.getValue().getWorkflowType()).isEqualTo(WorkflowType.WEATHER_SUMMARY);
 
         verifyNoMoreInteractions(workflowService);
     }

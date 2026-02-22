@@ -22,287 +22,297 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(
-        controllers = WeatherAlertController.class,
-        excludeAutoConfiguration = {
+@WebMvcTest(controllers = WeatherAlertController.class, excludeAutoConfiguration = {
                 SecurityAutoConfiguration.class,
                 OAuth2ResourceServerAutoConfiguration.class
-        }
-)
+})
 @Import(WeatherAlertControllerTest.TestBeans.class)
+@org.springframework.test.context.TestPropertySource(properties = {
+                "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration"
+})
 class WeatherAlertControllerTest {
 
-    @Autowired MockMvc mockMvc;
+        @Autowired
+        MockMvc mockMvc;
 
-    @Autowired BrightSkyService brightSkyService;
-    @Autowired WeatherAlertMapper weatherAlertMapper;
+        @Autowired
+        BrightSkyService brightSkyService;
+        @Autowired
+        WeatherAlertMapper weatherAlertMapper;
 
-    @TestConfiguration
-    static class TestBeans {
-        @Bean BrightSkyService brightSkyService() { return mock(BrightSkyService.class); }
-        @Bean WeatherAlertMapper weatherAlertMapper() { return mock(WeatherAlertMapper.class); }
-    }
+        @TestConfiguration
+        static class TestBeans {
+                @Bean
+                BrightSkyService brightSkyService() {
+                        return mock(BrightSkyService.class);
+                }
 
-    @AfterEach
-    void resetMocks() {
-        reset(brightSkyService, weatherAlertMapper);
-    }
+                @Bean
+                WeatherAlertMapper weatherAlertMapper() {
+                        return mock(WeatherAlertMapper.class);
+                }
+        }
 
-    @Test
-    void getCurrentLocationAlerts_returns200_andUsesGermanWhenLangDe() throws Exception {
-        List<WeatherAlert> alerts = List.of(new WeatherAlert(), new WeatherAlert());
-        List<WeatherAlertDTO> dtos = List.of(new WeatherAlertDTO(), new WeatherAlertDTO());
+        @AfterEach
+        void resetMocks() {
+                reset(brightSkyService, weatherAlertMapper);
+        }
 
-        when(brightSkyService.getAlertsForCurrentLocation()).thenReturn(alerts);
-        when(weatherAlertMapper.toDTOList(alerts, true)).thenReturn(dtos);
+        @Test
+        void getCurrentLocationAlerts_returns200_andUsesGermanWhenLangDe() throws Exception {
+                List<WeatherAlert> alerts = List.of(new WeatherAlert(), new WeatherAlert());
+                List<WeatherAlertDTO> dtos = List.of(new WeatherAlertDTO(), new WeatherAlertDTO());
 
-        mockMvc.perform(get("/api/alerts/current-location")
-                        .param("lang", "de"))
-                .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$.length()").value(2));
+                when(brightSkyService.getAlertsForCurrentLocation()).thenReturn(alerts);
+                when(weatherAlertMapper.toDTOList(alerts, true)).thenReturn(dtos);
 
-        verify(brightSkyService).getAlertsForCurrentLocation();
-        verify(weatherAlertMapper).toDTOList(alerts, true);
-        verifyNoMoreInteractions(brightSkyService, weatherAlertMapper);
-    }
+                mockMvc.perform(get("/api/alerts/current-location")
+                                .param("lang", "de"))
+                                .andExpect(status().isOk())
+                                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(jsonPath("$").isArray())
+                                .andExpect(jsonPath("$.length()").value(2));
 
-    @Test
-    void getActiveAlerts_returns200_andUsesEnglishByDefault() throws Exception {
-        List<WeatherAlert> alerts = List.of(new WeatherAlert());
-        List<WeatherAlertDTO> dtos = List.of(new WeatherAlertDTO());
+                verify(brightSkyService).getAlertsForCurrentLocation();
+                verify(weatherAlertMapper).toDTOList(alerts, true);
+                verifyNoMoreInteractions(brightSkyService, weatherAlertMapper);
+        }
 
-        when(brightSkyService.getActiveAlerts()).thenReturn(alerts);
-        when(weatherAlertMapper.toDTOList(alerts, false)).thenReturn(dtos);
+        @Test
+        void getActiveAlerts_returns200_andUsesEnglishByDefault() throws Exception {
+                List<WeatherAlert> alerts = List.of(new WeatherAlert());
+                List<WeatherAlertDTO> dtos = List.of(new WeatherAlertDTO());
 
-        mockMvc.perform(get("/api/alerts/active")) // default lang=en
-                .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$.length()").value(1));
+                when(brightSkyService.getActiveAlerts()).thenReturn(alerts);
+                when(weatherAlertMapper.toDTOList(alerts, false)).thenReturn(dtos);
 
-        verify(brightSkyService).getActiveAlerts();
-        verify(weatherAlertMapper).toDTOList(alerts, false);
-        verifyNoMoreInteractions(brightSkyService, weatherAlertMapper);
-    }
+                mockMvc.perform(get("/api/alerts/active")) // default lang=en
+                                .andExpect(status().isOk())
+                                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(jsonPath("$").isArray())
+                                .andExpect(jsonPath("$.length()").value(1));
 
-    @Test
-    void getAlertsByWarnCellId_returns200() throws Exception {
-        List<WeatherAlert> alerts = List.of(new WeatherAlert());
-        List<WeatherAlertDTO> dtos = List.of(new WeatherAlertDTO());
+                verify(brightSkyService).getActiveAlerts();
+                verify(weatherAlertMapper).toDTOList(alerts, false);
+                verifyNoMoreInteractions(brightSkyService, weatherAlertMapper);
+        }
 
-        when(brightSkyService.getAlertsByWarnCellId(123L)).thenReturn(alerts);
-        when(weatherAlertMapper.toDTOList(alerts, false)).thenReturn(dtos);
+        @Test
+        void getAlertsByWarnCellId_returns200() throws Exception {
+                List<WeatherAlert> alerts = List.of(new WeatherAlert());
+                List<WeatherAlertDTO> dtos = List.of(new WeatherAlertDTO());
 
-        mockMvc.perform(get("/api/alerts/warn-cell/123")
-                        .param("lang", "en"))
-                .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$.length()").value(1));
+                when(brightSkyService.getAlertsByWarnCellId(123L)).thenReturn(alerts);
+                when(weatherAlertMapper.toDTOList(alerts, false)).thenReturn(dtos);
 
-        verify(brightSkyService).getAlertsByWarnCellId(123L);
-        verify(weatherAlertMapper).toDTOList(alerts, false);
-        verifyNoMoreInteractions(brightSkyService, weatherAlertMapper);
-    }
+                mockMvc.perform(get("/api/alerts/warn-cell/123")
+                                .param("lang", "en"))
+                                .andExpect(status().isOk())
+                                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(jsonPath("$").isArray())
+                                .andExpect(jsonPath("$.length()").value(1));
 
-    @Test
-    void getAlertsByCity_returns200() throws Exception {
-        List<WeatherAlert> alerts = List.of(new WeatherAlert(), new WeatherAlert());
-        List<WeatherAlertDTO> dtos = List.of(new WeatherAlertDTO(), new WeatherAlertDTO());
+                verify(brightSkyService).getAlertsByWarnCellId(123L);
+                verify(weatherAlertMapper).toDTOList(alerts, false);
+                verifyNoMoreInteractions(brightSkyService, weatherAlertMapper);
+        }
 
-        when(brightSkyService.getAlertsByCity("Berlin")).thenReturn(alerts);
-        when(weatherAlertMapper.toDTOList(alerts, false)).thenReturn(dtos);
+        @Test
+        void getAlertsByCity_returns200() throws Exception {
+                List<WeatherAlert> alerts = List.of(new WeatherAlert(), new WeatherAlert());
+                List<WeatherAlertDTO> dtos = List.of(new WeatherAlertDTO(), new WeatherAlertDTO());
 
-        mockMvc.perform(get("/api/alerts/city/Berlin"))
-                .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$.length()").value(2));
+                when(brightSkyService.getAlertsByCity("Berlin")).thenReturn(alerts);
+                when(weatherAlertMapper.toDTOList(alerts, false)).thenReturn(dtos);
 
-        verify(brightSkyService).getAlertsByCity("Berlin");
-        verify(weatherAlertMapper).toDTOList(alerts, false);
-        verifyNoMoreInteractions(brightSkyService, weatherAlertMapper);
-    }
+                mockMvc.perform(get("/api/alerts/city/Berlin"))
+                                .andExpect(status().isOk())
+                                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(jsonPath("$").isArray())
+                                .andExpect(jsonPath("$.length()").value(2));
 
-    @Test
-    void getAlertsBySeverity_returns200_andPreferGerman() throws Exception {
-        List<WeatherAlert> alerts = List.of(new WeatherAlert());
-        List<WeatherAlertDTO> dtos = List.of(new WeatherAlertDTO());
+                verify(brightSkyService).getAlertsByCity("Berlin");
+                verify(weatherAlertMapper).toDTOList(alerts, false);
+                verifyNoMoreInteractions(brightSkyService, weatherAlertMapper);
+        }
 
-        when(brightSkyService.getAlertsBySeverity("severe")).thenReturn(alerts);
-        when(weatherAlertMapper.toDTOList(alerts, true)).thenReturn(dtos);
+        @Test
+        void getAlertsBySeverity_returns200_andPreferGerman() throws Exception {
+                List<WeatherAlert> alerts = List.of(new WeatherAlert());
+                List<WeatherAlertDTO> dtos = List.of(new WeatherAlertDTO());
 
-        mockMvc.perform(get("/api/alerts/severity/severe")
-                        .param("lang", "de"))
-                .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$.length()").value(1));
+                when(brightSkyService.getAlertsBySeverity("severe")).thenReturn(alerts);
+                when(weatherAlertMapper.toDTOList(alerts, true)).thenReturn(dtos);
 
-        verify(brightSkyService).getAlertsBySeverity("severe");
-        verify(weatherAlertMapper).toDTOList(alerts, true);
-        verifyNoMoreInteractions(brightSkyService, weatherAlertMapper);
-    }
+                mockMvc.perform(get("/api/alerts/severity/severe")
+                                .param("lang", "de"))
+                                .andExpect(status().isOk())
+                                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(jsonPath("$").isArray())
+                                .andExpect(jsonPath("$.length()").value(1));
 
-    @Test
-    void getActiveAlertsForLocation_passesWarnCellId_andReturns200() throws Exception {
-        List<WeatherAlert> alerts = List.of(new WeatherAlert());
-        List<WeatherAlertDTO> dtos = List.of(new WeatherAlertDTO());
+                verify(brightSkyService).getAlertsBySeverity("severe");
+                verify(weatherAlertMapper).toDTOList(alerts, true);
+                verifyNoMoreInteractions(brightSkyService, weatherAlertMapper);
+        }
 
-        when(brightSkyService.getActiveAlertsForLocation("Hamburg", 999L)).thenReturn(alerts);
-        when(weatherAlertMapper.toDTOList(alerts, false)).thenReturn(dtos);
+        @Test
+        void getActiveAlertsForLocation_passesWarnCellId_andReturns200() throws Exception {
+                List<WeatherAlert> alerts = List.of(new WeatherAlert());
+                List<WeatherAlertDTO> dtos = List.of(new WeatherAlertDTO());
 
-        mockMvc.perform(get("/api/alerts/location")
-                        .param("city", "Hamburg")
-                        .param("warnCellId", "999")
-                        .param("lang", "en"))
-                .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$.length()").value(1));
+                when(brightSkyService.getActiveAlertsForLocation("Hamburg", 999L)).thenReturn(alerts);
+                when(weatherAlertMapper.toDTOList(alerts, false)).thenReturn(dtos);
 
-        verify(brightSkyService).getActiveAlertsForLocation("Hamburg", 999L);
-        verify(weatherAlertMapper).toDTOList(alerts, false);
-        verifyNoMoreInteractions(brightSkyService, weatherAlertMapper);
-    }
+                mockMvc.perform(get("/api/alerts/location")
+                                .param("city", "Hamburg")
+                                .param("warnCellId", "999")
+                                .param("lang", "en"))
+                                .andExpect(status().isOk())
+                                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(jsonPath("$").isArray())
+                                .andExpect(jsonPath("$.length()").value(1));
 
-    @Test
-    void getRecentAlerts_returns200() throws Exception {
-        List<WeatherAlert> alerts = List.of(new WeatherAlert());
-        List<WeatherAlertDTO> dtos = List.of(new WeatherAlertDTO());
+                verify(brightSkyService).getActiveAlertsForLocation("Hamburg", 999L);
+                verify(weatherAlertMapper).toDTOList(alerts, false);
+                verifyNoMoreInteractions(brightSkyService, weatherAlertMapper);
+        }
 
-        when(brightSkyService.getRecentAlerts()).thenReturn(alerts);
-        when(weatherAlertMapper.toDTOList(alerts, false)).thenReturn(dtos);
+        @Test
+        void getRecentAlerts_returns200() throws Exception {
+                List<WeatherAlert> alerts = List.of(new WeatherAlert());
+                List<WeatherAlertDTO> dtos = List.of(new WeatherAlertDTO());
 
-        mockMvc.perform(get("/api/alerts/recent"))
-                .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON));
+                when(brightSkyService.getRecentAlerts()).thenReturn(alerts);
+                when(weatherAlertMapper.toDTOList(alerts, false)).thenReturn(dtos);
 
-        verify(brightSkyService).getRecentAlerts();
-        verify(weatherAlertMapper).toDTOList(alerts, false);
-        verifyNoMoreInteractions(brightSkyService, weatherAlertMapper);
-    }
+                mockMvc.perform(get("/api/alerts/recent"))
+                                .andExpect(status().isOk())
+                                .andExpect(content().contentType(MediaType.APPLICATION_JSON));
 
-    @Test
-    void updateAlertsForCurrentLocation_returns200_whenOk() throws Exception {
-        doNothing().when(brightSkyService).updateAlertsForCurrentLocation();
+                verify(brightSkyService).getRecentAlerts();
+                verify(weatherAlertMapper).toDTOList(alerts, false);
+                verifyNoMoreInteractions(brightSkyService, weatherAlertMapper);
+        }
 
-        mockMvc.perform(post("/api/alerts/update"))
-                .andExpect(status().isOk())
-                .andExpect(content().string("Weather alerts updated successfully"));
+        @Test
+        void updateAlertsForCurrentLocation_returns200_whenOk() throws Exception {
+                doNothing().when(brightSkyService).updateAlertsForCurrentLocation();
 
-        verify(brightSkyService).updateAlertsForCurrentLocation();
-        verifyNoMoreInteractions(brightSkyService);
-        verifyNoInteractions(weatherAlertMapper);
-    }
+                mockMvc.perform(post("/api/alerts/update"))
+                                .andExpect(status().isOk())
+                                .andExpect(content().string("Weather alerts updated successfully"));
 
-    @Test
-    void updateAlertsForCurrentLocation_returns500_whenServiceThrows() throws Exception {
-        doThrow(new RuntimeException("boom")).when(brightSkyService).updateAlertsForCurrentLocation();
+                verify(brightSkyService).updateAlertsForCurrentLocation();
+                verifyNoMoreInteractions(brightSkyService);
+                verifyNoInteractions(weatherAlertMapper);
+        }
 
-        mockMvc.perform(post("/api/alerts/update"))
-                .andExpect(status().isInternalServerError())
-                .andExpect(content().string("Failed to update weather alerts"));
+        @Test
+        void updateAlertsForCurrentLocation_returns500_whenServiceThrows() throws Exception {
+                doThrow(new RuntimeException("boom")).when(brightSkyService).updateAlertsForCurrentLocation();
 
-        verify(brightSkyService).updateAlertsForCurrentLocation();
-        verifyNoMoreInteractions(brightSkyService);
-        verifyNoInteractions(weatherAlertMapper);
-    }
+                mockMvc.perform(post("/api/alerts/update"))
+                                .andExpect(status().isInternalServerError())
+                                .andExpect(content().string("Failed to update weather alerts"));
 
-    @Test
-    void cleanupExpiredAlerts_returns200_whenOk() throws Exception {
-        doNothing().when(brightSkyService).cleanupExpiredAlerts();
+                verify(brightSkyService).updateAlertsForCurrentLocation();
+                verifyNoMoreInteractions(brightSkyService);
+                verifyNoInteractions(weatherAlertMapper);
+        }
 
-        mockMvc.perform(delete("/api/alerts/cleanup"))
-                .andExpect(status().isOk())
-                .andExpect(content().string("Expired alerts cleaned up successfully"));
+        @Test
+        void cleanupExpiredAlerts_returns200_whenOk() throws Exception {
+                doNothing().when(brightSkyService).cleanupExpiredAlerts();
 
-        verify(brightSkyService).cleanupExpiredAlerts();
-        verifyNoMoreInteractions(brightSkyService);
-        verifyNoInteractions(weatherAlertMapper);
-    }
+                mockMvc.perform(delete("/api/alerts/cleanup"))
+                                .andExpect(status().isOk())
+                                .andExpect(content().string("Expired alerts cleaned up successfully"));
 
-    @Test
-    void cleanupExpiredAlerts_returns500_whenServiceThrows() throws Exception {
-        doThrow(new RuntimeException("boom")).when(brightSkyService).cleanupExpiredAlerts();
+                verify(brightSkyService).cleanupExpiredAlerts();
+                verifyNoMoreInteractions(brightSkyService);
+                verifyNoInteractions(weatherAlertMapper);
+        }
 
-        mockMvc.perform(delete("/api/alerts/cleanup"))
-                .andExpect(status().isInternalServerError())
-                .andExpect(content().string("Failed to cleanup expired alerts"));
+        @Test
+        void cleanupExpiredAlerts_returns500_whenServiceThrows() throws Exception {
+                doThrow(new RuntimeException("boom")).when(brightSkyService).cleanupExpiredAlerts();
 
-        verify(brightSkyService).cleanupExpiredAlerts();
-        verifyNoMoreInteractions(brightSkyService);
-        verifyNoInteractions(weatherAlertMapper);
-    }
+                mockMvc.perform(delete("/api/alerts/cleanup"))
+                                .andExpect(status().isInternalServerError())
+                                .andExpect(content().string("Failed to cleanup expired alerts"));
 
-    @Test
-    void getRadarEndpoint_returns200_andPayload_whenServiceReturnsUrl() throws Exception {
-        when(brightSkyService.getRadarEndpointUrlForCurrentLocation(null, "compressed"))
-                .thenReturn("https://example.test/radar");
+                verify(brightSkyService).cleanupExpiredAlerts();
+                verifyNoMoreInteractions(brightSkyService);
+                verifyNoInteractions(weatherAlertMapper);
+        }
 
-        mockMvc.perform(get("/api/alerts/radar/endpoint"))
-                .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.radarEndpoint").value("https://example.test/radar"))
-                .andExpect(jsonPath("$.format").value("compressed"))
-                .andExpect(jsonPath("$.distance").value(200000))
-                .andExpect(jsonPath("$.documentation").isString())
-                .andExpect(jsonPath("$.note").isString());
+        @Test
+        void getRadarEndpoint_returns200_andPayload_whenServiceReturnsUrl() throws Exception {
+                when(brightSkyService.getRadarEndpointUrlForCurrentLocation(null, "compressed"))
+                                .thenReturn("https://example.test/radar");
 
-        verify(brightSkyService).getRadarEndpointUrlForCurrentLocation(null, "compressed");
-        verifyNoMoreInteractions(brightSkyService);
-        verifyNoInteractions(weatherAlertMapper);
-    }
+                mockMvc.perform(get("/api/alerts/radar/endpoint"))
+                                .andExpect(status().isOk())
+                                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(jsonPath("$.radarEndpoint").value("https://example.test/radar"))
+                                .andExpect(jsonPath("$.format").value("compressed"))
+                                .andExpect(jsonPath("$.distance").value(200000))
+                                .andExpect(jsonPath("$.documentation").isString())
+                                .andExpect(jsonPath("$.note").isString());
 
-    @Test
-    void getRadarEndpoint_usesProvidedDistanceAndFormat() throws Exception {
-        when(brightSkyService.getRadarEndpointUrlForCurrentLocation(12345, "plain"))
-                .thenReturn("https://example.test/radar2");
+                verify(brightSkyService).getRadarEndpointUrlForCurrentLocation(null, "compressed");
+                verifyNoMoreInteractions(brightSkyService);
+                verifyNoInteractions(weatherAlertMapper);
+        }
 
-        mockMvc.perform(get("/api/alerts/radar/endpoint")
-                        .param("distance", "12345")
-                        .param("format", "plain"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.radarEndpoint").value("https://example.test/radar2"))
-                .andExpect(jsonPath("$.format").value("plain"))
-                .andExpect(jsonPath("$.distance").value(12345));
+        @Test
+        void getRadarEndpoint_usesProvidedDistanceAndFormat() throws Exception {
+                when(brightSkyService.getRadarEndpointUrlForCurrentLocation(12345, "plain"))
+                                .thenReturn("https://example.test/radar2");
 
-        verify(brightSkyService).getRadarEndpointUrlForCurrentLocation(12345, "plain");
-        verifyNoMoreInteractions(brightSkyService);
-        verifyNoInteractions(weatherAlertMapper);
-    }
+                mockMvc.perform(get("/api/alerts/radar/endpoint")
+                                .param("distance", "12345")
+                                .param("format", "plain"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.radarEndpoint").value("https://example.test/radar2"))
+                                .andExpect(jsonPath("$.format").value("plain"))
+                                .andExpect(jsonPath("$.distance").value(12345));
 
-    @Test
-    void getRadarEndpoint_returns200_withError_whenServiceThrows() throws Exception {
-        when(brightSkyService.getRadarEndpointUrlForCurrentLocation(null, "compressed"))
-                .thenThrow(new RuntimeException("boom"));
+                verify(brightSkyService).getRadarEndpointUrlForCurrentLocation(12345, "plain");
+                verifyNoMoreInteractions(brightSkyService);
+                verifyNoInteractions(weatherAlertMapper);
+        }
 
-        mockMvc.perform(get("/api/alerts/radar/endpoint"))
-                .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.error").value("Unable to generate radar endpoint"));
+        @Test
+        void getRadarEndpoint_returns200_withError_whenServiceThrows() throws Exception {
+                when(brightSkyService.getRadarEndpointUrlForCurrentLocation(null, "compressed"))
+                                .thenThrow(new RuntimeException("boom"));
 
-        verify(brightSkyService).getRadarEndpointUrlForCurrentLocation(null, "compressed");
-        verifyNoMoreInteractions(brightSkyService);
-        verifyNoInteractions(weatherAlertMapper);
-    }
+                mockMvc.perform(get("/api/alerts/radar/endpoint"))
+                                .andExpect(status().isOk())
+                                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(jsonPath("$.error").value("Unable to generate radar endpoint"));
 
-    @Test
-    void getCitiesWithActiveAlerts_returns200() throws Exception {
-        when(brightSkyService.getCitiesWithActiveAlerts()).thenReturn(List.of("Berlin", "Hamburg"));
+                verify(brightSkyService).getRadarEndpointUrlForCurrentLocation(null, "compressed");
+                verifyNoMoreInteractions(brightSkyService);
+                verifyNoInteractions(weatherAlertMapper);
+        }
 
-        mockMvc.perform(get("/api/alerts/cities"))
-                .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$.length()").value(2))
-                .andExpect(jsonPath("$[0]").value("Berlin"))
-                .andExpect(jsonPath("$[1]").value("Hamburg"));
+        @Test
+        void getCitiesWithActiveAlerts_returns200() throws Exception {
+                when(brightSkyService.getCitiesWithActiveAlerts()).thenReturn(List.of("Berlin", "Hamburg"));
 
-        verify(brightSkyService).getCitiesWithActiveAlerts();
-        verifyNoMoreInteractions(brightSkyService);
-        verifyNoInteractions(weatherAlertMapper);
-    }
+                mockMvc.perform(get("/api/alerts/cities"))
+                                .andExpect(status().isOk())
+                                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(jsonPath("$").isArray())
+                                .andExpect(jsonPath("$.length()").value(2))
+                                .andExpect(jsonPath("$[0]").value("Berlin"))
+                                .andExpect(jsonPath("$[1]").value("Hamburg"));
+
+                verify(brightSkyService).getCitiesWithActiveAlerts();
+                verifyNoMoreInteractions(brightSkyService);
+                verifyNoInteractions(weatherAlertMapper);
+        }
 }

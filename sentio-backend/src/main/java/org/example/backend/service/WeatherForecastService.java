@@ -261,7 +261,6 @@ public class WeatherForecastService {
         };
     }
 
-    // ===== Device-scoped methods =====
 
     /**
      * Retrieves forecasts for a specific device after verifying ownership.
@@ -415,7 +414,6 @@ public class WeatherForecastService {
         return weatherForecastRepository.findDistinctCitiesWithUpcomingForecasts(LocalDate.now());
     }
 
-    // ==================== Circuit Breaker Fallback Methods ====================
 
     @SuppressWarnings("unused")
     private List<WeatherForecast> getForecastForLocationFallback(Float latitude, Float longitude,

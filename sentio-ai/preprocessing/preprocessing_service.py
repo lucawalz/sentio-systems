@@ -8,8 +8,6 @@ import os
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any
-# Environment variables are passed via docker-compose
-
 # Configure logging
 log_level = os.getenv('LOG_LEVEL', 'INFO')
 logging.basicConfig(level=getattr(logging, log_level))
@@ -75,7 +73,6 @@ class ImagePreprocessor:
 
             logger.info(f"Original image shape: {img.shape}")
 
-            # Assess image quality to determine if enhancement is needed
             needs_enhancement = ImagePreprocessor._assess_image_quality(img)
 
             if not needs_enhancement['any']:
@@ -278,7 +275,6 @@ async def forward_to_classifier(
     Returns:
         Classification response from the downstream service
     """
-    # Determine target URL based on animal type
     if animal_type.lower() == "bird":
         target_url = BIRD_CLASSIFIER_URL
         logger.info(f"Routing to bird classifier: {target_url}")
@@ -404,8 +400,6 @@ async def preprocess_only(file: UploadFile = File(...)):
             detail=f"Error preprocessing image: {str(e)}"
         )
 
-
-# ============ Redis Queue Stats ============
 
 @app.get("/queue/stats")
 async def queue_stats():

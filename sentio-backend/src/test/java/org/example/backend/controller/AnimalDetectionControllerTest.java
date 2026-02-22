@@ -35,6 +35,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
                 OAuth2ResourceServerAutoConfiguration.class
 })
 @Import(AnimalDetectionControllerTest.TestBeans.class)
+@org.springframework.test.context.TestPropertySource(properties = {
+                "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration"
+})
 class AnimalDetectionControllerTest {
 
         @Autowired

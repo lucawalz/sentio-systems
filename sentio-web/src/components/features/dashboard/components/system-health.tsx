@@ -13,8 +13,7 @@ export function SystemHealth({ devices, loading }: SystemHealthProps) {
 
     const onlineCount = safeDevices.filter((d) => {
         if (!d.lastSeen) return false
-        // Backend sends LocalDateTime which implies UTC but lacks offset
-        // We append 'Z' to ensure browser treats it as UTC
+        // Backend sends LocalDateTime without UTC offset
         const lastSeenTime = d.lastSeen.endsWith('Z') ? d.lastSeen : `${d.lastSeen}Z`
         return Date.now() - new Date(lastSeenTime).getTime() < 5 * 60 * 1000
     }).length

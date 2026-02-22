@@ -284,7 +284,6 @@ public class BrightSkyService {
         return weatherAlertRepository.findActiveAlertsForLocation(city, warnCellId, LocalDateTime.now());
     }
 
-    // ===== Device-scoped methods =====
 
     /**
      * Retrieves active alerts for a specific device after verifying ownership.
@@ -475,7 +474,6 @@ public class BrightSkyService {
         return weatherAlertRepository.findDistinctCitiesWithActiveAlerts(LocalDateTime.now());
     }
 
-    // ==================== RADAR METADATA METHODS ====================
 
     /**
      * Fetches radar data from BrightSky and stores metadata for AI analysis.
@@ -700,7 +698,6 @@ public class BrightSkyService {
         log.info("Cleaned up radar metadata older than {}", cutoff);
     }
 
-    // ==================== Circuit Breaker Fallback Methods ====================
 
     /**
      * Fallback for getAlertsForLocation when BrightSky API is unavailable.

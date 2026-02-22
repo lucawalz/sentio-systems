@@ -44,7 +44,7 @@ export default function ForgotPasswordPage() {
 
             // Always show success message to prevent email enumeration
             setSuccess(true)
-        } catch (error) {
+        } catch {
             // Still show success to prevent email enumeration
             setSuccess(true)
         } finally {

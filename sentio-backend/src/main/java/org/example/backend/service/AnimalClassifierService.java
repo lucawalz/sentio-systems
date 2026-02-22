@@ -543,7 +543,6 @@ public class AnimalClassifierService {
         };
     }
 
-    // ==================== Circuit Breaker Fallback Methods ====================
 
     @SuppressWarnings("unused")
     private Map<String, Object> callPreprocessingServiceFallback(File imageFile, String animalType, Exception ex) {

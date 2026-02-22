@@ -311,16 +311,10 @@ public class DeviceService {
                 .orElse(false);
     }
 
-    /**
-     * Get list of device IDs owned by current user.
-     */
     public List<String> getMyDeviceIds() {
         return getMyDevices().stream().map(Device::getId).toList();
     }
 
-    /**
-     * Check if the current user has any registered devices.
-     */
     public boolean hasAnyDevices() {
         return !getMyDevices().isEmpty();
     }

@@ -1,6 +1,7 @@
 package org.example.backend.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import jakarta.ws.rs.core.Response;
 import org.example.backend.dto.AuthDTOs;
 import org.junit.jupiter.api.BeforeEach;
@@ -12,6 +13,7 @@ import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.admin.client.resource.UserResource;
 import org.keycloak.admin.client.resource.UsersResource;
+import org.keycloak.representations.idm.CredentialRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
@@ -27,31 +29,30 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
+import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * Unit tests for {@link KeycloakAuthService}.
- * 
+ * Integration tests for {@link KeycloakAuthService}.
+ * Uses WireMock to mock Keycloak token endpoints and Mockito for Keycloak admin client.
+ *
  * <p>
  * Following FIRST principles:
  * </p>
  * <ul>
- * <li><b>Fast</b> - All external calls to Keycloak and REST endpoints are
- * mocked</li>
+ * <li><b>Fast</b> - All external calls to Keycloak and REST endpoints are mocked</li>
  * <li><b>Independent</b> - Each test is self-contained with fresh mocks</li>
  * <li><b>Repeatable</b> - No network or state dependencies</li>
- * <li><b>Self-validating</b> - Clear assertions with descriptive test
- * names</li>
+ * <li><b>Self-validating</b> - Clear assertions with descriptive test names</li>
  * <li><b>Timely</b> - Tests cover critical authentication flows</li>
  * </ul>
  */
+@WireMockTest(httpPort = 8093)
 @ExtendWith(MockitoExtension.class)
 class KeycloakAuthServiceTest {
 

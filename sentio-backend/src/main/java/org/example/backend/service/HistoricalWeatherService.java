@@ -563,7 +563,6 @@ public class HistoricalWeatherService {
         return historicalWeatherRepository.findDistinctCitiesWithHistoricalWeather(LocalDate.now().minusYears(1));
     }
 
-    // ==================== Circuit Breaker Fallback Methods ====================
 
     @SuppressWarnings("unused")
     private List<HistoricalWeather> getHistoricalWeatherForLocationFallback(Float latitude, Float longitude,

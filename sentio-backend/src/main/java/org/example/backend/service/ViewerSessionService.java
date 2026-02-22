@@ -71,13 +71,8 @@ public class ViewerSessionService {
     public boolean leaveStream(String deviceId, String sessionId) {
         String viewersKey = VIEWERS_KEY_PREFIX + deviceId;
 
-        // Remove the session from sorted set
         Long removed = redisTemplate.opsForZSet().remove(viewersKey, sessionId);
-        
-        // Clean up expired sessions
         cleanupExpiredSessions(deviceId);
-        
-        // Get remaining count
         Long count = redisTemplate.opsForZSet().zCard(viewersKey);
         long viewerCount = count != null ? count : 0;
 
