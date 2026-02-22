@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import jakarta.persistence.EntityManager;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -118,13 +118,13 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
     @Autowired
     private EntityManager entityManager;
 
-    @MockBean
+    @MockitoBean
     private ImageStorageService imageStorageService;
 
-    @MockBean
+    @MockitoBean
     private RedisQueueService redisQueueService;
 
-    @MockBean
+    @MockitoBean
     private ClassificationResultProcessor resultProcessor;
 
     @Autowired
@@ -226,8 +226,7 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
                         anyString(),
                         eq("bird"),
                         eq(detection.getId()),
-                        eq(resultProcessor)
-                );
+                        eq(resultProcessor));
             });
         }
 
@@ -250,7 +249,8 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
 
             // Should attempt queue first, then fallback
             await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
-                verify(redisQueueService).submitClassificationJobAsync(any(), anyString(), anyString(), anyLong(), any());
+                verify(redisQueueService).submitClassificationJobAsync(any(), anyString(), anyString(), anyLong(),
+                        any());
             });
         }
 
@@ -379,8 +379,7 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
                         contains(".jpg"),
                         eq("mammal"),
                         eq(detection.getId()),
-                        eq(resultProcessor)
-                );
+                        eq(resultProcessor));
             });
         }
 
@@ -400,7 +399,8 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
             animalClassifierService.classifyAndUpdate(detection);
 
             await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> {
-                verify(redisQueueService, never()).submitClassificationJobAsync(any(), anyString(), anyString(), anyLong(), any());
+                verify(redisQueueService, never()).submitClassificationJobAsync(any(), anyString(), anyString(),
+                        anyLong(), any());
             });
         }
 
@@ -419,7 +419,8 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
             animalClassifierService.classifyAndUpdate(detection);
 
             await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> {
-                verify(redisQueueService, never()).submitClassificationJobAsync(any(), anyString(), anyString(), anyLong(), any());
+                verify(redisQueueService, never()).submitClassificationJobAsync(any(), anyString(), anyString(),
+                        anyLong(), any());
             });
         }
 
@@ -441,7 +442,8 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
             animalClassifierService.classifyAndUpdate(detection);
 
             await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> {
-                verify(redisQueueService).submitClassificationJobAsync(any(), anyString(), anyString(), anyLong(), any());
+                verify(redisQueueService).submitClassificationJobAsync(any(), anyString(), anyString(), anyLong(),
+                        any());
             });
         }
 

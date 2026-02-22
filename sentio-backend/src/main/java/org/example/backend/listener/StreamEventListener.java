@@ -1,9 +1,9 @@
 package org.example.backend.listener;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.backend.event.StreamStopScheduledEvent;
 import org.example.backend.service.ViewerSessionService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.EventListener;
 import org.springframework.integration.mqtt.support.MqttHeaders;
 import org.springframework.integration.support.MessageBuilder;
@@ -25,14 +25,19 @@ import java.util.concurrent.ConcurrentHashMap;
  * 4. If new viewers joined, the stop is cancelled via timestamp comparison
  */
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class StreamEventListener {
 
     private final ViewerSessionService viewerSessionService;
     private final MessageChannel mqttOutboundChannel;
 
-    private static final long STOP_DELAY_MS = 60_000; // 60 seconds
+    @Value("${sentio.stream.stop-delay-ms:60000}")
+    private long stopDelayMs;
+
+    public StreamEventListener(ViewerSessionService viewerSessionService, MessageChannel mqttOutboundChannel) {
+        this.viewerSessionService = viewerSessionService;
+        this.mqttOutboundChannel = mqttOutboundChannel;
+    }
 
     // Track when stops were scheduled - allows cancellation by publishing new event
     private final ConcurrentHashMap<String, Instant> scheduledStops = new ConcurrentHashMap<>();
@@ -56,11 +61,11 @@ public class StreamEventListener {
         // Record this stop request
         scheduledStops.put(deviceId, scheduledAt);
         log.info("Stream stop scheduled for device {} at {} - waiting {}s",
-                deviceId, scheduledAt, STOP_DELAY_MS / 1000);
+                deviceId, scheduledAt, stopDelayMs / 1000);
 
         try {
             // Wait for the delay period
-            Thread.sleep(STOP_DELAY_MS);
+            Thread.sleep(stopDelayMs);
 
             // Check if this stop request is still valid (not superseded by new viewers)
             Instant currentScheduled = scheduledStops.get(deviceId);
@@ -94,7 +99,7 @@ public class StreamEventListener {
 
             // Send stop command
             log.info("No viewers after {}s delay - stopping stream for device {}",
-                    STOP_DELAY_MS / 1000, deviceId);
+                    stopDelayMs / 1000, deviceId);
             sendStreamCommand(deviceId, "stop");
             scheduledStops.remove(deviceId);
 
