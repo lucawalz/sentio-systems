@@ -8,8 +8,6 @@ Unified repository for the Sentio environmental monitoring platform.
 - **sentio-embedded**: Embedded firmware for AI wildlife monitoring
 - **sentio-ai**: ML models for species detection and weather prediction
 
-## Architecture Decisions
-We document significant architectural decisions in this repository using 
-**Architecture Decision Records (ADRs)**.
-You can find the history of decisions and their rationale in the 
-[docs/adr/](docs/adr/README.md) directory.
+## Documentation
+
+- [Architecture Decision Records (ADRs)](docs/adr/README.md)
