@@ -30,4 +30,27 @@ public interface AuthService {
      * @return UserInfo containing username and email
      */
     AuthDTOs.UserInfo getCurrentUser();
+
+    /**
+     * Checks if a user exists with the given email address.
+     * 
+     * @param email The email to check
+     * @return true if a user with this email exists
+     */
+    boolean userExistsByEmail(String email);
+
+    /**
+     * Updates the password for a user identified by email.
+     * 
+     * @param email       The user's email address
+     * @param newPassword The new password to set
+     */
+    void updatePassword(String email, String newPassword);
+
+    /**
+     * Marks a user's email as verified.
+     * 
+     * @param email The user's email address to mark as verified
+     */
+    void markEmailVerified(String email);
 }
