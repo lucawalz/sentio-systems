@@ -50,6 +50,25 @@ public class MqttConfig {
     @Value("${mqtt.keepAliveInterval:60}")
     private int keepAliveInterval;
 
+    // TLS/SSL properties
+    @Value("${mqtt.tls.enabled:false}")
+    private boolean tlsEnabled;
+
+    @Value("${mqtt.tls.ca-cert-path:}")
+    private String tlsCaCertPath;
+
+    @Value("${mqtt.tls.client-cert-path:}")
+    private String tlsClientCertPath;
+
+    @Value("${mqtt.tls.client-key-path:}")
+    private String tlsClientKeyPath;
+
+    @Value("${mqtt.tls.client-key-password:}")
+    private String tlsClientKeyPassword;
+
+    @Value("${mqtt.tls.verify-hostname:true}")
+    private boolean tlsVerifyHostname;
+
     @Bean
     public MqttPahoClientFactory mqttClientFactory() {
         DefaultMqttPahoClientFactory factory = new DefaultMqttPahoClientFactory();
@@ -62,6 +81,40 @@ public class MqttConfig {
         if (!mqttUsername.isEmpty() && !mqttPassword.isEmpty()) {
             options.setUserName(mqttUsername);
             options.setPassword(mqttPassword.toCharArray());
+        }
+
+        // TLS/SSL Configuration
+        if (tlsEnabled) {
+            try {
+                java.util.Properties sslProperties = new java.util.Properties();
+                
+                // CA certificate for server verification
+                if (!tlsCaCertPath.isEmpty()) {
+                    sslProperties.setProperty("com.ibm.ssl.trustStore", tlsCaCertPath);
+                    if (!tlsClientKeyPassword.isEmpty()) {
+                        sslProperties.setProperty("com.ibm.ssl.trustStorePassword", tlsClientKeyPassword);
+                    }
+                }
+                
+                // Client certificate for mutual TLS authentication
+                if (!tlsClientCertPath.isEmpty()) {
+                    sslProperties.setProperty("com.ibm.ssl.keyStore", tlsClientCertPath);
+                    if (!tlsClientKeyPassword.isEmpty()) {
+                        sslProperties.setProperty("com.ibm.ssl.keyStorePassword", tlsClientKeyPassword);
+                    }
+                }
+                
+                options.setSSLProperties(sslProperties);
+                options.setSSLHostnameVerifier(tlsVerifyHostname 
+                    ? null  // null = default hostname verifier (strict)
+                    : (hostname, session) -> true);  // accept all (development only!)
+                    
+                System.out.println("MQTT TLS/SSL enabled with CA cert: " + tlsCaCertPath);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to configure MQTT TLS/SSL", e);
+            }
+        } else {
+            System.out.println("WARNING: MQTT TLS/SSL is DISABLED. This is insecure for production!");
         }
 
         // Connection settings
