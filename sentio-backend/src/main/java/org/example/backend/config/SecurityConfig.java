@@ -57,12 +57,12 @@ public class SecurityConfig {
                 .frameOptions(frame -> frame.sameOrigin())
                 .referrerPolicy(referrer -> referrer
                     .policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.NO_REFERRER))
-                .permissionsPolicy(permissions -> permissions
-                    .policy("geolocation=(), microphone=(), camera=()"))
                 .httpStrictTransportSecurity(hsts -> hsts
                     .includeSubDomains(true)
                     .preload(true)
-                    .maxAgeInSeconds(31536000)))
+                    .maxAgeInSeconds(31536000))
+                .permissionsPolicy(permissions -> permissions
+                    .policy("geolocation=(), microphone=(), camera=()")))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/internal/mqtt/**").permitAll() // Called by Mosquitto auth plugin
