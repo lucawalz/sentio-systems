@@ -30,6 +30,11 @@ We use the MADR (Markdown Architectural Decision Records) format:
 | [0010](# ADR-0010.md) | RESTful API Design Pattern | Accepted |
 | [0011](# ADR-0011.md) | Hailo AI Accelerator for Edge Inference | Accepted |
 | [0012](# ADR-0012.md) | Layered Architecture Pattern | Accepted |
+| [0013](# ADR-0013.md) | Centralized Authentication with Keycloak | Accepted |
+| [0014](# ADR-0014.md) | External Weather Data Integration | Accepted |
+| [0015](# ADR-0015.md) | Low-Latency Video Streaming via RTMPS | Accepted |
+| [0016](# ADR-0016.md) | Workflow Automation with n8n | Accepted |
+| [0017](# ADR-0017.md) | Comprehensive API Documentation with OpenAPI/Swagger | Accepted |
 
 ## Creating New ADRs
 
