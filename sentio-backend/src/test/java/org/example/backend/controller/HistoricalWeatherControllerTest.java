@@ -3,7 +3,7 @@ package org.example.backend.controller;
 import org.example.backend.dto.HistoricalWeatherDTO;
 import org.example.backend.mapper.HistoricalWeatherMapper;
 import org.example.backend.model.HistoricalWeather;
-import org.example.backend.service.HistoricalWeatherService;
+import org.example.backend.service.IHistoricalWeatherService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.security.oauth2.resource.servlet.OAuth2ResourceServerAutoConfiguration;
@@ -40,7 +40,7 @@ class HistoricalWeatherControllerTest {
 
     @Autowired MockMvc mockMvc;
 
-    @Autowired HistoricalWeatherService historicalWeatherService;
+        @Autowired IHistoricalWeatherService historicalWeatherService;
     @Autowired HistoricalWeatherMapper historicalWeatherMapper;
     @AfterEach
     void resetMocks() {
@@ -49,7 +49,7 @@ class HistoricalWeatherControllerTest {
 
     @TestConfiguration
     static class TestBeans {
-        @Bean HistoricalWeatherService historicalWeatherService() { return mock(HistoricalWeatherService.class); }
+                @Bean IHistoricalWeatherService historicalWeatherService() { return mock(IHistoricalWeatherService.class); }
         @Bean HistoricalWeatherMapper historicalWeatherMapper() { return mock(HistoricalWeatherMapper.class); }
     }
 
@@ -130,13 +130,13 @@ class HistoricalWeatherControllerTest {
 
     @Test
     void updateHistoricalWeatherForCurrentLocation_returns200_onSuccess() throws Exception {
-        doNothing().when(historicalWeatherService).updateHistoricalWeatherForCurrentLocation();
+        doNothing().when(historicalWeatherService).updateHistoricalWeatherForAllDeviceLocations();
 
         mockMvc.perform(post("/api/historical/update"))
                 .andExpect(status().isOk())
-                .andExpect(content().string("Historical weather data updated successfully"));
+                .andExpect(content().string("Historical weather data updated successfully for all devices"));
 
-        verify(historicalWeatherService).updateHistoricalWeatherForCurrentLocation();
+        verify(historicalWeatherService).updateHistoricalWeatherForAllDeviceLocations();
         verifyNoInteractions(historicalWeatherMapper);
         verifyNoMoreInteractions(historicalWeatherService);
     }
@@ -144,13 +144,13 @@ class HistoricalWeatherControllerTest {
     @Test
     void updateHistoricalWeatherForCurrentLocation_returns500_onFailure() throws Exception {
         doThrow(new RuntimeException("boom"))
-                .when(historicalWeatherService).updateHistoricalWeatherForCurrentLocation();
+                .when(historicalWeatherService).updateHistoricalWeatherForAllDeviceLocations();
 
         mockMvc.perform(post("/api/historical/update"))
                 .andExpect(status().isInternalServerError())
                 .andExpect(content().string("Failed to update historical weather data"));
 
-        verify(historicalWeatherService).updateHistoricalWeatherForCurrentLocation();
+        verify(historicalWeatherService).updateHistoricalWeatherForAllDeviceLocations();
         verifyNoInteractions(historicalWeatherMapper);
         verifyNoMoreInteractions(historicalWeatherService);
     }
@@ -256,12 +256,21 @@ class HistoricalWeatherControllerTest {
 
     @Test
     void getHistoricalComparison_returns200_andCallsServiceForEachKey() throws Exception {
-        // 5 keys: threeDaysAgo, oneWeekAgo, oneMonthAgo, threeMonthsAgo, oneYearAgo
+        // 5 keys: threeDaysAgo, twoWeeksAgo, oneMonthAgo, threeMonthsAgo, oneYearAgo
         HistoricalWeather hw1 = new HistoricalWeather();
         HistoricalWeatherDTO dto1 = new HistoricalWeatherDTO();
+                LocalDate today = LocalDate.now();
 
-        when(historicalWeatherService.getHistoricalWeatherForDate(any(LocalDate.class)))
-                .thenReturn(hw1, null, hw1, null, hw1); // gemischt null/nicht-null
+        when(historicalWeatherService.getHistoricalWeatherForDate(any(LocalDate.class), isNull()))
+                                .thenAnswer(invocation -> {
+                                        LocalDate requestedDate = invocation.getArgument(0);
+                                        if (requestedDate.equals(today.minusDays(3))
+                                                        || requestedDate.equals(today.minusMonths(1))
+                                                        || requestedDate.equals(today.minusYears(1))) {
+                                                return hw1;
+                                        }
+                                        return null;
+                                });
         when(historicalWeatherMapper.toDTO(hw1)).thenReturn(dto1);
 
         mockMvc.perform(get("/api/historical/comparison"))
@@ -274,10 +283,10 @@ class HistoricalWeatherControllerTest {
                 .andExpect(jsonPath("$.oneYearAgo").isMap())
 
                 // keys die bei dir null sind:
-                .andExpect(jsonPath("$.oneWeekAgo").value(nullValue()))
+                .andExpect(jsonPath("$.twoWeeksAgo").value(nullValue()))
                 .andExpect(jsonPath("$.threeMonthsAgo").value(nullValue()));
 
-        verify(historicalWeatherService, times(5)).getHistoricalWeatherForDate(any(LocalDate.class));
+        verify(historicalWeatherService, times(5)).getHistoricalWeatherForDate(any(LocalDate.class), isNull());
         verify(historicalWeatherMapper, times(3)).toDTO(hw1); // weil 3x hw1 zurückgegeben
         verifyNoMoreInteractions(historicalWeatherService, historicalWeatherMapper);
     }
