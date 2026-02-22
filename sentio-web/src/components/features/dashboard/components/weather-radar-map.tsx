@@ -10,16 +10,12 @@ import { register } from 'ol/proj/proj4'
 import { get as getProjection } from 'ol/proj'
 import Overlay from 'ol/Overlay'
 import proj4 from 'proj4'
-import pako from 'pako'
 import { Play, Pause, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { precipitationToRGBA } from '@/lib/turbo-colormap'
-import type { Device, BrightSkyRadarResponse, BrightSkyRadarRecord } from '@/types/api'
+import type { Device, BrightSkyRadarResponse } from '@/types/api'
 import 'ol/ol.css'
 
 // DWD DE1200 projection constants
-const GRID_WIDTH = 1100
-const GRID_HEIGHT = 1200
 const GRID_PROJECTION_NAME = 'DE1200'
 const GRID_PROJ_STRING = '+proj=stere +lat_0=90 +lat_ts=60 +lon_0=10 +a=6378137 +b=6356752.3142451802 +no_defs +x_0=543196.83521776402 +y_0=3622588.8619310018'
 const GRID_EXTENT: [number, number, number, number] = [-500, -1199500, 1099500, 500]
@@ -52,56 +48,7 @@ interface WeatherRadarMapProps {
 proj4.defs(GRID_PROJECTION_NAME, GRID_PROJ_STRING)
 register(proj4)
 
-/**
- * Decompresses base64-encoded, zlib-compressed radar data to Uint16Array.
- */
-function decompressRadarData(base64Data: string): Uint16Array {
-    // Decode base64 to bytes
-    const compressed = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0))
-    // Decompress zlib
-    const decompressed = pako.inflate(compressed)
-    // Interpret as 2-byte integers
-    return new Uint16Array(decompressed.buffer)
-}
 
-/**
- * Creates a canvas data URL from radar precipitation data.
- */
-function createRadarImageUrl(precipitationData: Uint16Array): string {
-    const canvas = document.createElement('canvas')
-    canvas.width = GRID_WIDTH
-    canvas.height = GRID_HEIGHT
-    const ctx = canvas.getContext('2d')!
-    const imageData = ctx.createImageData(GRID_WIDTH, GRID_HEIGHT)
-
-    for (let i = 0; i < precipitationData.length; i++) {
-        const [r, g, b, a] = precipitationToRGBA(precipitationData[i])
-        imageData.data[i * 4] = r
-        imageData.data[i * 4 + 1] = g
-        imageData.data[i * 4 + 2] = b
-        imageData.data[i * 4 + 3] = a
-    }
-
-    ctx.putImageData(imageData, 0, 0)
-    return canvas.toDataURL()
-}
-
-/**
- * Processes radar records into displayable frames.
- */
-function processRadarRecords(records: BrightSkyRadarRecord[]): RadarFrame[] {
-    return records.map(record => {
-        const data = decompressRadarData(record.precipitation_5)
-        const imageUrl = createRadarImageUrl(data)
-        // Extract time HH:MM from ISO timestamp
-        const label = record.timestamp.substring(11, 16)
-        return {
-            label,
-            timestamp: record.timestamp,
-            imageUrl
-        }
-    })
-}
 
 /**
  * Calculate map center from device locations.
@@ -135,7 +82,9 @@ export function WeatherRadarMap({ devices = [], coveragePercent, focusLocation, 
     const [currentFrameIndex, setCurrentFrameIndex] = useState(0)
     const [isPlaying, setIsPlaying] = useState(false)
     const [isLoading, setIsLoading] = useState(true)
+    const [processingProgress, setProcessingProgress] = useState(0)
     const [error, setError] = useState<string | null>(null)
+    const workerRef = useRef<Worker | null>(null)
 
     // Effect to handle focusLocation - zoom and pan to the location
     useEffect(() => {
@@ -155,12 +104,13 @@ export function WeatherRadarMap({ devices = [], coveragePercent, focusLocation, 
         })
     }, [focusLocation, onFocusComplete])
 
-    // Fetch radar data from BrightSky
+    // Fetch radar data from BrightSky and process via Web Worker
     useEffect(() => {
         const fetchRadarData = async () => {
             try {
                 setIsLoading(true)
                 setError(null)
+                setProcessingProgress(0)
 
                 const response = await fetch('https://api.brightsky.dev/radar?tz=Europe/Berlin')
                 if (!response.ok) {
@@ -173,19 +123,57 @@ export function WeatherRadarMap({ devices = [], coveragePercent, focusLocation, 
                     throw new Error('No radar data available')
                 }
 
-                // Process frames (this can take a moment)
-                const processedFrames = processRadarRecords(data.radar)
-                setFrames(processedFrames)
-                setCurrentFrameIndex(0)
+                // Process frames in a Web Worker to avoid blocking the UI
+                const worker = new Worker(
+                    new URL('@/workers/radar-processor.worker.ts', import.meta.url),
+                    { type: 'module' }
+                )
+                workerRef.current = worker
+
+                const processedFrames: RadarFrame[] = []
+
+                worker.onmessage = (event) => {
+                    const msg = event.data
+                    if (msg.type === 'progress') {
+                        processedFrames.push(msg.frame)
+                        setProcessingProgress(
+                            Math.round(((msg.frameIndex + 1) / msg.totalFrames) * 100)
+                        )
+                    } else if (msg.type === 'complete') {
+                        setFrames(processedFrames)
+                        setCurrentFrameIndex(0)
+                        setIsLoading(false)
+                        worker.terminate()
+                        workerRef.current = null
+                    }
+                }
+
+                worker.onerror = (err) => {
+                    console.error('Radar worker error:', err)
+                    setError('Failed to process radar data')
+                    setIsLoading(false)
+                    worker.terminate()
+                    workerRef.current = null
+                }
+
+                // Send records to the worker
+                worker.postMessage({ records: data.radar })
             } catch (err) {
                 console.error('Error fetching radar data:', err)
                 setError(err instanceof Error ? err.message : 'Failed to load radar data')
-            } finally {
                 setIsLoading(false)
             }
         }
 
         fetchRadarData()
+
+        return () => {
+            // Clean up worker on unmount
+            if (workerRef.current) {
+                workerRef.current.terminate()
+                workerRef.current = null
+            }
+        }
     }, [])
 
     // Initialize OpenLayers map
@@ -322,8 +310,13 @@ export function WeatherRadarMap({ devices = [], coveragePercent, focusLocation, 
         <div className={cn("relative w-full h-full rounded-lg overflow-hidden", className)}>
             {/* Loading overlay */}
             {isLoading && (
-                <div className="absolute inset-0 flex items-center justify-center bg-muted/80 z-20">
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-muted/80 z-20 gap-2">
                     <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    {processingProgress > 0 && (
+                        <span className="text-xs text-muted-foreground">
+                            Processing frames: {processingProgress}%
+                        </span>
+                    )}
                 </div>
             )}
 

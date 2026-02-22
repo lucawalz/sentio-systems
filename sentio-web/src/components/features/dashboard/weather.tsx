@@ -1,7 +1,7 @@
 import { Header } from '@/components/layout/dashboard/header'
 import { Main } from '@/components/layout/dashboard/main'
 import { Cloud, Thermometer, CloudRain, Cpu, Activity } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { weatherApi, forecastApi, alertsApi, devicesApi, historicalApi } from '@/lib/api'
 import type { RaspiWeather, WeatherForecast, WeatherAlert, Device, HistoricalComparison as HistoricalComparisonType } from '@/types/api'
 import { CurrentConditions } from './components/current-conditions'
@@ -239,7 +239,11 @@ export default function WeatherPage() {
 
                     {/* Right column: Radar */}
                     <div className="col-span-1 lg:col-span-4">
-                        <WeatherRadar loading={loading} />
+                        <Suspense fallback={
+                            <div className="h-full min-h-[300px] rounded-lg bg-muted animate-pulse" />
+                        }>
+                            <WeatherRadar loading={loading} />
+                        </Suspense>
                     </div>
                 </div>
 

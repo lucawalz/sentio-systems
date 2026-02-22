@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
@@ -139,14 +139,16 @@ export function WeatherRadar({ loading: parentLoading }: WeatherRadarProps) {
                 {isLoading ? (
                     <Skeleton className="flex-1 w-full rounded-lg min-h-[200px]" />
                 ) : (
-                    <WeatherRadarMap
-                        key={refreshKey}
-                        devices={displayDevices}
-                        coveragePercent={metadata?.coveragePercent}
-                        focusLocation={focusLocation}
-                        onFocusComplete={handleFocusComplete}
-                        className="flex-1 min-h-[200px]"
-                    />
+                    <Suspense fallback={<Skeleton className="flex-1 w-full rounded-lg min-h-[200px]" />}>
+                        <WeatherRadarMap
+                            key={refreshKey}
+                            devices={displayDevices}
+                            coveragePercent={metadata?.coveragePercent}
+                            focusLocation={focusLocation}
+                            onFocusComplete={handleFocusComplete}
+                            className="flex-1 min-h-[200px]"
+                        />
+                    </Suspense>
                 )}
             </CardContent>
         </Card>
