@@ -50,6 +50,11 @@ class WorkflowControllerTest {
         WorkflowService workflowService() {
             return mock(WorkflowService.class);
         }
+
+        @Bean
+        org.example.backend.service.N8nWorkflowTriggerService n8nWorkflowTriggerService() {
+            return mock(org.example.backend.service.N8nWorkflowTriggerService.class);
+        }
     }
 
     @Test
@@ -57,7 +62,7 @@ class WorkflowControllerTest {
         WorkflowResult result = new WorkflowResult();
         result.setId(1L);
         result.setAnalysisText("Hello");
-        result.setWorkflowType(WorkflowType.SUMMARY);
+        result.setWorkflowType(WorkflowType.WEATHER_SUMMARY);
         result.setTimestamp(LocalDateTime.of(2025, 12, 18, 10, 0));
 
         when(workflowService.getCurrentResult()).thenReturn(Optional.of(result));
@@ -67,7 +72,7 @@ class WorkflowControllerTest {
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.id").value(1))
                 .andExpect(jsonPath("$.analysisText").value("Hello"))
-                .andExpect(jsonPath("$.workflowType").value("SUMMARY"))
+                .andExpect(jsonPath("$.workflowType").value("WEATHER_SUMMARY"))
                 .andExpect(jsonPath("$.timestamp").value("2025-12-18T10:00:00"));
 
         verify(workflowService, times(1)).getCurrentResult();
@@ -166,7 +171,7 @@ class WorkflowControllerTest {
         verify(workflowService).saveWorkflowResult(captor.capture());
 
         assertThat(captor.getValue().getTimestamp()).isNotNull();
-        assertThat(captor.getValue().getWorkflowType()).isEqualTo(WorkflowType.SUMMARY);
+        assertThat(captor.getValue().getWorkflowType()).isEqualTo(WorkflowType.WEATHER_SUMMARY);
 
         verifyNoMoreInteractions(workflowService);
     }
