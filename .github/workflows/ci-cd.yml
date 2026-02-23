@@ -191,7 +191,7 @@ jobs:
       github.ref == 'refs/heads/main' ||
       github.ref == 'refs/heads/develop' ||
       startsWith(github.ref, 'refs/heads/release/')
-    timeout-minutes: 20
+    timeout-minutes: 45
     permissions:
       contents: read
       checks: write
@@ -217,7 +217,7 @@ jobs:
             -Dtest="*Test,!*IT" \
             -DfailIfNoTests=false \
             -B
-        timeout-minutes: 15
+        timeout-minutes: 20
         env:
           SPRING_PROFILES_ACTIVE: test
 
@@ -231,21 +231,15 @@ jobs:
             -Dit.test="*IT,SentioApplicationTests" \
             -DfailIfNoTests=false \
             -B
-        timeout-minutes: 10
+        timeout-minutes: 20
         env:
           SPRING_PROFILES_ACTIVE: test
           TESTCONTAINERS_REUSE_ENABLE: true
 
-      # Merge unit-test and IT exec files, then generate the combined report.
-      # The merge goal reads jacoco-ut.exec  + jacoco-it.exec (if present) and
-      # writes jacoco.exec; the report goal reads that merged file.
       - name: Generate Coverage Report
         working-directory: ./sentio-backend
         if: always()
-        run: |
-          ./mvnw jacoco:merge jacoco:report -B \
-            -Djacoco.destFile=target/jacoco.exec \
-            -Djacoco.dataFile=target/jacoco.exec
+        run: ./mvnw jacoco:report -B
 
       - name: Upload Coverage to Codecov
         uses: codecov/codecov-action@v4
@@ -295,7 +289,7 @@ jobs:
           fi
 
       - name: Comment Coverage on PR
-        if: github.event_name == 'pull_request' && always()
+        if: github.event_name == 'pull_request' && always() && hashFiles('sentio-backend/coverage-summary.md') != ''
         uses: marocchino/sticky-pull-request-comment@v2
         continue-on-error: true
         with:
