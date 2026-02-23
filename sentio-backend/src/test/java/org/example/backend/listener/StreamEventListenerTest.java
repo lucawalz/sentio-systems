@@ -17,6 +17,8 @@ import org.springframework.messaging.MessageChannel;
 
 import java.time.Instant;
 
+import org.springframework.test.util.ReflectionTestUtils;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -39,7 +41,11 @@ class StreamEventListenerTest {
 
     @BeforeEach
     void setUp() {
-        // No default mocking - tests will stub as needed
+        // @InjectMocks (Mockito) does not process @Value annotations, so stopDelayMs
+        // stays at 0L by default. Set it to 500ms so the async "pending" state is
+        // observable in the timing-sensitive tests without making synchronous tests
+        // slow.
+        ReflectionTestUtils.setField(listener, "stopDelayMs", 500L);
     }
 
     @Nested
