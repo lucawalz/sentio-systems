@@ -15,10 +15,22 @@ import java.time.format.DateTimeFormatter;
 import java.util.Base64;
 
 /**
- * MQTT handler for processing animal detection events from Raspberry Pi
- * devices.
- * Handles multiple animal types and creates initial detection records for AI
- * classification.
+ * MQTT handler for processing animal detection events from Raspberry Pi devices.
+ *
+ * <p>Expected JSON payload structure:
+ * <pre>
+ * {
+ *   "device_id": "string",
+ *   "animal_type": "string",
+ *   "species": "string" (optional),
+ *   "confidence": float,
+ *   "image": "base64 string",
+ *   "timestamp": "ISO8601 string"
+ * }
+ * </pre>
+ * </p>
+ *
+ * Handles multiple animal types and creates initial detection records for AI classification.
  * Uses CQRS CommandService for write operations.
  */
 @Component

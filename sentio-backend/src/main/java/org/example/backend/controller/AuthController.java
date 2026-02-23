@@ -17,6 +17,11 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
 public class AuthController {
+        /**
+         * REST controller for authentication and user account management.
+         * Handles registration, login, logout, password reset, and email verification endpoints.
+         * Delegates authentication logic to AuthService and manages secure cookie handling.
+         */
 
     private final AuthService authService;
     private final CookieAuthService cookieAuthService;

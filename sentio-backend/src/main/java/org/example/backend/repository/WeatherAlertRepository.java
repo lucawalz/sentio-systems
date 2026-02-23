@@ -1,3 +1,9 @@
+
+/**
+ * Repository interface for weather alert data access.
+ * Provides queries for active alerts, location-based filtering, and severity/city lookups.
+ * Integrates with BrightSky alert IDs and warn cell IDs.
+ */
 package org.example.backend.repository;
 
 import jakarta.transaction.Transactional;

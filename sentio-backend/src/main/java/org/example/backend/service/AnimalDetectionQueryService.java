@@ -140,6 +140,16 @@ public class AnimalDetectionQueryService {
         return summary;
     }
 
+    /**
+     * Populates the detection summary with statistics from a list of detections.
+     *
+     * Calculates unique species, unique animal types, average confidence,
+     * first/last detection timestamps, species and animal type breakdowns,
+     * and counts for birds, mammals, and other animals.
+     *
+     * @param summary    The summary object to populate
+     * @param detections The list of animal detections to analyze
+     */
     private void populateSummaryStats(AnimalDetectionSummary summary, List<AnimalDetection> detections) {
         Set<String> uniqueSpecies = detections.stream()
                 .map(AnimalDetection::getSpecies)

@@ -9,6 +9,11 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/contact")
 @CrossOrigin // check Port !!!! //needed for check if frontend has different port than backend / api
 public class ContactController {
+    /**
+     * REST controller for handling contact form submissions.
+     * Receives contact requests from the frontend and triggers email notifications.
+     * Validates input and delegates mail sending to ContactService.
+     */
 
     private final ContactService service;
 

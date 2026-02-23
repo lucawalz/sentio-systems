@@ -13,6 +13,19 @@ import java.time.format.DateTimeFormatter;
 
 /**
  * MQTT message handler responsible for processing incoming weather sensor data.
+ *
+ * <p>Expected JSON payload structure:
+ * <pre>
+ * {
+ *   "device_id": "string",
+ *   "temperature": float,
+ *   "humidity": float,
+ *   "pressure": float,
+ *   "timestamp": "ISO8601 string"
+ * }
+ * </pre>
+ * </p>
+ *
  * Handles JSON payload parsing and persistence of weather measurements.
  */
 @Component

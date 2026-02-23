@@ -23,6 +23,11 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+        /**
+         * Service for managing IoT device registration, pairing, and ownership.
+         * Handles device CRUD operations, MQTT code generation, and event publishing for device lifecycle changes.
+         * Integrates with authentication and repository layers.
+         */
 public class DeviceService {
 
     private final DeviceRepository deviceRepository;
