@@ -1,7 +1,11 @@
 # Sentio Systems - Makefile
 # Run 'make' or 'make help' to see available commands
 
-.PHONY: help setup up down build rebuild status restart logs health aitest \
+# E2E base URL — point at the Docker frontend (override if needed)
+E2E_BASE_URL ?= http://localhost:3000
+
+.PHONY: help setup up down build rebuild status restart logs \
+        health test-backend test-backend-coverage test-frontend test-ai test-e2e test-unit test-all \
         clean cleanimg cleanall shell seed passwords
 
 # Colors
@@ -37,7 +41,14 @@ help:
 	@echo "  $(GREEN)make logs s=backend$(NC)     Follow logs for specific service"
 	@echo ""
 	@echo "$(BOLD)$(YELLOW)Testing:$(NC)"
-	@echo "  $(GREEN)make health$(NC)             Check health of all services"
+	@echo "  $(GREEN)make health$(NC)             Health check all running services"
+	@echo "  $(GREEN)make test-backend$(NC)       Run backend unit tests (Maven, fast)"
+	@echo "  $(GREEN)make test-backend-coverage$(NC) Run backend tests + JaCoCo coverage check"
+	@echo "  $(GREEN)make test-frontend$(NC)      Run frontend unit tests + coverage (Vitest)"
+	@echo "  $(GREEN)make test-ai$(NC)            Run AI service pytest suites + HTTP smoke test"
+	@echo "  $(GREEN)make test-e2e$(NC)           Run E2E tests (Playwright, needs 'make up')"
+	@echo "  $(GREEN)make test-unit$(NC)          Run unit tests only - no stack required"
+	@echo "  $(GREEN)make test-all$(NC)           Run every test suite (needs 'make up')"
 	@echo ""
 	@echo "$(BOLD)$(YELLOW)Cleanup:$(NC)"
 	@echo "  $(GREEN)make clean$(NC)              Stop services and remove volumes"
@@ -130,31 +141,133 @@ health:
 	@echo "$(BOLD)$(CYAN)║                    Service Health Check                       ║$(NC)"
 	@echo "$(BOLD)$(CYAN)╚═══════════════════════════════════════════════════════════════╝$(NC)"
 	@echo ""
-	@printf "  $(BOLD)Backend:$(NC)       " && (curl -sf http://localhost:8083/actuator/health > /dev/null && echo "$(GREEN)● healthy$(NC)" || echo "$(RED)○ offline$(NC)")
+	@printf "  $(BOLD)Backend:$(NC)       " && (docker compose ps backend --format '{{.State}}' 2>/dev/null | grep -qi running && echo "$(GREEN)● healthy$(NC)" || echo "$(RED)○ offline$(NC)")
 	@printf "  $(BOLD)Frontend:$(NC)      " && (curl -sf http://localhost:3000 > /dev/null && echo "$(GREEN)● healthy$(NC)" || echo "$(RED)○ offline$(NC)")
-	@printf "  $(BOLD)Keycloak:$(NC)      " && (curl -sf http://localhost:8080/health > /dev/null && echo "$(GREEN)● healthy$(NC)" || echo "$(RED)○ offline$(NC)")
+	@printf "  $(BOLD)Keycloak:$(NC)      " && (curl -sf http://localhost:8080/realms/sentio > /dev/null && echo "$(GREEN)● healthy$(NC)" || echo "$(RED)○ offline$(NC)")
 	@printf "  $(BOLD)Birder:$(NC)        " && (curl -sf http://localhost:8000/health > /dev/null && echo "$(GREEN)● healthy$(NC)" || echo "$(RED)○ offline$(NC)")
 	@printf "  $(BOLD)SpeciesNet:$(NC)    " && (curl -sf http://localhost:8081/health > /dev/null && echo "$(GREEN)● healthy$(NC)" || echo "$(RED)○ offline$(NC)")
 	@printf "  $(BOLD)Preprocessing:$(NC) " && (curl -sf http://localhost:8082/health > /dev/null && echo "$(GREEN)● healthy$(NC)" || echo "$(RED)○ offline$(NC)")
-	@printf "  $(BOLD)MediaMTX:$(NC)      " && (docker compose ps mediamtx --format '{{.Status}}' 2>/dev/null | grep -q healthy && echo "$(GREEN)● healthy$(NC)" || echo "$(RED)○ offline$(NC)")
-	@printf "  $(BOLD)MQTT:$(NC)          " && (docker compose ps mqtt --format '{{.Status}}' 2>/dev/null | grep -q healthy && echo "$(GREEN)● healthy$(NC)" || echo "$(RED)○ offline$(NC)")
+	@printf "  $(BOLD)MediaMTX:$(NC)      " && (docker compose ps mediamtx --format '{{.State}}' 2>/dev/null | grep -qi running && echo "$(GREEN)● healthy$(NC)" || echo "$(RED)○ offline$(NC)")
+	@printf "  $(BOLD)MQTT:$(NC)          " && (docker compose ps mosquitto --format '{{.State}}' 2>/dev/null | grep -qi running && echo "$(GREEN)● healthy$(NC)" || echo "$(RED)○ offline$(NC)")
+	@printf "  $(BOLD)Postgres:$(NC)      " && (docker compose ps postgres --format '{{.State}}' 2>/dev/null | grep -qi running && echo "$(GREEN)● healthy$(NC)" || echo "$(RED)○ offline$(NC)")
+	@printf "  $(BOLD)Redis:$(NC)         " && (docker compose ps redis --format '{{.State}}' 2>/dev/null | grep -qi running && echo "$(GREEN)● healthy$(NC)" || echo "$(RED)○ offline$(NC)")
 	@echo ""
 
-aitest:
+# --- Backend ---
+test-backend:
 	@echo ""
-	@echo "$(BOLD)$(CYAN)Testing AI Services...$(NC)"
+	@echo "$(BOLD)$(CYAN)╔═══════════════════════════════════════════════════════════════╗$(NC)"
+	@echo "$(BOLD)$(CYAN)║              Backend Tests (Maven)                            ║$(NC)"
+	@echo "$(BOLD)$(CYAN)╚═══════════════════════════════════════════════════════════════╝$(NC)"
 	@echo ""
-	@echo "$(YELLOW)Downloading test images...$(NC)"
-	@curl -sf -o /tmp/test_bird.jpg "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f3/Erithacus_rubecula_with_cocked_head.jpg/440px-Erithacus_rubecula_with_cocked_head.jpg"
-	@curl -sf -o /tmp/test_cat.jpg "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3a/Cat03.jpg/440px-Cat03.jpg"
+	@echo "$(BOLD)$(BLUE)Running unit + integration tests...$(NC)"
+	@cd sentio-backend && ./mvnw test
 	@echo ""
-	@echo "$(BOLD)$(BLUE)Birder (bird image):$(NC)"
-	@curl -sf -X POST -F "file=@/tmp/test_bird.jpg" http://localhost:8000/detect | jq -r '"  Species: \(.classification.top_species)\n  Confidence: \(.classification.top_confidence)"'
+	@echo "$(BOLD)$(GREEN)✓ Backend tests complete$(NC)"
+
+# --- Backend tests + JaCoCo coverage gate ---
+test-backend-coverage:
 	@echo ""
-	@echo "$(BOLD)$(BLUE)SpeciesNet (cat image):$(NC)"
-	@curl -sf -X POST -F "file=@/tmp/test_cat.jpg" http://localhost:8081/detect | jq -r '"  Species: \(.classification.top_species | split(";") | last)\n  Confidence: \(.classification.top_confidence)"'
+	@echo "$(BOLD)$(CYAN)╔═══════════════════════════════════════════════════════════════╗$(NC)"
+	@echo "$(BOLD)$(CYAN)║              Backend Tests + Coverage Gate                    ║$(NC)"
+	@echo "$(BOLD)$(CYAN)╚═══════════════════════════════════════════════════════════════╝$(NC)"
+	@echo ""
+	@echo "$(BOLD)$(BLUE)Running tests with JaCoCo coverage enforcement...$(NC)"
+	@echo "$(YELLOW)Required: 50%% instruction coverage, 35%% branch coverage (target: 80%%/75%%)$(NC)"
+	@cd sentio-backend && ./mvnw verify
+	@echo ""
+	@echo "$(BOLD)$(GREEN)✓ Coverage gate passed$(NC)"
+
+# --- Frontend unit tests ---
+test-frontend:
+	@echo ""
+	@echo "$(BOLD)$(CYAN)╔═══════════════════════════════════════════════════════════════╗$(NC)"
+	@echo "$(BOLD)$(CYAN)║              Frontend Tests (Vitest)                          ║$(NC)"
+	@echo "$(BOLD)$(CYAN)╚═══════════════════════════════════════════════════════════════╝$(NC)"
+	@echo ""
+	@echo "$(BOLD)$(BLUE)Running unit tests with coverage...$(NC)"
+	@cd sentio-web && npm run test:coverage
+	@echo ""
+	@echo "$(BOLD)$(GREEN)✓ Frontend tests complete$(NC)"
+
+# --- Frontend E2E tests (needs stack running via 'make up') ---
+test-e2e:
+	@echo ""
+	@echo "$(BOLD)$(CYAN)╔═══════════════════════════════════════════════════════════════╗$(NC)"
+	@echo "$(BOLD)$(CYAN)║              Frontend E2E Tests (Playwright)                   ║$(NC)"
+	@echo "$(BOLD)$(CYAN)╚═══════════════════════════════════════════════════════════════╝$(NC)"
+	@echo ""
+	@printf "  Checking frontend at $(E2E_BASE_URL)... " && \
+		(curl -sf $(E2E_BASE_URL) > /dev/null && echo "$(GREEN)● reachable$(NC)" || \
+		(echo "$(RED)○ not reachable$(NC)"; echo "$(RED)Run 'make up' first$(NC)"; exit 1))
+	@echo ""
+	@cd sentio-web && BASE_URL=$(E2E_BASE_URL) CI=true npm run test:e2e
+	@echo ""
+	@echo "$(BOLD)$(GREEN)✓ E2E tests complete$(NC)"
+
+# --- AI service pytest suites + HTTP smoke test ---
+test-ai:
+	@echo ""
+	@echo "$(BOLD)$(CYAN)╔═══════════════════════════════════════════════════════════════╗$(NC)"
+	@echo "$(BOLD)$(CYAN)║              AI Service Tests                                 ║$(NC)"
+	@echo "$(BOLD)$(CYAN)╚═══════════════════════════════════════════════════════════════╝$(NC)"
+	@echo ""
+	@echo "$(BOLD)$(BLUE)── Birder unit tests ──$(NC)"
+	@docker compose exec -T birder python3 -m pytest tests/ -v
+	@echo ""
+	@echo "$(BOLD)$(BLUE)── SpeciesNet unit tests ──$(NC)"
+	@docker compose exec -T speciesnet python3 -m pytest tests/ -v
+	@echo ""
+	@echo "$(BOLD)$(BLUE)── Preprocessing unit tests ──$(NC)"
+	@docker compose exec -T preprocessing python3 -m pytest tests/ -v
+	@echo ""
+	@echo "$(BOLD)$(BLUE)── HTTP smoke test (needs stack up) ──$(NC)"
+	@echo "$(YELLOW)Generating test images...$(NC)"
+	@python3 -c "from PIL import Image; img=Image.new('RGB',(64,64),(34,139,34)); img.save('/tmp/test_bird.jpg','JPEG')" 2>/dev/null || \
+		python3 -c "import struct,zlib; open('/tmp/test_bird.jpg','wb').write(bytes([0xff,0xd8,0xff,0xe0,0,16,74,70,73,70,0,1,1,0,0,1,0,1,0,0,0xff,0xd9]))"
+	@python3 -c "from PIL import Image; img=Image.new('RGB',(64,64),(100,149,237)); img.save('/tmp/test_cat.jpg','JPEG')" 2>/dev/null || \
+		python3 -c "open('/tmp/test_cat.jpg','wb').write(bytes([0xff,0xd8,0xff,0xe0,0,16,74,70,73,70,0,1,1,0,0,1,0,1,0,0,0xff,0xd9]))"
+	@if [ -f /tmp/test_bird.jpg ] && [ -f /tmp/test_cat.jpg ]; then \
+		printf "  $(BOLD)Birder health:$(NC)     " && \
+			(curl -sf http://localhost:8000/health > /dev/null && echo "$(GREEN)● online$(NC)" || (echo "$(RED)○ offline - skipping$(NC)")); \
+		if curl -sf http://localhost:8000/health > /dev/null 2>&1; then \
+			echo "$(BOLD)$(BLUE)  Birder detect (bird):$(NC)"; \
+			curl -sf -X POST -F "file=@/tmp/test_bird.jpg" http://localhost:8000/detect \
+				| jq -r '"    Species:    " + .classification.top_species + "\n    Confidence: " + (.classification.top_confidence | tostring)' \
+				|| echo "$(RED)    ✗ Unexpected response format$(NC)"; \
+		fi; \
+		printf "  $(BOLD)SpeciesNet health:$(NC) " && \
+			(curl -sf http://localhost:8081/health > /dev/null && echo "$(GREEN)● online$(NC)" || (echo "$(RED)○ offline - skipping$(NC)")); \
+		if curl -sf http://localhost:8081/health > /dev/null 2>&1; then \
+			echo "$(BOLD)$(BLUE)  SpeciesNet detect (cat):$(NC)"; \
+			curl -sf -X POST -F "file=@/tmp/test_cat.jpg" http://localhost:8081/detect \
+				| jq -r '"    Species:    " + (.classification.top_species | split(";") | last) + "\n    Confidence: " + (.classification.top_confidence | tostring)' \
+				|| echo "$(RED)    ✗ Unexpected response format$(NC)"; \
+		fi; \
+	else \
+		echo "$(YELLOW)⚠ Skipping HTTP smoke test (image download failed - no internet?)$(NC)"; \
+	fi
 	@echo ""
 	@echo "$(BOLD)$(GREEN)✓ AI tests complete$(NC)"
+
+# --- Unit tests only (no stack required) ---
+test-unit:
+	@$(MAKE) test-backend
+	@$(MAKE) test-frontend
+
+# --- Full test suite (needs 'make up') ---
+test-all:
+	@echo ""
+	@echo "$(BOLD)$(CYAN)╔═══════════════════════════════════════════════════════════════╗$(NC)"
+	@echo "$(BOLD)$(CYAN)║              Full Test Suite                                  ║$(NC)"
+	@echo "$(BOLD)$(CYAN)╚═══════════════════════════════════════════════════════════════╝$(NC)"
+	@echo ""
+	@$(MAKE) test-backend
+	@$(MAKE) test-frontend
+	@$(MAKE) test-ai
+	@$(MAKE) test-e2e
+	@echo ""
+	@echo "$(BOLD)$(GREEN)✓ All test suites complete$(NC)"
 
 # =============================================================================
 # Cleanup

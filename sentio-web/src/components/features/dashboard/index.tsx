@@ -51,7 +51,7 @@ function renderMarkdown(text: string): React.ReactNode {
                 <ul key={pIndex} className="list-disc list-inside space-y-1 my-2">
                     {lines.filter(line => line.trim()).map((line, lIndex) => (
                         <li key={lIndex} className="text-sm">
-                            {renderInlineMarkdown(line.replace(/^[\*\-]\s*/, ''))}
+                            {renderInlineMarkdown(line.replace(/^[*-]\s*/, ''))}
                         </li>
                     ))}
                 </ul>

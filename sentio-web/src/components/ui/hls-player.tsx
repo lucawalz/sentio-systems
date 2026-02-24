@@ -23,9 +23,6 @@ export function HlsPlayer({ deviceId, className }: HlsPlayerProps) {
         setErrorMessage('')
 
         try {
-            // Fetch stream URL and access token from backend
-            // The backend extracts the access token from the httpOnly cookie
-            // and returns it for use in the stream URL
             const response = await devicesApi.getStreamUrl(deviceId)
             const { streamUrl, isStreaming, accessToken } = response.data
 

@@ -93,7 +93,7 @@ export function NativeStartNow({
       await onStart();
       setStatus("success");
       setTimeout(() => setStatus("idle"), 2000);
-    } catch (error) {
+    } catch {
       setStatus("idle");
     }
   };

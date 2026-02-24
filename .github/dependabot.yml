@@ -1,0 +1,78 @@
+version: 2
+updates:
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels: ["dependencies", "ci"]
+
+  # Backend
+  - package-ecosystem: "maven"
+    directory: "/sentio-backend"
+    schedule:
+      interval: "weekly"
+    labels: ["dependencies", "backend"]
+    ignore:
+      - dependency-name: "org.springframework.boot:spring-boot-starter-parent"
+        update-types: ["version-update:semver-major"]
+
+  # Frontend
+  - package-ecosystem: "npm"
+    directory: "/sentio-web"
+    schedule:
+      interval: "weekly"
+    labels: ["dependencies", "frontend"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  # AI services
+  - package-ecosystem: "pip"
+    directory: "/sentio-ai/birder"
+    schedule:
+      interval: "weekly"
+    labels: ["dependencies", "ai"]
+
+  - package-ecosystem: "pip"
+    directory: "/sentio-ai/speciesnet"
+    schedule:
+      interval: "weekly"
+    labels: ["dependencies", "ai"]
+
+  - package-ecosystem: "pip"
+    directory: "/sentio-ai/preprocessing"
+    schedule:
+      interval: "weekly"
+    labels: ["dependencies", "ai"]
+
+  # Docker
+  - package-ecosystem: "docker"
+    directory: "/sentio-backend"
+    schedule:
+      interval: "weekly"
+    labels: ["dependencies", "docker"]
+
+  - package-ecosystem: "docker"
+    directory: "/sentio-web"
+    schedule:
+      interval: "weekly"
+    labels: ["dependencies", "docker"]
+
+  - package-ecosystem: "docker"
+    directory: "/sentio-ai/birder"
+    schedule:
+      interval: "weekly"
+    labels: ["dependencies", "docker"]
+
+  - package-ecosystem: "docker"
+    directory: "/sentio-ai/speciesnet"
+    schedule:
+      interval: "weekly"
+    labels: ["dependencies", "docker"]
+
+  - package-ecosystem: "docker"
+    directory: "/sentio-ai/preprocessing"
+    schedule:
+      interval: "weekly"
+    labels: ["dependencies", "docker"]

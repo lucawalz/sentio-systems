@@ -130,8 +130,6 @@ public class WorkflowController {
                 return ResponseEntity.ok("Cleanup completed successfully");
         }
 
-        // ========== User-scoped endpoints ==========
-
         /**
          * Gets the current weather summary for the authenticated user
          */
@@ -203,8 +201,6 @@ public class WorkflowController {
                 WorkflowResult saved = workflowService.saveUserWorkflowResult(userId, result);
                 return ResponseEntity.ok(saved);
         }
-
-        // ========== Trigger endpoints ==========
 
         /**
          * Triggers generation of a weather summary for the authenticated user

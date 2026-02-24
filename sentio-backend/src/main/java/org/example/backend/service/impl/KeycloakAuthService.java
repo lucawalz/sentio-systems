@@ -265,7 +265,7 @@ public class KeycloakAuthService implements AuthService {
         if (authentication.getPrincipal() instanceof org.springframework.security.oauth2.jwt.Jwt) {
             org.springframework.security.oauth2.jwt.Jwt jwt = (org.springframework.security.oauth2.jwt.Jwt) authentication
                     .getPrincipal();
-            String id = jwt.getSubject(); // The 'sub' claim contains the Keycloak user UUID
+            String id = jwt.getSubject();
             String username = jwt.getClaimAsString("preferred_username");
             String email = jwt.getClaimAsString("email");
 

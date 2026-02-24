@@ -21,6 +21,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 /**
@@ -95,7 +96,7 @@ public class BrightSkyService {
             cleanupExpiredAlerts();
 
             // BrightSky Alerts API URL
-            String url = String.format("%s/alerts?lat=%f&lon=%f&tz=Europe/Berlin",
+            String url = String.format(java.util.Locale.US, "%s/alerts?lat=%f&lon=%f&tz=Europe/Berlin",
                     baseUrl, latitude, longitude);
 
             log.info("Fetching weather alerts from BrightSky: {}", url);
@@ -127,6 +128,7 @@ public class BrightSkyService {
 
         } catch (Exception e) {
             log.error("Failed to fetch weather alerts for location: lat: {}, lon: {}", latitude, longitude, e);
+            e.printStackTrace();
             return new ArrayList<>();
         }
     }
@@ -138,8 +140,8 @@ public class BrightSkyService {
         try {
             String alertId = alertNode.get("alert_id").asText();
 
-            // Check if alert already exists
-            Optional<WeatherAlert> existingAlert = weatherAlertRepository.findByAlertId(alertId);
+            // Check if alert already exists for this device
+            Optional<WeatherAlert> existingAlert = weatherAlertRepository.findByAlertIdAndDeviceId(alertId, deviceId);
             WeatherAlert alert = existingAlert.orElse(new WeatherAlert());
 
             // Set device ID for user data isolation
@@ -284,8 +286,6 @@ public class BrightSkyService {
         return weatherAlertRepository.findActiveAlertsForLocation(city, warnCellId, LocalDateTime.now());
     }
 
-    // ===== Device-scoped methods =====
-
     /**
      * Retrieves active alerts for a specific device after verifying ownership.
      *
@@ -429,7 +429,7 @@ public class BrightSkyService {
         if (format == null)
             format = "compressed";
 
-        String url = String.format("%s/radar?lat=%f&lon=%f&distance=%d&format=%s&tz=Europe/Berlin",
+        String url = String.format(java.util.Locale.US, "%s/radar?lat=%f&lon=%f&distance=%d&format=%s&tz=Europe/Berlin",
                 baseUrl, latitude, longitude, distance, format);
 
         log.debug("Generated radar endpoint URL: {}", url);
@@ -475,8 +475,6 @@ public class BrightSkyService {
         return weatherAlertRepository.findDistinctCitiesWithActiveAlerts(LocalDateTime.now());
     }
 
-    // ==================== RADAR METADATA METHODS ====================
-
     /**
      * Fetches radar data from BrightSky and stores metadata for AI analysis.
      * Only metadata (precipitation stats) is stored, not the raw grid data.
@@ -497,10 +495,11 @@ public class BrightSkyService {
 
         try {
             // Fetch radar data in plain format for easier parsing
-            String url = String.format("%s/radar?lat=%f&lon=%f&distance=%d&format=plain&tz=Europe/Berlin",
+            String radarUrl = String.format(Locale.US,
+                    "%s/radar?lat=%f&lon=%f&distance=%d&format=plain&tz=Europe/Berlin",
                     baseUrl, latitude, longitude, distance);
 
-            String response = restTemplate.getForObject(url, String.class);
+            String response = restTemplate.getForObject(radarUrl, String.class);
             JsonNode jsonNode = objectMapper.readTree(response);
 
             JsonNode radarArray = jsonNode.get("radar");
@@ -699,8 +698,6 @@ public class BrightSkyService {
         weatherRadarMetadataRepository.deleteOldMetadata(cutoff);
         log.info("Cleaned up radar metadata older than {}", cutoff);
     }
-
-    // ==================== Circuit Breaker Fallback Methods ====================
 
     /**
      * Fallback for getAlertsForLocation when BrightSky API is unavailable.

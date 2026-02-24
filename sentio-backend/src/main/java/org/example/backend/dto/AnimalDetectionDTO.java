@@ -53,7 +53,6 @@ public class AnimalDetectionDTO {
     @Schema(description = "Height of the bounding box", example = "150.0")
     private float height;
 
-    // TODO: check in raspi script why class id isnt sent
     @Schema(description = "Classification ID from the detection model", example = "16")
     private Integer classId;
 

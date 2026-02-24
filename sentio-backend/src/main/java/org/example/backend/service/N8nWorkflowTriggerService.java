@@ -101,6 +101,7 @@ public class N8nWorkflowTriggerService {
     private boolean triggerWebhook(String webhookPath, String userId) {
         String webhookUrl = n8nWebhookBaseUrl + "/" + webhookPath;
         log.info("Triggering n8n webhook: {} for user: {}", webhookPath, userId);
+        log.info("Exactly constructed webhookUrl: '{}'", webhookUrl);
 
         try {
             HttpHeaders headers = new HttpHeaders();

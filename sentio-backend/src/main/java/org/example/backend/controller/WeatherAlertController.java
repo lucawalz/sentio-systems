@@ -62,9 +62,6 @@ public class WeatherAlertController {
                 List<WeatherAlert> alerts = brightSkyService.getAlertsForCurrentLocation();
 
                 if (alerts.isEmpty()) {
-                        // Check if empty because no devices or no alerts
-                        // We'll return empty list for no alerts (200), but 404 for no devices
-                        // Since service returns empty for no devices, we need to differentiate
                         logger.debug("No alerts or no device locations available");
                 }
 

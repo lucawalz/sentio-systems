@@ -23,18 +23,10 @@ public class SchedulingConfig {
     private final BrightSkyService brightSkyService;
     private final DeviceRepository deviceRepository;
 
-    /**
-     * Check if any devices are registered in the system.
-     * We use existsBy instead of count for efficiency.
-     */
     private boolean hasAnyDevices() {
         return deviceRepository.count() > 0;
     }
 
-    /**
-     * Update weather on application ready.
-     * Performs initial data fetch for all devices with GPS coordinates.
-     */
     @EventListener(ApplicationReadyEvent.class)
     public void onApplicationReady() {
         log.info("Application ready - checking for devices with GPS coordinates");
@@ -44,8 +36,6 @@ public class SchedulingConfig {
             return;
         }
 
-        // Fetch weather data for all existing devices on startup
-        // This ensures data is available immediately after server restart
         log.info("Found devices - fetching initial weather data for all device locations");
         try {
             weatherForecastService.updateForecastsForAllDeviceLocations();

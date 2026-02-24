@@ -25,7 +25,6 @@ export function WeatherRadar({ loading: parentLoading }: WeatherRadarProps) {
     // If unified view (null), use primary device (or first) for centering, but still show all device markers
     const safeDevices = Array.isArray(devices) ? devices : []
 
-    // For map centering: use selected device, or primary device in unified view
     const primaryDevice = safeDevices.find(d => d.isPrimary) || safeDevices[0]
     const centerDevice = selectedDevice || primaryDevice
 
