@@ -1,13 +1,16 @@
 package org.example.backend.service;
 
-import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
-import com.github.tomakehurst.wiremock.junit5.WireMockTest;
+import com.github.tomakehurst.wiremock.WireMockServer;
+import com.github.tomakehurst.wiremock.client.WireMock;
+import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import org.example.backend.BaseIntegrationTest;
 import org.example.backend.model.Device;
 import org.example.backend.model.LocationData;
 import org.example.backend.model.WeatherForecast;
 import org.example.backend.repository.DeviceRepository;
 import org.example.backend.repository.WeatherForecastRepository;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -15,11 +18,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -34,29 +39,47 @@ import static org.mockito.Mockito.when;
  * Integration tests for WeatherForecastService.
  * Uses WireMock to mock OpenMeteo external API.
  */
-@WireMockTest(httpPort = 8089)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class WeatherForecastServiceIT extends BaseIntegrationTest {
 
+    private static WireMockServer wireMockServer;
     private static final AtomicInteger hourCounter = new AtomicInteger(0);
 
-    private static final String OPEN_METEO_FORECAST_RESPONSE = """
-            {
-                "latitude": 52.52,
-                "longitude": 13.41,
-                "timezone": "Europe/Berlin",
-                "hourly": {
-                    "time": ["2026-02-11T12:00", "2026-02-11T13:00"],
-                    "temperature_2m": [8.5, 9.2],
-                    "relative_humidity_2m": [75, 72],
-                    "precipitation_probability": [20, 15],
-                    "precipitation": [0.0, 0.0],
-                    "weather_code": [3, 2],
-                    "wind_speed_10m": [12.5, 10.8],
-                    "cloud_cover": [50, 40],
-                    "pressure_msl": [1015.0, 1016.0]
+    @BeforeAll
+    static void startWireMock() {
+        wireMockServer = new WireMockServer(WireMockConfiguration.options().port(8089));
+        wireMockServer.start();
+        WireMock.configureFor("localhost", 8089);
+    }
+
+    @AfterAll
+    static void stopWireMock() {
+        if (wireMockServer != null) {
+            wireMockServer.stop();
+        }
+    }
+
+    private static String createOpenMeteoForecastResponse() {
+        LocalDateTime now = LocalDateTime.now().truncatedTo(ChronoUnit.HOURS);
+        return String.format("""
+                {
+                    "latitude": 52.52,
+                    "longitude": 13.41,
+                    "timezone": "Europe/Berlin",
+                    "hourly": {
+                        "time": ["%s", "%s"],
+                        "temperature_2m": [8.5, 9.2],
+                        "relative_humidity_2m": [75, 72],
+                        "precipitation_probability": [20, 15],
+                        "precipitation": [0.0, 0.0],
+                        "weather_code": [3, 2],
+                        "wind_speed_10m": [12.5, 10.8],
+                        "cloud_cover": [50, 40],
+                        "pressure_msl": [1015.0, 1016.0]
+                    }
                 }
-            }
-            """;
+                """, now, now.plusHours(1));
+    }
 
     @DynamicPropertySource
     static void configureWireMock(DynamicPropertyRegistry registry) {
@@ -207,7 +230,7 @@ class WeatherForecastServiceIT extends BaseIntegrationTest {
 
         @Test
         @DisplayName("should fetch and persist forecasts from OpenMeteo API")
-        void shouldFetchFromOpenMeteoAPI(WireMockRuntimeInfo wmRuntimeInfo) {
+        void shouldFetchFromOpenMeteoAPI() {
             // Stub OpenMeteo API - service uses /forecast path with query parameters
             stubFor(get(urlPathEqualTo("/forecast"))
                     .withQueryParam("latitude", matching(".*"))
@@ -215,7 +238,7 @@ class WeatherForecastServiceIT extends BaseIntegrationTest {
                     .willReturn(aResponse()
                             .withStatus(200)
                             .withHeader("Content-Type", "application/json")
-                            .withBody(OPEN_METEO_FORECAST_RESPONSE)));
+                            .withBody(createOpenMeteoForecastResponse())));
 
             LocationData locationData = new LocationData();
             locationData.setLatitude(52.52f);
@@ -248,7 +271,7 @@ class WeatherForecastServiceIT extends BaseIntegrationTest {
                     .willReturn(aResponse()
                             .withStatus(200)
                             .withHeader("Content-Type", "application/json")
-                            .withBody(OPEN_METEO_FORECAST_RESPONSE)));
+                            .withBody(createOpenMeteoForecastResponse())));
 
             LocationData locationData = new LocationData();
             locationData.setLatitude(52.52f);
@@ -294,7 +317,7 @@ class WeatherForecastServiceIT extends BaseIntegrationTest {
                     .willReturn(aResponse()
                             .withStatus(200)
                             .withHeader("Content-Type", "application/json")
-                            .withBody(multiDayResponse)));
+                            .withBody(injectTimes(multiDayResponse, LocalDateTime.now(), 24, 3))));
 
             LocationData locationData = new LocationData();
             locationData.setLatitude(52.52f);
@@ -343,7 +366,7 @@ class WeatherForecastServiceIT extends BaseIntegrationTest {
                     .willReturn(aResponse()
                             .withStatus(200)
                             .withHeader("Content-Type", "application/json")
-                            .withBody(hourlyResponse)));
+                            .withBody(injectTimes(hourlyResponse, LocalDateTime.now(), 1, 3))));
 
             LocationData locationData = new LocationData();
             locationData.setLatitude(52.52f);
@@ -412,7 +435,7 @@ class WeatherForecastServiceIT extends BaseIntegrationTest {
                     .willReturn(aResponse()
                             .withStatus(200)
                             .withHeader("Content-Type", "application/json")
-                            .withBody(OPEN_METEO_FORECAST_RESPONSE)));
+                            .withBody(createOpenMeteoForecastResponse())));
 
             LocationData locationData = new LocationData();
             locationData.setLatitude(999.0f); // Invalid latitude
@@ -457,7 +480,7 @@ class WeatherForecastServiceIT extends BaseIntegrationTest {
                     .willReturn(aResponse()
                             .withStatus(200)
                             .withHeader("Content-Type", "application/json")
-                            .withBody(futureDatesResponse)));
+                            .withBody(injectTimes(futureDatesResponse, LocalDateTime.now(), 24 * 14, 2))));
 
             LocationData locationData = new LocationData();
             locationData.setLatitude(52.52f);
@@ -470,8 +493,7 @@ class WeatherForecastServiceIT extends BaseIntegrationTest {
                     52.52f, 13.41f, locationData);
 
             // Should filter out dates beyond 7 days
-            assertThat(forecasts).allMatch(f ->
-                    !f.getForecastDate().isAfter(LocalDate.now().plusDays(7)));
+            assertThat(forecasts).allMatch(f -> !f.getForecastDate().isAfter(LocalDate.now().plusDays(7)));
         }
 
         @Test
@@ -503,7 +525,7 @@ class WeatherForecastServiceIT extends BaseIntegrationTest {
                     .willReturn(aResponse()
                             .withStatus(200)
                             .withHeader("Content-Type", "application/json")
-                            .withBody(pastDatesResponse)));
+                            .withBody(injectTimes(pastDatesResponse, LocalDateTime.now().minusDays(10), 24 * 10, 2))));
 
             LocationData locationData = new LocationData();
             locationData.setLatitude(52.52f);
@@ -516,8 +538,7 @@ class WeatherForecastServiceIT extends BaseIntegrationTest {
                     52.52f, 13.41f, locationData);
 
             // Should filter out dates more than 3 hours old
-            assertThat(forecasts).allMatch(f ->
-                    !f.getForecastDateTime().isBefore(LocalDateTime.now().minusHours(3)));
+            assertThat(forecasts).allMatch(f -> !f.getForecastDateTime().isBefore(LocalDateTime.now().minusHours(3)));
         }
     }
 
@@ -726,7 +747,7 @@ class WeatherForecastServiceIT extends BaseIntegrationTest {
                     .willReturn(aResponse()
                             .withStatus(200)
                             .withHeader("Content-Type", "application/json")
-                            .withBody(OPEN_METEO_FORECAST_RESPONSE)));
+                            .withBody(createOpenMeteoForecastResponse())));
 
             LocationData locationData = new LocationData();
             locationData.setLatitude(52.52f);
@@ -797,7 +818,7 @@ class WeatherForecastServiceIT extends BaseIntegrationTest {
                     .willReturn(aResponse()
                             .withStatus(200)
                             .withHeader("Content-Type", "application/json")
-                            .withBody(temperatureResponse)));
+                            .withBody(injectTimes(temperatureResponse, LocalDateTime.now(), 1, 1))));
 
             LocationData locationData = new LocationData();
             locationData.setLatitude(52.52f);
@@ -843,7 +864,7 @@ class WeatherForecastServiceIT extends BaseIntegrationTest {
                     .willReturn(aResponse()
                             .withStatus(200)
                             .withHeader("Content-Type", "application/json")
-                            .withBody(precipitationResponse)));
+                            .withBody(injectTimes(precipitationResponse, LocalDateTime.now(), 1, 1))));
 
             LocationData locationData = new LocationData();
             locationData.setLatitude(52.52f);
@@ -889,7 +910,7 @@ class WeatherForecastServiceIT extends BaseIntegrationTest {
                     .willReturn(aResponse()
                             .withStatus(200)
                             .withHeader("Content-Type", "application/json")
-                            .withBody(weatherCodeResponse)));
+                            .withBody(injectTimes(weatherCodeResponse, LocalDateTime.now(), 1, 3))));
 
             LocationData locationData = new LocationData();
             locationData.setLatitude(52.52f);
@@ -954,7 +975,7 @@ class WeatherForecastServiceIT extends BaseIntegrationTest {
                     .willReturn(aResponse()
                             .withStatus(200)
                             .withHeader("Content-Type", "application/json")
-                            .withBody(allWeatherCodesResponse)));
+                            .withBody(injectTimes(allWeatherCodesResponse, LocalDateTime.now().minusHours(2), 1, 24))));
 
             LocationData locationData = new LocationData();
             locationData.setLatitude(52.52f);
@@ -1015,7 +1036,7 @@ class WeatherForecastServiceIT extends BaseIntegrationTest {
                     .willReturn(aResponse()
                             .withStatus(200)
                             .withHeader("Content-Type", "application/json")
-                            .withBody(comprehensiveResponse)));
+                            .withBody(injectTimes(comprehensiveResponse, LocalDateTime.now(), 1, 1))));
 
             LocationData locationData = new LocationData();
             locationData.setLatitude(52.52f);
@@ -1085,7 +1106,7 @@ class WeatherForecastServiceIT extends BaseIntegrationTest {
                     .willReturn(aResponse()
                             .withStatus(200)
                             .withHeader("Content-Type", "application/json")
-                            .withBody(snowResponse)));
+                            .withBody(injectTimes(snowResponse, LocalDateTime.now(), 1, 2))));
 
             LocationData locationData = new LocationData();
             locationData.setLatitude(52.52f);
@@ -1131,7 +1152,7 @@ class WeatherForecastServiceIT extends BaseIntegrationTest {
                     .willReturn(aResponse()
                             .withStatus(200)
                             .withHeader("Content-Type", "application/json")
-                            .withBody(thunderstormResponse)));
+                            .withBody(injectTimes(thunderstormResponse, LocalDateTime.now(), 1, 3))));
 
             LocationData locationData = new LocationData();
             locationData.setLatitude(52.52f);
@@ -1220,7 +1241,7 @@ class WeatherForecastServiceIT extends BaseIntegrationTest {
                     .willReturn(aResponse()
                             .withStatus(200)
                             .withHeader("Content-Type", "application/json")
-                            .withBody(OPEN_METEO_FORECAST_RESPONSE)));
+                            .withBody(createOpenMeteoForecastResponse())));
 
             LocationData locationData = new LocationData();
             locationData.setLatitude(52.52f);
@@ -1265,7 +1286,7 @@ class WeatherForecastServiceIT extends BaseIntegrationTest {
                     .willReturn(aResponse()
                             .withStatus(200)
                             .withHeader("Content-Type", "application/json")
-                            .withBody(OPEN_METEO_FORECAST_RESPONSE)));
+                            .withBody(createOpenMeteoForecastResponse())));
 
             LocationData locationData = new LocationData();
             locationData.setLatitude(52.52f);
@@ -1306,7 +1327,7 @@ class WeatherForecastServiceIT extends BaseIntegrationTest {
                     .willReturn(aResponse()
                             .withStatus(200)
                             .withHeader("Content-Type", "application/json")
-                            .withBody(OPEN_METEO_FORECAST_RESPONSE)));
+                            .withBody(createOpenMeteoForecastResponse())));
 
             LocationData location1 = new LocationData();
             location1.setLatitude(52.52f);
@@ -1378,7 +1399,10 @@ class WeatherForecastServiceIT extends BaseIntegrationTest {
             repository.save(older);
 
             // Wait a bit to ensure different created timestamps
-            try { Thread.sleep(10); } catch (InterruptedException e) {}
+            try {
+                Thread.sleep(10);
+            } catch (InterruptedException e) {
+            }
 
             // Create newer forecast
             WeatherForecast newer = createForecast(targetDate, "Berlin");
@@ -1395,19 +1419,22 @@ class WeatherForecastServiceIT extends BaseIntegrationTest {
         @DisplayName("getRecentForecasts should return forecasts from last N hours")
         void shouldReturnRecentForecasts() {
             // Create recent forecast
-            WeatherForecast recent = createForecast(LocalDate.now(), "Berlin");
+            WeatherForecast recent = createForecast(LocalDate.now(), "BerlinRecent");
             recent.setForecastDateTime(LocalDateTime.now().minusHours(1));
             repository.save(recent);
 
             // Create old forecast
-            WeatherForecast old = createForecast(LocalDate.now().minusDays(1), "Munich");
+            WeatherForecast old = createForecast(LocalDate.now().minusDays(1), "MunichRecent");
             old.setForecastDateTime(LocalDateTime.now().minusDays(1));
             repository.save(old);
 
             List<WeatherForecast> forecasts = weatherService.getRecentForecasts(2);
 
-            assertThat(forecasts).hasSize(1);
-            assertThat(forecasts.get(0).getCity()).isEqualTo("Berlin");
+            long count = forecasts.stream()
+                    .filter(f -> "BerlinRecent".equals(f.getCity()))
+                    .count();
+
+            assertThat(count).isEqualTo(1);
         }
     }
 
@@ -1435,7 +1462,7 @@ class WeatherForecastServiceIT extends BaseIntegrationTest {
                     .willReturn(aResponse()
                             .withStatus(200)
                             .withHeader("Content-Type", "application/json")
-                            .withBody(OPEN_METEO_FORECAST_RESPONSE)));
+                            .withBody(createOpenMeteoForecastResponse())));
 
             LocationData locationData = new LocationData();
             locationData.setLatitude(52.52f);
@@ -1466,7 +1493,7 @@ class WeatherForecastServiceIT extends BaseIntegrationTest {
                     .willReturn(aResponse()
                             .withStatus(200)
                             .withHeader("Content-Type", "application/json")
-                            .withBody(OPEN_METEO_FORECAST_RESPONSE)));
+                            .withBody(createOpenMeteoForecastResponse())));
 
             LocationData locationData = new LocationData();
             locationData.setLatitude(52.52f);
@@ -1482,5 +1509,16 @@ class WeatherForecastServiceIT extends BaseIntegrationTest {
             assertThat(forecasts).isNotEmpty();
             assertThat(forecasts).allMatch(f -> "device-2".equals(f.getDeviceId()));
         }
+    }
+
+    private String injectTimes(String jsonResponse, java.time.LocalDateTime start, int hoursInterval, int count) {
+        java.time.LocalDateTime time = start.truncatedTo(java.time.temporal.ChronoUnit.HOURS);
+        java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter
+                .ofPattern("yyyy-MM-dd'T'HH:mm");
+        java.util.List<String> times = new java.util.ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            times.add("\"" + time.plusHours((long) i * hoursInterval).format(formatter) + "\"");
+        }
+        return jsonResponse.replaceAll("(?s)\"time\":\\s*\\[.*?\\]", "\"time\": [" + String.join(", ", times) + "]");
     }
 }

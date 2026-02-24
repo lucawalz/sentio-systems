@@ -6,10 +6,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
-@Testcontainers
 @SpringBootTest
 @Import(IntegrationTestConfig.class)
 @Transactional
@@ -19,18 +16,23 @@ public abstract class BaseIntegrationTest {
         System.setProperty("api.version", "1.44");
     }
 
-    @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15-alpine")
+    static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15-alpine")
             .withDatabaseName("testdb")
             .withUsername("test")
             .withPassword("test")
+            .withCommand("-c", "max_connections=1000")
             .withReuse(true);
+
+    static {
+        postgres.start();
+    }
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", postgres::getJdbcUrl);
         registry.add("spring.datasource.username", postgres::getUsername);
         registry.add("spring.datasource.password", postgres::getPassword);
+        registry.add("spring.datasource.hikari.maximum-pool-size", () -> "2");
 
         // Disable external services for test isolation
         registry.add("mqtt.enabled", () -> "false");

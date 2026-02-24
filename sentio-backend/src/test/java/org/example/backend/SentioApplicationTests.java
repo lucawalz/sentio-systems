@@ -5,11 +5,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Import;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 @SpringBootTest
-@Testcontainers
 @Import(IntegrationTestConfig.class)
 class SentioApplicationTests {
 
@@ -18,13 +15,27 @@ class SentioApplicationTests {
 		System.setProperty("api.version", "1.44");
 	}
 
-	@Container
 	@ServiceConnection
-	static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15-alpine")
+	static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15-alpine")
 			.withReuse(true);
+
+	static {
+		postgres.start();
+	}
 
 	@Test
 	void contextLoads() {
+	}
+
+	@Test
+	void mainMethodStartsApplication() {
+		try (org.mockito.MockedStatic<org.springframework.boot.SpringApplication> mocked = org.mockito.Mockito
+				.mockStatic(org.springframework.boot.SpringApplication.class)) {
+			SentioApplication.main(new String[] {});
+			mocked.verify(
+					() -> org.springframework.boot.SpringApplication.run(SentioApplication.class, new String[] {}),
+					org.mockito.Mockito.times(1));
+		}
 	}
 
 }

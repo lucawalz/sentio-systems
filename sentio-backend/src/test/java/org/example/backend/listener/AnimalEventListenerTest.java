@@ -225,6 +225,30 @@ class AnimalEventListenerTest {
             verify(webSocketService).broadcastAnimalDetected(DEVICE_ID, SPECIES, CONFIDENCE);
             verify(webSocketService).broadcastAnimalDetected("device-456", "Cardinal", 0.92f);
         }
+
+        @Test
+        @DisplayName("Should test triggerWorkflow via reflection")
+        void testTriggerWorkflow() throws Exception {
+            AnimalDetectedEvent event = new AnimalDetectedEvent(this, detection);
+            java.lang.reflect.Method method = AnimalEventListener.class.getDeclaredMethod("triggerWorkflow",
+                    AnimalDetectedEvent.class);
+            method.setAccessible(true);
+            method.invoke(listener, event);
+            verify(n8nService).triggerAnimalDetectionWorkflow(DEVICE_ID, SPECIES, CONFIDENCE);
+        }
+
+        @Test
+        @DisplayName("Should handle n8n exception gracefully via reflection")
+        void testTriggerWorkflowException() throws Exception {
+            AnimalDetectedEvent event = new AnimalDetectedEvent(this, detection);
+            doThrow(new RuntimeException("n8n error")).when(n8nService).triggerAnimalDetectionWorkflow(anyString(),
+                    anyString(), anyFloat());
+            java.lang.reflect.Method method = AnimalEventListener.class.getDeclaredMethod("triggerWorkflow",
+                    AnimalDetectedEvent.class);
+            method.setAccessible(true);
+            method.invoke(listener, event);
+            verify(n8nService).triggerAnimalDetectionWorkflow(DEVICE_ID, SPECIES, CONFIDENCE);
+        }
     }
 
     @Nested

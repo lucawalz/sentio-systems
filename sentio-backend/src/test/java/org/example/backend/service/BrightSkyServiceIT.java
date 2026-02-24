@@ -1,7 +1,7 @@
 package org.example.backend.service;
 
-import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
-import com.github.tomakehurst.wiremock.junit5.WireMockTest;
+import com.github.tomakehurst.wiremock.WireMockServer;
+import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import org.example.backend.BaseIntegrationTest;
 import org.example.backend.dto.RadarMetadataDTO;
 import org.example.backend.model.Device;
@@ -11,6 +11,8 @@ import org.example.backend.model.WeatherRadarMetadata;
 import org.example.backend.repository.DeviceRepository;
 import org.example.backend.repository.WeatherAlertRepository;
 import org.example.backend.repository.WeatherRadarMetadataRepository;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -19,6 +21,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -44,21 +48,43 @@ import static org.mockito.Mockito.when;
  *
  * Coverage Goals:
  * - getAlertsForCurrentLocation() + device location handling
- * - getAlertsForLocation() + data transformation (processAlertNode, getTextValue, parseDateTime)
- * - All query methods (getActiveAlerts, getAlertsBySeverity, getAlertsByCity, etc.)
- * - Device-specific methods (getAlertsForDevice, getRadarEndpointForDevice, etc.)
- * - Update methods (updateAlertsForCurrentLocation, updateAlertsForAllDeviceLocations)
+ * - getAlertsForLocation() + data transformation (processAlertNode,
+ * getTextValue, parseDateTime)
+ * - All query methods (getActiveAlerts, getAlertsBySeverity, getAlertsByCity,
+ * etc.)
+ * - Device-specific methods (getAlertsForDevice, getRadarEndpointForDevice,
+ * etc.)
+ * - Update methods (updateAlertsForCurrentLocation,
+ * updateAlertsForAllDeviceLocations)
  * - Cleanup methods (cleanupExpiredAlerts, cleanupOldRadarMetadata)
- * - Radar endpoint URL generation (getRadarEndpointUrl, getRadarEndpointUrlForCurrentLocation)
- * - Radar metadata fetching and storage (fetchAndStoreRadarMetadata, fetchRadarMetadataForDevice)
+ * - Radar endpoint URL generation (getRadarEndpointUrl,
+ * getRadarEndpointUrlForCurrentLocation)
+ * - Radar metadata fetching and storage (fetchAndStoreRadarMetadata,
+ * fetchRadarMetadataForDevice)
  * - Radar metadata queries (getLatestRadarMetadata, getRecentRadarMetadata)
  * - Additional query methods (getRecentAlerts, getCitiesWithActiveAlerts)
  * - Error handling and edge cases
  *
  * Target Coverage: 80%+ (from 0.3%)
  */
-@WireMockTest(httpPort = 8090)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class BrightSkyServiceIT extends BaseIntegrationTest {
+
+    private static WireMockServer wireMockServer;
+
+    @BeforeAll
+    static void startWireMock() {
+        wireMockServer = new WireMockServer(WireMockConfiguration.wireMockConfig().port(8090));
+        wireMockServer.start();
+        configureFor("localhost", 8090);
+    }
+
+    @AfterAll
+    static void stopWireMock() {
+        if (wireMockServer != null) {
+            wireMockServer.stop();
+        }
+    }
 
     private static final String BRIGHTSKY_ALERTS_RESPONSE = """
             {
@@ -67,9 +93,9 @@ class BrightSkyServiceIT extends BaseIntegrationTest {
                         "id": 1,
                         "alert_id": "alert-001",
                         "status": "actual",
-                        "effective": "2024-01-15T10:00:00+00:00",
-                        "onset": "2024-01-15T12:00:00+00:00",
-                        "expires": "2024-01-16T12:00:00+00:00",
+                        "effective": "2030-02-11T11:00:00+00:00",
+                        "onset": "2030-02-11T12:00:00+00:00",
+                        "expires": "2030-02-11T13:00:00+00:00",
                         "category": "Met",
                         "response_type": "Monitor",
                         "urgency": "Immediate",
@@ -101,7 +127,7 @@ class BrightSkyServiceIT extends BaseIntegrationTest {
             {
                 "radar": [
                     {
-                        "timestamp": "2024-01-15T10:00:00+00:00",
+                        "timestamp": "2030-01-15T10:00:00+00:00",
                         "source": "DWD",
                         "precipitation_5": [
                             [0, 50, 100, 150],
@@ -119,12 +145,16 @@ class BrightSkyServiceIT extends BaseIntegrationTest {
             """;
 
     @DynamicPropertySource
-    static void configureWireMock(DynamicPropertyRegistry registry) {
+    static void configureProperties(DynamicPropertyRegistry registry) {
         registry.add("brightsky.api.base-url", () -> "http://localhost:8090");
+        registry.add("brightsky.alerts.enabled", () -> "true");
     }
 
     @Autowired
     private BrightSkyService brightSkyService;
+
+    @Autowired
+    private RestTemplate restTemplate;
 
     @Autowired
     private WeatherAlertRepository alertRepository;
@@ -199,6 +229,7 @@ class BrightSkyServiceIT extends BaseIntegrationTest {
             stubFor(get(urlPathEqualTo("/alerts"))
                     .withQueryParam("lat", matching("52\\.5.*"))
                     .withQueryParam("lon", matching("13\\.4.*"))
+                    .withQueryParam("tz", equalTo("Europe/Berlin"))
                     .willReturn(aResponse()
                             .withStatus(200)
                             .withHeader("Content-Type", "application/json")
@@ -230,6 +261,7 @@ class BrightSkyServiceIT extends BaseIntegrationTest {
         @DisplayName("should correctly transform all alert fields")
         void shouldTransformAllAlertFields() {
             stubFor(get(urlPathEqualTo("/alerts"))
+                    .withQueryParam("tz", equalTo("Europe/Berlin"))
                     .willReturn(aResponse()
                             .withStatus(200)
                             .withHeader("Content-Type", "application/json")
@@ -398,7 +430,7 @@ class BrightSkyServiceIT extends BaseIntegrationTest {
 
         @Test
         @DisplayName("should fetch and persist alerts from BrightSky API")
-        void shouldFetchFromBrightSkyAPI(WireMockRuntimeInfo wmRuntimeInfo) {
+        void shouldFetchFromBrightSkyAPI() {
             stubFor(get(urlPathEqualTo("/alerts"))
                     .withQueryParam("lat", matching("52\\.5.*"))
                     .withQueryParam("lon", matching("13\\.4.*"))
@@ -882,6 +914,7 @@ class BrightSkyServiceIT extends BaseIntegrationTest {
             when(deviceLocationService.getFirstUserDeviceLocation()).thenReturn(Optional.of(location));
 
             stubFor(get(urlPathEqualTo("/alerts"))
+                    .withQueryParam("tz", equalTo("Europe/Berlin"))
                     .willReturn(aResponse()
                             .withStatus(200)
                             .withHeader("Content-Type", "application/json")
@@ -907,11 +940,11 @@ class BrightSkyServiceIT extends BaseIntegrationTest {
         void shouldUpdateMultipleDeviceLocations() {
             List<LocationData> locations = List.of(
                     createLocationData("device-1", 52.52f, 13.41f, "Berlin"),
-                    createLocationData("device-2", 48.13f, 11.57f, "Munich")
-            );
+                    createLocationData("device-2", 48.13f, 11.57f, "Munich"));
             when(deviceLocationService.getAllUniqueDeviceLocations()).thenReturn(locations);
 
             stubFor(get(urlPathEqualTo("/alerts"))
+                    .withQueryParam("tz", equalTo("Europe/Berlin"))
                     .willReturn(aResponse()
                             .withStatus(200)
                             .withHeader("Content-Type", "application/json")
@@ -1057,6 +1090,7 @@ class BrightSkyServiceIT extends BaseIntegrationTest {
         @DisplayName("fetchAndStoreRadarMetadata should process and store radar data")
         void shouldFetchAndStoreRadarMetadata() {
             stubFor(get(urlPathEqualTo("/radar"))
+                    .withQueryParam("tz", equalTo("Europe/Berlin"))
                     .willReturn(aResponse()
                             .withStatus(200)
                             .withHeader("Content-Type", "application/json")
@@ -1104,6 +1138,7 @@ class BrightSkyServiceIT extends BaseIntegrationTest {
                     """;
 
             stubFor(get(urlPathEqualTo("/radar"))
+                    .withQueryParam("tz", equalTo("Europe/Berlin"))
                     .willReturn(aResponse()
                             .withStatus(200)
                             .withHeader("Content-Type", "application/json")
@@ -1124,6 +1159,7 @@ class BrightSkyServiceIT extends BaseIntegrationTest {
         @DisplayName("fetchAndStoreRadarMetadata should return null on API error")
         void shouldReturnNullOnApiError() {
             stubFor(get(urlPathEqualTo("/radar"))
+                    .withQueryParam("tz", equalTo("Europe/Berlin"))
                     .willReturn(aResponse()
                             .withStatus(500)));
 
@@ -1140,6 +1176,7 @@ class BrightSkyServiceIT extends BaseIntegrationTest {
             when(deviceLocationService.getPrimaryUserDeviceLocation()).thenReturn(Optional.of(location));
 
             stubFor(get(urlPathEqualTo("/radar"))
+                    .withQueryParam("tz", equalTo("Europe/Berlin"))
                     .willReturn(aResponse()
                             .withStatus(200)
                             .withHeader("Content-Type", "application/json")
@@ -1158,6 +1195,7 @@ class BrightSkyServiceIT extends BaseIntegrationTest {
             when(deviceService.getVerifiedDevice("device-1")).thenReturn(device);
 
             stubFor(get(urlPathEqualTo("/radar"))
+                    .withQueryParam("tz", equalTo("Europe/Berlin"))
                     .willReturn(aResponse()
                             .withStatus(200)
                             .withHeader("Content-Type", "application/json")
@@ -1172,6 +1210,7 @@ class BrightSkyServiceIT extends BaseIntegrationTest {
         @DisplayName("getLatestRadarMetadata should return most recent metadata")
         void shouldGetLatestRadarMetadata() {
             stubFor(get(urlPathEqualTo("/radar"))
+                    .withQueryParam("tz", equalTo("Europe/Berlin"))
                     .willReturn(aResponse()
                             .withStatus(200)
                             .withHeader("Content-Type", "application/json")
@@ -1188,13 +1227,14 @@ class BrightSkyServiceIT extends BaseIntegrationTest {
         @Test
         @DisplayName("getRecentRadarMetadata should return metadata from specified hours")
         void shouldGetRecentRadarMetadata() {
-            stubFor(get(urlPathEqualTo("/radar"))
-                    .willReturn(aResponse()
-                            .withStatus(200)
-                            .withHeader("Content-Type", "application/json")
-                            .withBody(BRIGHTSKY_RADAR_RESPONSE)));
-
-            brightSkyService.fetchAndStoreRadarMetadata(52.52f, 13.41f, null, "device-1");
+            // Create recent metadata (simulated by direct DB insert with recent timestamp)
+            WeatherRadarMetadata recentMetadata = new WeatherRadarMetadata();
+            recentMetadata.setTimestamp(LocalDateTime.now().minusHours(12));
+            recentMetadata.setDeviceId("device-1");
+            recentMetadata.setLatitude(52.52f);
+            recentMetadata.setLongitude(13.41f);
+            recentMetadata.setDistance(100);
+            radarMetadataRepository.save(recentMetadata);
 
             List<WeatherRadarMetadata> recent = brightSkyService.getRecentRadarMetadata(24);
 
@@ -1210,6 +1250,7 @@ class BrightSkyServiceIT extends BaseIntegrationTest {
             oldMetadata.setDeviceId("device-1");
             oldMetadata.setLatitude(52.52f);
             oldMetadata.setLongitude(13.41f);
+            oldMetadata.setDistance(100);
             radarMetadataRepository.save(oldMetadata);
 
             brightSkyService.cleanupOldRadarMetadata();

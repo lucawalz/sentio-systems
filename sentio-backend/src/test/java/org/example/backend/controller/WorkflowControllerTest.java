@@ -211,4 +211,174 @@ class WorkflowControllerTest {
         verify(workflowService).cleanupOldResults();
         verifyNoMoreInteractions(workflowService);
     }
+
+    @Test
+    void getMyWeatherSummary_returns200_whenPresent() throws Exception {
+        try (org.mockito.MockedStatic<org.example.backend.util.SecurityUtils> mocked = mockStatic(
+                org.example.backend.util.SecurityUtils.class)) {
+            mocked.when(org.example.backend.util.SecurityUtils::getCurrentUserId).thenReturn("user-1");
+            WorkflowResult summary = new WorkflowResult();
+            summary.setAnalysisText("User weather summary");
+            when(workflowService.getCurrentWeatherSummary("user-1")).thenReturn(Optional.of(summary));
+
+            mockMvc.perform(get("/api/workflow/me/weather"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.analysisText").value("User weather summary"));
+        }
+    }
+
+    @Test
+    void getMyWeatherSummary_returns204_whenEmpty() throws Exception {
+        try (org.mockito.MockedStatic<org.example.backend.util.SecurityUtils> mocked = mockStatic(
+                org.example.backend.util.SecurityUtils.class)) {
+            mocked.when(org.example.backend.util.SecurityUtils::getCurrentUserId).thenReturn("user-1");
+            when(workflowService.getCurrentWeatherSummary("user-1")).thenReturn(Optional.empty());
+
+            mockMvc.perform(get("/api/workflow/me/weather"))
+                    .andExpect(status().isNoContent());
+        }
+    }
+
+    @Test
+    void getMySightingsSummary_returns200_whenPresent() throws Exception {
+        try (org.mockito.MockedStatic<org.example.backend.util.SecurityUtils> mocked = mockStatic(
+                org.example.backend.util.SecurityUtils.class)) {
+            mocked.when(org.example.backend.util.SecurityUtils::getCurrentUserId).thenReturn("user-2");
+            WorkflowResult summary = new WorkflowResult();
+            summary.setAnalysisText("Sightings");
+            when(workflowService.getCurrentSightingsSummary("user-2")).thenReturn(Optional.of(summary));
+
+            mockMvc.perform(get("/api/workflow/me/sightings"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.analysisText").value("Sightings"));
+        }
+    }
+
+    @Test
+    void getMySightingsSummary_returns204_whenEmpty() throws Exception {
+        try (org.mockito.MockedStatic<org.example.backend.util.SecurityUtils> mocked = mockStatic(
+                org.example.backend.util.SecurityUtils.class)) {
+            mocked.when(org.example.backend.util.SecurityUtils::getCurrentUserId).thenReturn("user-2");
+            when(workflowService.getCurrentSightingsSummary("user-2")).thenReturn(Optional.empty());
+
+            mockMvc.perform(get("/api/workflow/me/sightings"))
+                    .andExpect(status().isNoContent());
+        }
+    }
+
+    @Test
+    void getMyRecentResults_returns200() throws Exception {
+        try (org.mockito.MockedStatic<org.example.backend.util.SecurityUtils> mocked = mockStatic(
+                org.example.backend.util.SecurityUtils.class)) {
+            mocked.when(org.example.backend.util.SecurityUtils::getCurrentUserId).thenReturn("user-3");
+            WorkflowResult r1 = new WorkflowResult();
+            r1.setAnalysisText("Recent Result");
+            when(workflowService.getUserRecentResults("user-3")).thenReturn(List.of(r1));
+
+            mockMvc.perform(get("/api/workflow/me/recent"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$[0].analysisText").value("Recent Result"));
+        }
+    }
+
+    @Test
+    void createUserWorkflowResult_returns200() throws Exception {
+        try (org.mockito.MockedStatic<org.example.backend.util.SecurityUtils> mocked = mockStatic(
+                org.example.backend.util.SecurityUtils.class)) {
+            mocked.when(org.example.backend.util.SecurityUtils::getCurrentUserId).thenReturn("user-4");
+            when(workflowService.saveUserWorkflowResult(eq("user-4"), any(WorkflowResult.class)))
+                    .thenAnswer(inv -> inv.getArgument(1));
+
+            mockMvc.perform(post("/api/workflow/me")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"analysisText\": \"Save me\"}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.analysisText").value("Save me"))
+                    .andExpect(jsonPath("$.timestamp").isNotEmpty());
+        }
+    }
+
+    @Test
+    void generateWeatherSummary_returns202_whenTrue() throws Exception {
+        try (org.mockito.MockedStatic<org.example.backend.util.SecurityUtils> mocked = mockStatic(
+                org.example.backend.util.SecurityUtils.class)) {
+            mocked.when(org.example.backend.util.SecurityUtils::getCurrentUserId).thenReturn("user-5");
+            when(n8nWorkflowTriggerService.triggerWeatherSummary("user-5")).thenReturn(true);
+
+            mockMvc.perform(post("/api/workflow/generate/weather"))
+                    .andExpect(status().isAccepted())
+                    .andExpect(content().string("Weather summary generation triggered"));
+        }
+    }
+
+    @Test
+    void generateWeatherSummary_returns500_whenFalse() throws Exception {
+        try (org.mockito.MockedStatic<org.example.backend.util.SecurityUtils> mocked = mockStatic(
+                org.example.backend.util.SecurityUtils.class)) {
+            mocked.when(org.example.backend.util.SecurityUtils::getCurrentUserId).thenReturn("user-5");
+            when(n8nWorkflowTriggerService.triggerWeatherSummary("user-5")).thenReturn(false);
+
+            mockMvc.perform(post("/api/workflow/generate/weather"))
+                    .andExpect(status().isInternalServerError())
+                    .andExpect(content().string("Failed to trigger workflow"));
+        }
+    }
+
+    @Test
+    void generateSightingsSummary_returns202_whenTrue() throws Exception {
+        try (org.mockito.MockedStatic<org.example.backend.util.SecurityUtils> mocked = mockStatic(
+                org.example.backend.util.SecurityUtils.class)) {
+            mocked.when(org.example.backend.util.SecurityUtils::getCurrentUserId).thenReturn("user-6");
+            when(n8nWorkflowTriggerService.triggerSightingsSummary("user-6")).thenReturn(true);
+
+            mockMvc.perform(post("/api/workflow/generate/sightings"))
+                    .andExpect(status().isAccepted())
+                    .andExpect(content().string("Sightings summary generation triggered"));
+        }
+    }
+
+    @Test
+    void generateSightingsSummary_returns500_whenFalse() throws Exception {
+        try (org.mockito.MockedStatic<org.example.backend.util.SecurityUtils> mocked = mockStatic(
+                org.example.backend.util.SecurityUtils.class)) {
+            mocked.when(org.example.backend.util.SecurityUtils::getCurrentUserId).thenReturn("user-6");
+            when(n8nWorkflowTriggerService.triggerSightingsSummary("user-6")).thenReturn(false);
+
+            mockMvc.perform(post("/api/workflow/generate/sightings"))
+                    .andExpect(status().isInternalServerError())
+                    .andExpect(content().string("Failed to trigger workflow"));
+        }
+    }
+
+    @Test
+    void askAgent_returns200_whenResponseNotNull() throws Exception {
+        try (org.mockito.MockedStatic<org.example.backend.util.SecurityUtils> mocked = mockStatic(
+                org.example.backend.util.SecurityUtils.class)) {
+            mocked.when(org.example.backend.util.SecurityUtils::getCurrentUserId).thenReturn("user-7");
+            when(n8nWorkflowTriggerService.triggerAiAgent("user-7", "What is the weather?")).thenReturn("It is sunny");
+
+            mockMvc.perform(post("/api/workflow/agent/ask")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"query\": \"What is the weather?\"}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.response").value("It is sunny"))
+                    .andExpect(jsonPath("$.success").value(true));
+        }
+    }
+
+    @Test
+    void askAgent_returns500_whenResponseNull() throws Exception {
+        try (org.mockito.MockedStatic<org.example.backend.util.SecurityUtils> mocked = mockStatic(
+                org.example.backend.util.SecurityUtils.class)) {
+            mocked.when(org.example.backend.util.SecurityUtils::getCurrentUserId).thenReturn("user-7");
+            when(n8nWorkflowTriggerService.triggerAiAgent("user-7", "What is the weather?")).thenReturn(null);
+
+            mockMvc.perform(post("/api/workflow/agent/ask")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"query\": \"What is the weather?\"}"))
+                    .andExpect(status().isInternalServerError())
+                    .andExpect(jsonPath("$.response").value("Failed to get agent response"))
+                    .andExpect(jsonPath("$.success").value(false));
+        }
+    }
 }

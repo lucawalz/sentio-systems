@@ -30,10 +30,13 @@ import static org.assertj.core.api.Assertions.assertThatCode;
  */
 class ViewerSessionServiceTest extends BaseIntegrationTest {
 
-    @Container
-    static GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:7-alpine"))
+    static final GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:7-alpine"))
             .withExposedPorts(6379)
             .withReuse(true);
+
+    static {
+        redis.start();
+    }
 
     @DynamicPropertySource
     static void configureRedis(DynamicPropertyRegistry registry) {

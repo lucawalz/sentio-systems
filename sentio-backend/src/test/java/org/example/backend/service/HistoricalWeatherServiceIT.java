@@ -1,20 +1,26 @@
 package org.example.backend.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.github.tomakehurst.wiremock.junit5.WireMockTest;
+import com.github.tomakehurst.wiremock.WireMockServer;
+import com.github.tomakehurst.wiremock.client.WireMock;
+import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import org.example.backend.BaseIntegrationTest;
 import org.example.backend.model.Device;
 import org.example.backend.model.HistoricalWeather;
 import org.example.backend.model.LocationData;
 import org.example.backend.repository.DeviceRepository;
 import org.example.backend.repository.HistoricalWeatherRepository;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
@@ -36,13 +42,34 @@ import static org.mockito.Mockito.when;
  * Target: 80%+ code coverage
  * Current: 0.3% (1537 missed, 4 covered)
  */
-@WireMockTest(httpPort = 8095)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class HistoricalWeatherServiceIT extends BaseIntegrationTest {
 
+    private static WireMockServer wireMockServer;
     private static final AtomicInteger deviceCounter = new AtomicInteger(0);
+
+    @BeforeAll
+    static void startWireMock() {
+        wireMockServer = new WireMockServer(WireMockConfiguration.options().port(8095));
+        wireMockServer.start();
+        WireMock.configureFor("localhost", 8095);
+    }
+
+    @AfterAll
+    static void stopWireMock() {
+        if (wireMockServer != null) {
+            wireMockServer.stop();
+        }
+    }
 
     @Autowired
     private HistoricalWeatherService historicalWeatherService;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private jakarta.persistence.EntityManager entityManager;
 
     @Autowired
     private HistoricalWeatherRepository repository;
@@ -66,6 +93,7 @@ class HistoricalWeatherServiceIT extends BaseIntegrationTest {
         repository.deleteAll();
         deviceRepository.deleteAll();
         deviceCounter.set(0);
+        com.github.tomakehurst.wiremock.client.WireMock.resetAllRequests();
     }
 
     private HistoricalWeather createHistoricalWeather(LocalDate date, String city) {
@@ -145,28 +173,28 @@ class HistoricalWeatherServiceIT extends BaseIntegrationTest {
         sunsetArray.append("]");
 
         return String.format("""
-            {
-                "latitude": 52.52,
-                "longitude": 13.41,
-                "timezone": "Europe/Berlin",
-                "daily": {
-                    "time": %s,
-                    "weather_code": %s,
-                    "temperature_2m_max": %s,
-                    "temperature_2m_min": %s,
-                    "sunrise": %s,
-                    "sunset": %s,
-                    "daylight_duration": [43200.0, 43200.0, 43200.0],
-                    "sunshine_duration": [28800.0, 28800.0, 28800.0],
-                    "uv_index_max": %s,
-                    "precipitation_sum": %s,
-                    "precipitation_hours": [0.0, 2.0, 1.5],
-                    "wind_speed_10m_max": %s,
-                    "wind_direction_10m_dominant": [180.0, 190.0, 200.0]
+                {
+                    "latitude": 52.52,
+                    "longitude": 13.41,
+                    "timezone": "Europe/Berlin",
+                    "daily": {
+                        "time": %s,
+                        "weather_code": %s,
+                        "temperature_2m_max": %s,
+                        "temperature_2m_min": %s,
+                        "sunrise": %s,
+                        "sunset": %s,
+                        "daylight_duration": [43200.0, 43200.0, 43200.0],
+                        "sunshine_duration": [28800.0, 28800.0, 28800.0],
+                        "uv_index_max": %s,
+                        "precipitation_sum": %s,
+                        "precipitation_hours": [0.0, 2.0, 1.5],
+                        "wind_speed_10m_max": %s,
+                        "wind_direction_10m_dominant": [180.0, 190.0, 200.0]
+                    }
                 }
-            }
-            """, timeArray, weatherCodeArray, tempMaxArray, tempMinArray,
-                 sunriseArray, sunsetArray, uvIndexArray, precipArray, windSpeedArray);
+                """, timeArray, weatherCodeArray, tempMaxArray, tempMinArray,
+                sunriseArray, sunsetArray, uvIndexArray, precipArray, windSpeedArray);
     }
 
     // ========== Core Business Logic Tests ==========
@@ -184,24 +212,23 @@ class HistoricalWeatherServiceIT extends BaseIntegrationTest {
             LocalDate date2 = LocalDate.now().minusWeeks(2);
 
             String response = createOpenMeteoResponse(
-                date1.toString(),
-                date2.toString()
-            );
+                    date1.toString(),
+                    date2.toString());
 
             stubFor(get(urlPathMatching("/forecast"))
-                .willReturn(aResponse()
-                    .withStatus(200)
-                    .withHeader("Content-Type", "application/json")
-                    .withBody(response)));
+                    .willReturn(aResponse()
+                            .withStatus(200)
+                            .withHeader("Content-Type", "application/json")
+                            .withBody(response)));
 
             List<HistoricalWeather> results = historicalWeatherService
-                .getHistoricalWeatherForLocation(52.52f, 13.41f, location);
+                    .getHistoricalWeatherForLocation(52.52f, 13.41f, location);
 
             assertThat(results).isNotEmpty();
             assertThat(repository.count()).isGreaterThan(0);
 
             HistoricalWeather saved = repository.findByWeatherDateAndDeviceId(date1, "device-1")
-                .orElseThrow();
+                    .orElseThrow();
 
             assertThat(saved.getCity()).isEqualTo("Berlin");
             assertThat(saved.getCountry()).isEqualTo("Germany");
@@ -220,32 +247,32 @@ class HistoricalWeatherServiceIT extends BaseIntegrationTest {
             LocalDate date = LocalDate.now().minusDays(3);
 
             String response = String.format("""
-                {
-                    "daily": {
-                        "time": ["%s"],
-                        "weather_code": [61],
-                        "temperature_2m_max": [20.5],
-                        "temperature_2m_min": [10.2],
-                        "sunrise": ["%sT06:30:00"],
-                        "sunset": ["%sT18:30:00"],
-                        "daylight_duration": [43200.0],
-                        "sunshine_duration": [28800.0],
-                        "uv_index_max": [4.5],
-                        "precipitation_sum": [5.5],
-                        "precipitation_hours": [2.0],
-                        "wind_speed_10m_max": [3.5],
-                        "wind_direction_10m_dominant": [180.0]
+                    {
+                        "daily": {
+                            "time": ["%s"],
+                            "weather_code": [61],
+                            "temperature_2m_max": [20.5],
+                            "temperature_2m_min": [10.2],
+                            "sunrise": ["%sT06:30:00"],
+                            "sunset": ["%sT18:30:00"],
+                            "daylight_duration": [43200.0],
+                            "sunshine_duration": [28800.0],
+                            "uv_index_max": [4.5],
+                            "precipitation_sum": [5.5],
+                            "precipitation_hours": [2.0],
+                            "wind_speed_10m_max": [3.5],
+                            "wind_direction_10m_dominant": [180.0]
+                        }
                     }
-                }
-                """, date, date, date);
+                    """, date, date, date);
 
             stubFor(get(urlPathMatching("/forecast"))
-                .willReturn(ok(response)));
+                    .willReturn(ok(response)));
 
             historicalWeatherService.getHistoricalWeatherForLocation(52.52f, 13.41f, location);
 
             HistoricalWeather saved = repository.findByWeatherDateAndDeviceId(date, "device-2")
-                .orElseThrow();
+                    .orElseThrow();
 
             assertThat(saved.getWeatherCode()).isEqualTo(61);
             assertThat(saved.getWeatherMain()).isEqualTo("Rain");
@@ -257,16 +284,24 @@ class HistoricalWeatherServiceIT extends BaseIntegrationTest {
         @DisplayName("should not refetch existing data")
         void shouldSkipExistingData() {
             LocationData location = createLocationData("device-3", 52.52f, 13.41f);
-            LocalDate date = LocalDate.now().minusDays(3);
+            LocalDate[] dates = {
+                    LocalDate.now().minusDays(3),
+                    LocalDate.now().minusWeeks(2),
+                    LocalDate.now().minusMonths(1),
+                    LocalDate.now().minusMonths(3),
+                    LocalDate.now().minusYears(1)
+            };
 
-            HistoricalWeather existing = createHistoricalWeather(date, "Berlin");
-            existing.setDeviceId("device-3");
-            repository.save(existing);
+            for (LocalDate d : dates) {
+                HistoricalWeather existing = createHistoricalWeather(d, "Berlin");
+                existing.setDeviceId("device-3");
+                repository.save(existing);
+            }
 
             List<HistoricalWeather> results = historicalWeatherService
-                .getHistoricalWeatherForLocation(52.52f, 13.41f, location);
+                    .getHistoricalWeatherForLocation(52.52f, 13.41f, location);
 
-            assertThat(results).hasSize(1);
+            assertThat(results).hasSize(5);
             verify(0, getRequestedFor(urlPathMatching("/forecast")));
         }
 
@@ -276,10 +311,10 @@ class HistoricalWeatherServiceIT extends BaseIntegrationTest {
             LocationData location = createLocationData("device-4", 52.52f, 13.41f);
 
             stubFor(get(urlPathMatching("/forecast"))
-                .willReturn(aResponse().withStatus(500)));
+                    .willReturn(aResponse().withStatus(500)));
 
             List<HistoricalWeather> results = historicalWeatherService
-                .getHistoricalWeatherForLocation(52.52f, 13.41f, location);
+                    .getHistoricalWeatherForLocation(52.52f, 13.41f, location);
 
             assertThat(results).isEmpty();
         }
@@ -291,30 +326,30 @@ class HistoricalWeatherServiceIT extends BaseIntegrationTest {
             LocalDate date = LocalDate.now().minusDays(3);
 
             String response = String.format("""
-                {
-                    "daily": {
-                        "time": ["%s"],
-                        "weather_code": [null],
-                        "temperature_2m_max": [null],
-                        "temperature_2m_min": [10.2],
-                        "sunrise": [null],
-                        "sunset": [null],
-                        "daylight_duration": [null],
-                        "sunshine_duration": [null],
-                        "uv_index_max": [null],
-                        "precipitation_sum": [null],
-                        "precipitation_hours": [null],
-                        "wind_speed_10m_max": [null],
-                        "wind_direction_10m_dominant": [null]
+                    {
+                        "daily": {
+                            "time": ["%s"],
+                            "weather_code": [null],
+                            "temperature_2m_max": [null],
+                            "temperature_2m_min": [10.2],
+                            "sunrise": [null],
+                            "sunset": [null],
+                            "daylight_duration": [null],
+                            "sunshine_duration": [null],
+                            "uv_index_max": [null],
+                            "precipitation_sum": [null],
+                            "precipitation_hours": [null],
+                            "wind_speed_10m_max": [null],
+                            "wind_direction_10m_dominant": [null]
+                        }
                     }
-                }
-                """, date);
+                    """, date);
 
             stubFor(get(urlPathMatching("/forecast"))
-                .willReturn(ok(response)));
+                    .willReturn(ok(response)));
 
             List<HistoricalWeather> results = historicalWeatherService
-                .getHistoricalWeatherForLocation(52.52f, 13.41f, location);
+                    .getHistoricalWeatherForLocation(52.52f, 13.41f, location);
 
             assertThat(results).hasSize(1);
             HistoricalWeather saved = results.get(0);
@@ -329,27 +364,44 @@ class HistoricalWeatherServiceIT extends BaseIntegrationTest {
             LocationData location = createLocationData("device-6", 52.52f, 13.41f);
             LocalDate date = LocalDate.now().minusDays(3);
 
-            HistoricalWeather old = createHistoricalWeather(date, "Berlin");
-            old.setDeviceId("device-6");
-            old.setMaxTemperature(15.0f);
-            repository.save(old);
+            LocalDate[] datesToSeed = {
+                    LocalDate.now().minusWeeks(2),
+                    LocalDate.now().minusMonths(1),
+                    LocalDate.now().minusMonths(3),
+                    LocalDate.now().minusYears(1)
+            };
 
-            // Set updatedAt to 2 weeks ago to trigger update
-            repository.findByWeatherDateAndDeviceId(date, "device-6")
-                .ifPresent(hw -> {
-                    hw.setUpdatedAt(LocalDateTime.now().minusWeeks(2));
-                    repository.save(hw);
-                });
+            for (LocalDate d : datesToSeed) {
+                jdbcTemplate.update(
+                        "INSERT INTO historical_weather (device_id, weather_date, city, country, max_temperature, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        "device-6",
+                        java.sql.Date.valueOf(d),
+                        "Berlin",
+                        "Germany",
+                        15.0f,
+                        java.sql.Timestamp.valueOf(LocalDateTime.now()),
+                        java.sql.Timestamp.valueOf(LocalDateTime.now()));
+            }
 
-            Thread.sleep(100);
+            jdbcTemplate.update(
+                    "INSERT INTO historical_weather (device_id, weather_date, city, country, max_temperature, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    "device-6",
+                    java.sql.Date.valueOf(date),
+                    "Berlin",
+                    "Germany",
+                    15.0f,
+                    java.sql.Timestamp.valueOf(LocalDateTime.now().minusWeeks(2)),
+                    java.sql.Timestamp.valueOf(LocalDateTime.now().minusWeeks(2)));
+
+            entityManager.clear();
 
             String response = createOpenMeteoResponse(date.toString());
 
             stubFor(get(urlPathMatching("/forecast"))
-                .willReturn(ok(response)));
+                    .willReturn(ok(response)));
 
             List<HistoricalWeather> results = historicalWeatherService
-                .getHistoricalWeatherForLocation(52.52f, 13.41f, location);
+                    .getHistoricalWeatherForLocation(52.52f, 13.41f, location);
 
             assertThat(results).isNotEmpty();
             verify(1, getRequestedFor(urlPathMatching("/forecast")));
@@ -367,15 +419,15 @@ class HistoricalWeatherServiceIT extends BaseIntegrationTest {
             String response2 = createOpenMeteoResponse(date2.toString());
 
             stubFor(get(urlPathMatching("/forecast"))
-                .withQueryParam("start_date", matching(".*-" + date1.getMonthValue() + "-.*"))
-                .willReturn(ok(response1)));
+                    .withQueryParam("start_date", matching(".*-" + date1.getMonthValue() + "-.*"))
+                    .willReturn(ok(response1)));
 
             stubFor(get(urlPathMatching("/forecast"))
-                .withQueryParam("start_date", matching(".*-" + date2.getMonthValue() + "-.*"))
-                .willReturn(ok(response2)));
+                    .withQueryParam("start_date", matching(".*-" + date2.getMonthValue() + "-.*"))
+                    .willReturn(ok(response2)));
 
             List<HistoricalWeather> results = historicalWeatherService
-                .getHistoricalWeatherForLocation(52.52f, 13.41f, location);
+                    .getHistoricalWeatherForLocation(52.52f, 13.41f, location);
 
             assertThat(results).hasSizeGreaterThanOrEqualTo(2);
         }
@@ -391,17 +443,16 @@ class HistoricalWeatherServiceIT extends BaseIntegrationTest {
         void shouldFetchForUserDevice() {
             LocationData location = createLocationData("device-8", 52.52f, 13.41f);
             when(deviceLocationService.getFirstUserDeviceLocation())
-                .thenReturn(Optional.of(location));
+                    .thenReturn(Optional.of(location));
 
             String response = createOpenMeteoResponse(
-                LocalDate.now().minusDays(3).toString()
-            );
+                    LocalDate.now().minusDays(3).toString());
 
             stubFor(get(urlPathMatching("/forecast"))
-                .willReturn(ok(response)));
+                    .willReturn(ok(response)));
 
             List<HistoricalWeather> results = historicalWeatherService
-                .getHistoricalWeatherForCurrentLocation();
+                    .getHistoricalWeatherForCurrentLocation();
 
             assertThat(results).isNotEmpty();
         }
@@ -410,10 +461,10 @@ class HistoricalWeatherServiceIT extends BaseIntegrationTest {
         @DisplayName("should return empty list when no device registered")
         void shouldReturnEmptyWhenNoDevice() {
             when(deviceLocationService.getFirstUserDeviceLocation())
-                .thenReturn(Optional.empty());
+                    .thenReturn(Optional.empty());
 
             List<HistoricalWeather> results = historicalWeatherService
-                .getHistoricalWeatherForCurrentLocation();
+                    .getHistoricalWeatherForCurrentLocation();
 
             assertThat(results).isEmpty();
         }
@@ -429,14 +480,13 @@ class HistoricalWeatherServiceIT extends BaseIntegrationTest {
         void shouldUpdateForDeviceLocation() {
             LocationData location = createLocationData("device-9", 52.52f, 13.41f);
             when(deviceLocationService.getFirstUserDeviceLocation())
-                .thenReturn(Optional.of(location));
+                    .thenReturn(Optional.of(location));
 
             String response = createOpenMeteoResponse(
-                LocalDate.now().minusDays(3).toString()
-            );
+                    LocalDate.now().minusDays(3).toString());
 
             stubFor(get(urlPathMatching("/forecast"))
-                .willReturn(ok(response)));
+                    .willReturn(ok(response)));
 
             historicalWeatherService.updateHistoricalWeatherForCurrentLocation();
 
@@ -448,18 +498,17 @@ class HistoricalWeatherServiceIT extends BaseIntegrationTest {
         void shouldPreventConcurrentUpdates() throws InterruptedException {
             LocationData location = createLocationData("device-10", 52.52f, 13.41f);
             when(deviceLocationService.getFirstUserDeviceLocation())
-                .thenReturn(Optional.of(location));
+                    .thenReturn(Optional.of(location));
 
             String response = createOpenMeteoResponse(
-                LocalDate.now().minusDays(3).toString()
-            );
+                    LocalDate.now().minusDays(3).toString());
 
             stubFor(get(urlPathMatching("/forecast"))
-                .willReturn(ok(response)
-                    .withFixedDelay(500)));
+                    .willReturn(ok(response)
+                            .withFixedDelay(500)));
 
-            Thread updateThread = new Thread(() ->
-                historicalWeatherService.updateHistoricalWeatherForCurrentLocation());
+            Thread updateThread = new Thread(
+                    () -> historicalWeatherService.updateHistoricalWeatherForCurrentLocation());
             updateThread.start();
 
             Thread.sleep(100);
@@ -473,7 +522,7 @@ class HistoricalWeatherServiceIT extends BaseIntegrationTest {
         @DisplayName("should handle no device gracefully")
         void shouldHandleNoDevice() {
             when(deviceLocationService.getFirstUserDeviceLocation())
-                .thenReturn(Optional.empty());
+                    .thenReturn(Optional.empty());
 
             historicalWeatherService.updateHistoricalWeatherForCurrentLocation();
 
@@ -492,14 +541,13 @@ class HistoricalWeatherServiceIT extends BaseIntegrationTest {
             LocationData location2 = createLocationData("device-12", 48.14f, 11.58f);
 
             when(deviceLocationService.getAllUniqueDeviceLocations())
-                .thenReturn(List.of(location1, location2));
+                    .thenReturn(List.of(location1, location2));
 
             String response = createOpenMeteoResponse(
-                LocalDate.now().minusDays(3).toString()
-            );
+                    LocalDate.now().minusDays(3).toString());
 
             stubFor(get(urlPathMatching("/forecast"))
-                .willReturn(ok(response)));
+                    .willReturn(ok(response)));
 
             historicalWeatherService.updateHistoricalWeatherForAllDeviceLocations();
 
@@ -510,7 +558,7 @@ class HistoricalWeatherServiceIT extends BaseIntegrationTest {
         @DisplayName("should handle no devices gracefully")
         void shouldHandleNoDevices() {
             when(deviceLocationService.getAllUniqueDeviceLocations())
-                .thenReturn(List.of());
+                    .thenReturn(List.of());
 
             historicalWeatherService.updateHistoricalWeatherForAllDeviceLocations();
 
@@ -524,19 +572,18 @@ class HistoricalWeatherServiceIT extends BaseIntegrationTest {
             LocationData location2 = createLocationData("device-14", 48.14f, 11.58f);
 
             when(deviceLocationService.getAllUniqueDeviceLocations())
-                .thenReturn(List.of(location1, location2));
+                    .thenReturn(List.of(location1, location2));
 
             stubFor(get(urlPathMatching("/forecast"))
-                .withQueryParam("latitude", equalTo("52.52"))
-                .willReturn(aResponse().withStatus(500)));
+                    .withQueryParam("latitude", equalTo("52.52"))
+                    .willReturn(aResponse().withStatus(500)));
 
             String response = createOpenMeteoResponse(
-                LocalDate.now().minusDays(3).toString()
-            );
+                    LocalDate.now().minusDays(3).toString());
 
             stubFor(get(urlPathMatching("/forecast"))
-                .withQueryParam("latitude", equalTo("48.14"))
-                .willReturn(ok(response)));
+                    .withQueryParam("latitude", equalTo("48.14"))
+                    .willReturn(ok(response)));
 
             historicalWeatherService.updateHistoricalWeatherForAllDeviceLocations();
 

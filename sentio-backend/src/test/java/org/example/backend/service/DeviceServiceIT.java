@@ -14,7 +14,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.bcrypt.BCrypt;
+import org.springframework.test.annotation.Commit;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.event.ApplicationEvents;
+import org.springframework.test.context.event.RecordApplicationEvents;
 
 import java.time.LocalDateTime;
 import java.util.HashSet;
@@ -31,6 +34,7 @@ import static org.mockito.Mockito.*;
  * Integration tests for {@link DeviceService}.
  * Validates device management with real database persistence.
  */
+@RecordApplicationEvents
 class DeviceServiceIT extends BaseIntegrationTest {
 
     @Autowired
@@ -42,8 +46,8 @@ class DeviceServiceIT extends BaseIntegrationTest {
     @MockitoBean
     private AuthService authService;
 
-    @MockitoBean
-    private ApplicationEventPublisher eventPublisher;
+    @Autowired
+    private ApplicationEvents events;
 
     private static final String USER_ID = "user-123";
     private static final String OTHER_USER_ID = "user-456";
@@ -57,7 +61,7 @@ class DeviceServiceIT extends BaseIntegrationTest {
         testUser = new AuthDTOs.UserInfo(USER_ID, "testuser", "test@example.com", List.of("user"));
         otherUser = new AuthDTOs.UserInfo(OTHER_USER_ID, "otheruser", "other@example.com", List.of("user"));
         when(authService.getCurrentUser()).thenReturn(testUser);
-        reset(eventPublisher);
+        events.clear();
     }
 
     @Nested
@@ -113,13 +117,15 @@ class DeviceServiceIT extends BaseIntegrationTest {
         }
 
         @Test
+        @Commit
         @DisplayName("should publish DeviceRegisteredEvent for new device")
         void shouldPublishEventForNewDevice() {
             // When
             Device result = deviceService.registerDevice("device-001", "My Pi");
 
             // Then
-            verify(eventPublisher).publishEvent(any(DeviceRegisteredEvent.class));
+            long count = events.stream(DeviceRegisteredEvent.class).count();
+            assertThat(count).isEqualTo(1);
         }
 
         @Test
@@ -127,13 +133,14 @@ class DeviceServiceIT extends BaseIntegrationTest {
         void shouldNotPublishEventForUpdate() {
             // Given
             deviceService.registerDevice("device-001", "Original Name");
-            reset(eventPublisher);
+            events.clear();
 
             // When
             deviceService.registerDevice("device-001", "Updated Name");
 
             // Then
-            verify(eventPublisher, never()).publishEvent(any(DeviceRegisteredEvent.class));
+            long count = events.stream(DeviceRegisteredEvent.class).count();
+            assertThat(count).isEqualTo(0);
         }
     }
 
@@ -262,13 +269,15 @@ class DeviceServiceIT extends BaseIntegrationTest {
         }
 
         @Test
+        @Commit
         @DisplayName("should publish DeviceRegisteredEvent")
         void shouldPublishEvent() {
             // When
             deviceService.registerDeviceWithCredentials("Test Device");
 
             // Then
-            verify(eventPublisher).publishEvent(any(DeviceRegisteredEvent.class));
+            long count = events.stream(DeviceRegisteredEvent.class).count();
+            assertThat(count).isEqualTo(1);
         }
     }
 
@@ -349,8 +358,7 @@ class DeviceServiceIT extends BaseIntegrationTest {
             // When
             String deviceToken = deviceService.exchangePairingCode(
                     registration.getDeviceId(),
-                    registration.getPairingCode()
-            );
+                    registration.getPairingCode());
 
             // Then
             assertThat(deviceToken).isNotNull();
@@ -402,8 +410,7 @@ class DeviceServiceIT extends BaseIntegrationTest {
             // When/Then
             assertThatThrownBy(() -> deviceService.exchangePairingCode(
                     registration.getDeviceId(),
-                    "WRONG-CODE"
-            ))
+                    "WRONG-CODE"))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("Invalid pairing code");
         }
@@ -420,8 +427,7 @@ class DeviceServiceIT extends BaseIntegrationTest {
             // When/Then
             assertThatThrownBy(() -> deviceService.exchangePairingCode(
                     registration.getDeviceId(),
-                    registration.getPairingCode()
-            ))
+                    registration.getPairingCode()))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("Pairing code has expired");
         }
@@ -473,8 +479,7 @@ class DeviceServiceIT extends BaseIntegrationTest {
             DeviceRegistrationResponse registration = deviceService.registerDeviceWithCredentials("Test Device");
             String deviceToken = deviceService.exchangePairingCode(
                     registration.getDeviceId(),
-                    registration.getPairingCode()
-            );
+                    registration.getPairingCode());
 
             // When
             boolean result = deviceService.validateMqttToken(registration.getDeviceId(), deviceToken);
@@ -609,6 +614,7 @@ class DeviceServiceIT extends BaseIntegrationTest {
     class UnregisterDeviceTests {
 
         @Test
+        @Commit
         @DisplayName("should delete owned device")
         void shouldDeleteOwnedDevice() {
             // Given
@@ -623,7 +629,8 @@ class DeviceServiceIT extends BaseIntegrationTest {
 
             // Then
             assertThat(deviceRepository.findById("device-001")).isEmpty();
-            verify(eventPublisher).publishEvent(any(DeviceUnregisteredEvent.class));
+            long count = events.stream(DeviceUnregisteredEvent.class).count();
+            assertThat(count).isEqualTo(1);
         }
 
         @Test
@@ -641,7 +648,7 @@ class DeviceServiceIT extends BaseIntegrationTest {
 
             // Then
             assertThat(deviceRepository.findById("device-001")).isPresent();
-            verify(eventPublisher, never()).publishEvent(any(DeviceUnregisteredEvent.class));
+            assertThat(events.stream(DeviceUnregisteredEvent.class).count()).isEqualTo(0);
         }
 
         @Test
@@ -649,7 +656,7 @@ class DeviceServiceIT extends BaseIntegrationTest {
         void shouldHandleNonExistentDevice() {
             // When/Then (should not throw exception)
             deviceService.unregisterDevice("non-existent");
-            verify(eventPublisher, never()).publishEvent(any(DeviceUnregisteredEvent.class));
+            assertThat(events.stream(DeviceUnregisteredEvent.class).count()).isEqualTo(0);
         }
     }
 

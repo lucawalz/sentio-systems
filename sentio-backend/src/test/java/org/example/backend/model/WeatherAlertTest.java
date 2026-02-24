@@ -165,7 +165,9 @@ class WeatherAlertRepositoryTest extends BaseDataJpaTest {
         WeatherAlert wa2 = createBaseAlert();
 
         wa1.setAlertId("unique-alert-1");
+        wa1.setDeviceId("device-1");
         wa2.setAlertId("unique-alert-1"); // duplicate → DB should reject it
+        wa2.setDeviceId("device-1");
 
         repository.saveAndFlush(wa1);
 

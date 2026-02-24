@@ -223,33 +223,21 @@ jobs:
 
       # Integration tests with Testcontainers. SentioApplicationTests is included
       # here (not above) because it requires a real DB container.
-      # Uses failsafe directly to avoid re-running unit tests from the test phase.
+      # Runs via lifecycle (verify) so JaCoCo agents instrument both phases.
+      # -DskipSurefireTests skips unit tests (already ran above) while still
+      # compiling and running failsafe integration tests + JaCoCo merge/report.
       - name: Run Integration Tests
         working-directory: ./sentio-backend
         run: |
-          ./mvnw failsafe:integration-test failsafe:verify \
+          ./mvnw verify \
+            -DskipSurefireTests \
             -Dit.test="*IT,SentioApplicationTests" \
             -DfailIfNoTests=false \
             -B
-        timeout-minutes: 20
+        timeout-minutes: 40
         env:
           SPRING_PROFILES_ACTIVE: test
           TESTCONTAINERS_REUSE_ENABLE: true
-
-      - name: Generate Coverage Report
-        working-directory: ./sentio-backend
-        if: always()
-        run: ./mvnw jacoco:report -B
-
-      - name: Upload Coverage to Codecov
-        uses: codecov/codecov-action@v4
-        if: always()
-        continue-on-error: true
-        with:
-          files: ./sentio-backend/target/site/jacoco/jacoco.xml
-          flags: backend
-          name: backend-coverage
-          fail_ci_if_error: false
 
       - name: Generate Coverage Summary
         if: always()

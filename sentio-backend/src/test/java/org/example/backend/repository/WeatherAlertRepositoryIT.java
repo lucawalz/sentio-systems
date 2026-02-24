@@ -16,7 +16,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Integration tests for {@link WeatherAlertRepository}.
- * Validates custom JPQL queries, filtering, and deletion operations with PostgreSQL.
+ * Validates custom JPQL queries, filtering, and deletion operations with
+ * PostgreSQL.
  */
 @DisplayName("WeatherAlertRepository")
 class WeatherAlertRepositoryIT extends BaseIntegrationTest {
@@ -60,35 +61,35 @@ class WeatherAlertRepositoryIT extends BaseIntegrationTest {
         @DisplayName("should find alert by alertId")
         void shouldFindByAlertId() {
             // Given
-            repository.save(createAlert("ALERT-001", "Berlin", "severe", LocalDateTime.now(), null));
+            repository.save(createAlertWithDevice("alert-device1", "device-1", LocalDateTime.now(), null));
 
             // When
-            Optional<WeatherAlert> result = repository.findByAlertId("ALERT-001");
+            Optional<WeatherAlert> found = repository.findByAlertIdAndDeviceId("alert-device1", "device-1");
 
             // Then
-            assertThat(result).isPresent();
-            assertThat(result.get().getAlertId()).isEqualTo("ALERT-001");
+            assertThat(found).isPresent();
+            assertThat(found.get().getAlertId()).isEqualTo("alert-device1");
         }
 
         @Test
         @DisplayName("should return empty when alertId not found")
         void shouldReturnEmptyWhenAlertIdNotFound() {
             // When
-            Optional<WeatherAlert> result = repository.findByAlertId("NON-EXISTENT");
+            Optional<WeatherAlert> notFound = repository.findByAlertIdAndDeviceId("non-existent-id", "device-1");
 
             // Then
-            assertThat(result).isEmpty();
+            assertThat(notFound).isEmpty();
         }
 
         @Test
         @DisplayName("should check if alert exists by alertId")
         void shouldCheckExistsByAlertId() {
             // Given
-            repository.save(createAlert("ALERT-002", "Munich", "minor", LocalDateTime.now(), null));
+            repository.save(createAlertWithDevice("ALERT-002", "device-1", LocalDateTime.now(), null));
 
             // When
-            boolean exists = repository.existsByAlertId("ALERT-002");
-            boolean notExists = repository.existsByAlertId("ALERT-999");
+            boolean exists = repository.existsByAlertIdAndDeviceId("ALERT-002", "device-1");
+            boolean notExists = repository.existsByAlertIdAndDeviceId("ALERT-999", "device-1");
 
             // Then
             assertThat(exists).isTrue();
@@ -380,7 +381,8 @@ class WeatherAlertRepositoryIT extends BaseIntegrationTest {
             // Given
             LocalDateTime cutoff = LocalDateTime.now().minusDays(1);
             repository.save(
-                    createAlert("ALERT-001", "Berlin", "severe", LocalDateTime.now().minusDays(5), cutoff.minusHours(1)));
+                    createAlert("ALERT-001", "Berlin", "severe", LocalDateTime.now().minusDays(5),
+                            cutoff.minusHours(1)));
             repository.save(createAlert("ALERT-002", "Munich", "moderate", LocalDateTime.now().minusHours(1),
                     cutoff.plusHours(1)));
 
@@ -408,7 +410,8 @@ class WeatherAlertRepositoryIT extends BaseIntegrationTest {
             WeatherAlert alert2 = createAlert("ALERT-002", "Munich", "moderate", LocalDateTime.now(), null);
             repository.save(alert2);
 
-            // When - delete with a far future cutoff (will delete all alerts created before tomorrow)
+            // When - delete with a far future cutoff (will delete all alerts created before
+            // tomorrow)
             repository.deleteOldAlerts(LocalDateTime.now().plusDays(1));
             repository.flush();
 

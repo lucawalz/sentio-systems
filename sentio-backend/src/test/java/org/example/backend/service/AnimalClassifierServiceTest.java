@@ -17,12 +17,15 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
@@ -38,7 +41,7 @@ import static org.mockito.Mockito.*;
  * NOTE: Due to @Async nature of classifyAndUpdate, some tests verify
  * invocation and setup rather than final state changes.
  */
-@WireMockTest(httpPort = 8092)
+@WireMockTest
 class AnimalClassifierServiceTest extends BaseIntegrationTest {
 
     private static final String BIRD_CLASSIFICATION_RESPONSE = """
@@ -85,12 +88,14 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
 
     @DynamicPropertySource
     static void configureWireMock(DynamicPropertyRegistry registry) {
-        registry.add("preprocessing.service.url", () -> "http://localhost:8092/classify");
+        // URL is dynamically set in setUp()
         registry.add("preprocessing.service.enabled", () -> "true");
         registry.add("queue.enabled", () -> "false");
     }
 
     @Autowired
+    private AnimalClassifierService animalClassifierServiceProxy;
+
     private AnimalClassifierService animalClassifierService;
 
     @Autowired
@@ -114,7 +119,7 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
     private Path tempImageFile;
 
     @BeforeEach
-    void setUp() throws IOException {
+    void setUp(WireMockRuntimeInfo wmRuntimeInfo) throws IOException {
         animalDetectionRepository.deleteAll();
         reset();
 
@@ -124,6 +129,23 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
 
         // Mock ImageStorageService to return our temp file
         when(imageStorageService.getLocalImagePath(anyString())).thenReturn(tempImageFile);
+
+        // Bypass Spring's @Async proxy to execute methods synchronously
+        animalClassifierService = org.springframework.test.util.AopTestUtils
+                .getTargetObject(animalClassifierServiceProxy);
+
+        // Dynamically set WireMock URL
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                animalClassifierService,
+                "preprocessingServiceUrl",
+                wmRuntimeInfo.getHttpBaseUrl() + "/classify");
+
+        // Force use of strictly synchronous, basic RestTemplate to avoid HTTP/2 issues
+        // with WireMock
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                animalClassifierService,
+                "restTemplate",
+                new org.springframework.web.client.RestTemplate());
     }
 
     @AfterEach
@@ -157,7 +179,7 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
 
         @Test
         @DisplayName("should initiate bird classification via preprocessing service")
-        void shouldInitiateBirdClassification(WireMockRuntimeInfo wmRuntimeInfo) {
+        void shouldInitiateBirdClassification() {
             stubFor(post(urlPathEqualTo("/classify"))
                     .willReturn(aResponse()
                             .withStatus(200)
@@ -167,10 +189,10 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
             AnimalDetection detection = createDetection("bird", "Unknown", 0.5f);
             animalClassifierService.classifyAndUpdate(detection);
 
-            // Verify async method was called (returns immediately)
-            await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
-                verify(imageStorageService).getLocalImagePath("/images/test.jpg");
-            });
+            // Verify async method was called and database was updated
+            AnimalDetection updated = animalDetectionRepository.findById(detection.getId()).orElseThrow();
+            assertThat(updated.getSpecies()).isEqualTo("Parus major");
+            assertThat(updated.isAiProcessed()).isTrue();
         }
 
         @Test
@@ -185,9 +207,9 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
             AnimalDetection detection = createDetection("mammal", "Unknown", 0.5f);
             animalClassifierService.classifyAndUpdate(detection);
 
-            await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
-                verify(imageStorageService).getLocalImagePath(anyString());
-            });
+            AnimalDetection updated = animalDetectionRepository.findById(detection.getId()).orElseThrow();
+            assertThat(updated.getSpecies()).isEqualTo("wolf");
+            assertThat(updated.isAiProcessed()).isTrue();
         }
 
         @Test
@@ -201,14 +223,12 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
             AnimalDetection detection = createDetection("bird", "Unknown", 0.5f);
             animalClassifierService.classifyAndUpdate(detection);
 
-            await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
-                verify(redisQueueService).submitClassificationJobAsync(
-                        any(byte[].class),
-                        anyString(),
-                        eq("bird"),
-                        eq(detection.getId()),
-                        eq(resultProcessor));
-            });
+            verify(redisQueueService).submitClassificationJobAsync(
+                    any(byte[].class),
+                    anyString(),
+                    eq("bird"),
+                    eq(detection.getId()),
+                    eq(resultProcessor));
         }
 
         @Test
@@ -229,10 +249,8 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
             animalClassifierService.classifyAndUpdate(detection);
 
             // Should attempt queue first, then fallback
-            await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
-                verify(redisQueueService).submitClassificationJobAsync(any(), anyString(), anyString(), anyLong(),
-                        any());
-            });
+            verify(redisQueueService).submitClassificationJobAsync(any(), anyString(), anyString(), anyLong(),
+                    any());
         }
 
         @Test
@@ -242,9 +260,7 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
             animalClassifierService.classifyAndUpdate(detection);
 
             // Should not attempt to get image for unsupported types
-            await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> {
-                verify(imageStorageService, never()).getLocalImagePath(anyString());
-            });
+            verify(imageStorageService, never()).getLocalImagePath(anyString());
         }
 
         @Test
@@ -256,9 +272,7 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
             AnimalDetection detection = createDetection("bird", "Unknown", 0.5f);
             animalClassifierService.classifyAndUpdate(detection);
 
-            await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> {
-                verify(imageStorageService).getLocalImagePath(anyString());
-            });
+            verify(imageStorageService).getLocalImagePath(anyString());
         }
 
         @Test
@@ -272,9 +286,7 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
             AnimalDetection detection = createDetection("bird", "Unknown", 0.5f);
             animalClassifierService.classifyAndUpdate(detection);
 
-            await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> {
-                verify(imageStorageService).getLocalImagePath(anyString());
-            });
+            verify(imageStorageService).getLocalImagePath(anyString());
         }
 
         @Test
@@ -289,9 +301,7 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
             AnimalDetection detection = createDetection("bird", "Unknown", 0.5f);
             animalClassifierService.classifyAndUpdate(detection);
 
-            await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> {
-                verify(imageStorageService).getLocalImagePath(anyString());
-            });
+            verify(imageStorageService).getLocalImagePath(anyString());
         }
 
         @Test
@@ -303,7 +313,7 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
                             "bird_detected": false,
                             "confidence": 0.1
                         },
-                        "classification": null
+                        "classification": {}
                     }
                     """;
 
@@ -316,9 +326,9 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
             AnimalDetection detection = createDetection("bird", "Unknown", 0.5f);
             animalClassifierService.classifyAndUpdate(detection);
 
-            await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> {
-                verify(imageStorageService).getLocalImagePath(anyString());
-            });
+            AnimalDetection updated = animalDetectionRepository.findById(detection.getId()).orElseThrow();
+            assertThat(updated.isAiProcessed()).isTrue();
+            assertThat(updated.getSpecies()).isEqualTo("Unknown"); // Keeps original
         }
 
         @Test
@@ -333,9 +343,9 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
             AnimalDetection detection = createDetection("bird", "Unknown", 0.5f);
             animalClassifierService.classifyAndUpdate(detection);
 
-            await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> {
-                verify(imageStorageService).getLocalImagePath(anyString());
-            });
+            AnimalDetection updated = animalDetectionRepository.findById(detection.getId()).orElseThrow();
+            assertThat(updated.getSpecies()).isEqualTo("Parus major");
+            assertThat(updated.isAiProcessed()).isTrue();
         }
     }
 
@@ -354,14 +364,12 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
             AnimalDetection detection = createDetection("mammal", "Unknown", 0.5f);
             animalClassifierService.classifyAndUpdate(detection);
 
-            await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> {
-                verify(redisQueueService).submitClassificationJobAsync(
-                        any(byte[].class),
-                        contains(".jpg"),
-                        eq("mammal"),
-                        eq(detection.getId()),
-                        eq(resultProcessor));
-            });
+            verify(redisQueueService).submitClassificationJobAsync(
+                    any(byte[].class),
+                    contains(".jpg"),
+                    eq("mammal"),
+                    eq(detection.getId()),
+                    eq(resultProcessor));
         }
 
         @Test
@@ -379,10 +387,8 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
             AnimalDetection detection = createDetection("mammal", "Unknown", 0.5f);
             animalClassifierService.classifyAndUpdate(detection);
 
-            await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> {
-                verify(redisQueueService, never()).submitClassificationJobAsync(any(), anyString(), anyString(),
-                        anyLong(), any());
-            });
+            verify(redisQueueService, never()).submitClassificationJobAsync(any(), anyString(), anyString(),
+                    anyLong(), any());
         }
 
         @Test
@@ -399,10 +405,8 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
             AnimalDetection detection = createDetection("bird", "Unknown", 0.5f);
             animalClassifierService.classifyAndUpdate(detection);
 
-            await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> {
-                verify(redisQueueService, never()).submitClassificationJobAsync(any(), anyString(), anyString(),
-                        anyLong(), any());
-            });
+            verify(redisQueueService, never()).submitClassificationJobAsync(any(), anyString(), anyString(),
+                    anyLong(), any());
         }
 
         @Test
@@ -422,10 +426,8 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
             AnimalDetection detection = createDetection("bird", "Unknown", 0.5f);
             animalClassifierService.classifyAndUpdate(detection);
 
-            await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> {
-                verify(redisQueueService).submitClassificationJobAsync(any(), anyString(), anyString(), anyLong(),
-                        any());
-            });
+            verify(redisQueueService).submitClassificationJobAsync(any(), anyString(), anyString(), anyLong(),
+                    any());
         }
 
         @Test
@@ -439,9 +441,7 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
             AnimalDetection detection = createDetection("bird", "Unknown", 0.5f);
             animalClassifierService.classifyAndUpdate(detection);
 
-            await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> {
-                verify(imageStorageService).getLocalImagePath(anyString());
-            });
+            verify(imageStorageService).getLocalImagePath(anyString());
         }
     }
 
@@ -455,9 +455,7 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
             AnimalDetection detection = createDetection("bird", "Unknown", 0.5f);
             animalClassifierService.classifyAndUpdate(detection);
 
-            await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> {
-                verify(imageStorageService).getLocalImagePath(anyString());
-            });
+            verify(imageStorageService).getLocalImagePath(anyString());
         }
 
         @Test
@@ -466,9 +464,7 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
             AnimalDetection detection = createDetection("mammal", "Unknown", 0.5f);
             animalClassifierService.classifyAndUpdate(detection);
 
-            await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> {
-                verify(imageStorageService).getLocalImagePath(anyString());
-            });
+            verify(imageStorageService).getLocalImagePath(anyString());
         }
 
         @Test
@@ -477,9 +473,7 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
             AnimalDetection detection = createDetection("human", "Person", 0.9f);
             animalClassifierService.classifyAndUpdate(detection);
 
-            await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> {
-                verify(imageStorageService).getLocalImagePath(anyString());
-            });
+            verify(imageStorageService).getLocalImagePath(anyString());
         }
 
         @Test
@@ -488,9 +482,7 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
             AnimalDetection detection = createDetection("fish", "Goldfish", 0.8f);
             animalClassifierService.classifyAndUpdate(detection);
 
-            await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> {
-                verify(imageStorageService, never()).getLocalImagePath(anyString());
-            });
+            verify(imageStorageService, never()).getLocalImagePath(anyString());
         }
 
         @Test
@@ -502,9 +494,7 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
             AnimalDetection detection = createDetection("bird", "Unknown", 0.5f);
             animalClassifierService.classifyAndUpdate(detection);
 
-            await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> {
-                verify(imageStorageService).getLocalImagePath("/images/test.jpg");
-            });
+            verify(imageStorageService).getLocalImagePath("/images/test.jpg");
         }
     }
 
@@ -526,9 +516,7 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
                 animalClassifierService.classifyAndUpdate(detection);
             }
 
-            await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
-                verify(imageStorageService, atLeast(1)).getLocalImagePath(anyString());
-            });
+            verify(imageStorageService, atLeast(1)).getLocalImagePath(anyString());
         }
 
         @Test
@@ -545,9 +533,7 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
                 animalClassifierService.classifyAndUpdate(detection);
             }
 
-            await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
-                verify(imageStorageService, atLeast(3)).getLocalImagePath(anyString());
-            });
+            verify(imageStorageService, atLeast(3)).getLocalImagePath(anyString());
         }
 
         @Test
@@ -561,9 +547,7 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
             AnimalDetection detection = createDetection("bird", "Unknown", 0.5f);
             animalClassifierService.classifyAndUpdate(detection);
 
-            await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> {
-                verify(imageStorageService).getLocalImagePath(anyString());
-            });
+            verify(imageStorageService).getLocalImagePath(anyString());
         }
 
         @Test
@@ -577,9 +561,7 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
             AnimalDetection detection = createDetection("bird", "Unknown", 0.5f);
             animalClassifierService.classifyAndUpdate(detection);
 
-            await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> {
-                verify(imageStorageService).getLocalImagePath(anyString());
-            });
+            verify(imageStorageService).getLocalImagePath(anyString());
         }
 
         @Test
@@ -592,9 +574,7 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
             AnimalDetection detection = createDetection("bird", "Unknown", 0.5f);
             animalClassifierService.classifyAndUpdate(detection);
 
-            await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> {
-                verify(imageStorageService).getLocalImagePath(anyString());
-            });
+            verify(imageStorageService).getLocalImagePath(anyString());
         }
     }
 
@@ -662,7 +642,6 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
 
     @Nested
     @DisplayName("Classification Response Processing")
-    @org.springframework.transaction.annotation.Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     class ClassificationResponseProcessingTests {
 
         @Test
@@ -702,12 +681,10 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
 
             animalClassifierService.classifyAndUpdate(detection);
 
-            await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
-                AnimalDetection updated = animalDetectionRepository.findById(detectionId).orElseThrow();
-                // Should fallback to original species
-                assertThat(updated.getSpecies()).isEqualTo("Fox");
-                assertThat(updated.getConfidence()).isEqualTo(0.7f);
-            });
+            AnimalDetection updated = animalDetectionRepository.findById(detectionId).orElseThrow();
+            // Should fallback to original species
+            assertThat(updated.getSpecies()).isEqualTo("Fox");
+            assertThat(updated.getConfidence()).isEqualTo(0.7f);
         }
 
         @Test
@@ -737,9 +714,7 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
             AnimalDetection detection = createDetection("bird", "Unknown", 0.5f);
             animalClassifierService.classifyAndUpdate(detection);
 
-            await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> {
-                verify(imageStorageService).getLocalImagePath(anyString());
-            });
+            verify(imageStorageService).getLocalImagePath(anyString());
         }
 
         @Test
@@ -763,9 +738,7 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
             AnimalDetection detection = createDetection("bird", "Unknown", 0.5f);
             animalClassifierService.classifyAndUpdate(detection);
 
-            await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> {
-                verify(imageStorageService).getLocalImagePath(anyString());
-            });
+            verify(imageStorageService).getLocalImagePath(anyString());
         }
 
         @Test
@@ -774,9 +747,7 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
             AnimalDetection detection = createDetection(null, "Unknown", 0.5f);
             animalClassifierService.classifyAndUpdate(detection);
 
-            await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> {
-                verify(imageStorageService, never()).getLocalImagePath(anyString());
-            });
+            verify(imageStorageService, never()).getLocalImagePath(anyString());
         }
 
         @Test
@@ -808,11 +779,9 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
 
             animalClassifierService.classifyAndUpdate(detection);
 
-            await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
-                AnimalDetection updated = animalDetectionRepository.findById(detectionId).orElseThrow();
-                // Should fallback to original
-                assertThat(updated.getSpecies()).isIn("Fox", "Unknown");
-            });
+            AnimalDetection updated = animalDetectionRepository.findById(detectionId).orElseThrow();
+            // Should fallback to original
+            assertThat(updated.getSpecies()).isIn("Fox", "Unknown");
         }
 
         @Test
@@ -827,9 +796,7 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
             AnimalDetection detection = createDetection("bird", "Unknown", 0.5f);
             animalClassifierService.classifyAndUpdate(detection);
 
-            await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> {
-                verify(imageStorageService).getLocalImagePath(anyString());
-            });
+            verify(imageStorageService).getLocalImagePath(anyString());
         }
 
         @Test
@@ -849,12 +816,10 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
 
             animalClassifierService.classifyAndUpdate(detection);
 
-            await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
-                AnimalDetection updated = animalDetectionRepository.findById(detectionId).orElseThrow();
-                // Should preserve the original values, not overwrite them
-                assertThat(updated.getOriginalSpecies()).isEqualTo("Cat");
-                assertThat(updated.getOriginalConfidence()).isEqualTo(0.6f);
-            });
+            AnimalDetection updated = animalDetectionRepository.findById(detectionId).orElseThrow();
+            // Should preserve the original values, not overwrite them
+            assertThat(updated.getOriginalSpecies()).isEqualTo("Cat");
+            assertThat(updated.getOriginalConfidence()).isEqualTo(0.6f);
         }
 
         @Test
@@ -879,9 +844,7 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
             AnimalDetection detection = createDetection("bird", "Unknown", 0.5f);
             animalClassifierService.classifyAndUpdate(detection);
 
-            await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> {
-                verify(imageStorageService).getLocalImagePath(anyString());
-            });
+            verify(imageStorageService).getLocalImagePath(anyString());
         }
 
         @Test
@@ -902,15 +865,12 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
             AnimalDetection detection = createDetection("mammal", "Unknown", 0.5f);
             animalClassifierService.classifyAndUpdate(detection);
 
-            await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> {
-                verify(imageStorageService).getLocalImagePath(anyString());
-            });
+            verify(imageStorageService).getLocalImagePath(anyString());
         }
     }
 
     @Nested
     @DisplayName("Species Validation")
-    @org.springframework.transaction.annotation.Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     class SpeciesValidationTests {
 
         @Test
@@ -937,11 +897,9 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
 
             animalClassifierService.classifyAndUpdate(detection);
 
-            await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
-                AnimalDetection updated = animalDetectionRepository.findById(detectionId).orElseThrow();
-                // Should fallback to original species
-                assertThat(updated.getSpecies()).isEqualTo("Deer");
-            });
+            AnimalDetection updated = animalDetectionRepository.findById(detectionId).orElseThrow();
+            // Should fallback to original species
+            assertThat(updated.getSpecies()).isEqualTo("Deer");
         }
 
         @Test
@@ -968,10 +926,8 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
 
             animalClassifierService.classifyAndUpdate(detection);
 
-            await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
-                AnimalDetection updated = animalDetectionRepository.findById(detectionId).orElseThrow();
-                assertThat(updated.getSpecies()).isEqualTo("Rabbit");
-            });
+            AnimalDetection updated = animalDetectionRepository.findById(detectionId).orElseThrow();
+            assertThat(updated.getSpecies()).isEqualTo("Rabbit");
         }
 
         @Test
@@ -998,10 +954,8 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
 
             animalClassifierService.classifyAndUpdate(detection);
 
-            await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
-                AnimalDetection updated = animalDetectionRepository.findById(detectionId).orElseThrow();
-                assertThat(updated.getSpecies()).isEqualTo("Squirrel");
-            });
+            AnimalDetection updated = animalDetectionRepository.findById(detectionId).orElseThrow();
+            assertThat(updated.getSpecies()).isEqualTo("Squirrel");
         }
 
         @Test
@@ -1028,10 +982,8 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
 
             animalClassifierService.classifyAndUpdate(detection);
 
-            await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
-                AnimalDetection updated = animalDetectionRepository.findById(detectionId).orElseThrow();
-                assertThat(updated.getSpecies()).isEqualTo("Raccoon");
-            });
+            AnimalDetection updated = animalDetectionRepository.findById(detectionId).orElseThrow();
+            assertThat(updated.getSpecies()).isEqualTo("Raccoon");
         }
     }
 
@@ -1104,9 +1056,7 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
             AnimalDetection detection = createDetection("bird", "Unknown", 0.5f);
             animalClassifierService.classifyAndUpdate(detection);
 
-            await().atMost(5, TimeUnit.SECONDS).untilAsserted(() -> {
-                verify(imageStorageService).getLocalImagePath(anyString());
-            });
+            verify(imageStorageService).getLocalImagePath(anyString());
         }
 
         @Test
@@ -1115,9 +1065,7 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
             AnimalDetection detection = createDetection("", "Unknown", 0.5f);
             animalClassifierService.classifyAndUpdate(detection);
 
-            await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> {
-                verify(imageStorageService, never()).getLocalImagePath(anyString());
-            });
+            verify(imageStorageService, never()).getLocalImagePath(anyString());
         }
 
         @Test

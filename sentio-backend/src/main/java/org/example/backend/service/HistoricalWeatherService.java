@@ -111,6 +111,10 @@ public class HistoricalWeatherService {
                 .filter(date -> !existingDates.contains(date) || needsUpdate(date, locationData, oneWeekAgo))
                 .collect(Collectors.toList());
 
+        log.error("DEBUG - historicalDates: {}", historicalDates);
+        log.error("DEBUG - existingDates: {}", existingDates);
+        log.error("DEBUG - datesToFetch: {}", datesToFetch);
+
         if (datesToFetch.isEmpty()) {
             log.info("All historical data is up to date for device: {}", deviceId);
             return deviceId != null
@@ -184,7 +188,10 @@ public class HistoricalWeatherService {
                 : historicalWeatherRepository.findByWeatherDateAndLocation(
                         date, locationData.getCity(), locationData.getCountry());
 
-        return existing.isEmpty() || existing.get().getUpdatedAt().isBefore(cutoff);
+        boolean needIt = existing.isEmpty() || existing.get().getUpdatedAt().isBefore(cutoff);
+        log.error("DEBUG needsUpdate - date: {}, existing: {}, updatedAt: {}, cutoff: {}, result: {}",
+                date, existing.isPresent(), existing.map(HistoricalWeather::getUpdatedAt).orElse(null), cutoff, needIt);
+        return needIt;
     }
 
     /**
@@ -562,7 +569,6 @@ public class HistoricalWeatherService {
         log.debug("Retrieving available cities with historical weather");
         return historicalWeatherRepository.findDistinctCitiesWithHistoricalWeather(LocalDate.now().minusYears(1));
     }
-
 
     @SuppressWarnings("unused")
     private List<HistoricalWeather> getHistoricalWeatherForLocationFallback(Float latitude, Float longitude,

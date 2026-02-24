@@ -31,14 +31,18 @@ import static org.assertj.core.api.Assertions.*;
 
 /**
  * Integration tests for {@link RedisQueueService}.
- * Uses real Redis Testcontainer to validate queue operations with production parity.
+ * Uses real Redis Testcontainer to validate queue operations with production
+ * parity.
  */
 class RedisQueueServiceTest extends BaseIntegrationTest {
 
-    @Container
-    static GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:7-alpine"))
+    static final GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:7-alpine"))
             .withExposedPorts(6379)
             .withReuse(true);
+
+    static {
+        redis.start();
+    }
 
     @DynamicPropertySource
     static void configureRedis(DynamicPropertyRegistry registry) {
@@ -87,7 +91,8 @@ class RedisQueueServiceTest extends BaseIntegrationTest {
             String jobJson = redisTemplate.opsForList().rightPop(SPECIESNET_QUEUE);
             assertThat(jobJson).isNotNull();
 
-            Map<String, Object> job = objectMapper.readValue(jobJson, new TypeReference<>() {});
+            Map<String, Object> job = objectMapper.readValue(jobJson, new TypeReference<>() {
+            });
             assertThat(job).containsEntry("job_id", jobId);
             assertThat(job).containsEntry("filename", TEST_FILENAME);
             assertThat(job).containsEntry("animal_type", "mammal");
@@ -168,7 +173,8 @@ class RedisQueueServiceTest extends BaseIntegrationTest {
             assertThat(jobId).isNotBlank();
 
             String jobJson = redisTemplate.opsForList().rightPop(BIRDER_QUEUE);
-            Map<String, Object> job = objectMapper.readValue(jobJson, new TypeReference<>() {});
+            Map<String, Object> job = objectMapper.readValue(jobJson, new TypeReference<>() {
+            });
 
             String imageBase64 = (String) job.get("image_base64");
             byte[] decodedImage = Base64.getDecoder().decode(imageBase64);
@@ -188,7 +194,8 @@ class RedisQueueServiceTest extends BaseIntegrationTest {
             assertThat(jobId).isNotBlank();
 
             String jobJson = redisTemplate.opsForList().rightPop(SPECIESNET_QUEUE);
-            Map<String, Object> job = objectMapper.readValue(jobJson, new TypeReference<>() {});
+            Map<String, Object> job = objectMapper.readValue(jobJson, new TypeReference<>() {
+            });
 
             assertThat(job.get("filename")).isEqualTo(specialFilename);
         }
@@ -380,7 +387,8 @@ class RedisQueueServiceTest extends BaseIntegrationTest {
             String jobJson = redisTemplate.opsForList().rightPop(BIRDER_QUEUE);
             assertThat(jobJson).isNotNull();
 
-            Map<String, Object> job = objectMapper.readValue(jobJson, new TypeReference<>() {});
+            Map<String, Object> job = objectMapper.readValue(jobJson, new TypeReference<>() {
+            });
             assertThat(job).containsEntry("job_id", jobId);
 
             // Verify job is registered with processor
@@ -418,8 +426,7 @@ class RedisQueueServiceTest extends BaseIntegrationTest {
         @DisplayName("should handle null image bytes gracefully")
         void shouldHandleNullImageBytes() {
             // When/Then - should throw exception due to null pointer
-            assertThatThrownBy(() ->
-                    redisQueueService.submitClassificationJob(null, TEST_FILENAME, "bird"))
+            assertThatThrownBy(() -> redisQueueService.submitClassificationJob(null, TEST_FILENAME, "bird"))
                     .isInstanceOf(NullPointerException.class);
         }
 
@@ -436,7 +443,8 @@ class RedisQueueServiceTest extends BaseIntegrationTest {
             assertThat(jobId).isNotBlank();
 
             String jobJson = redisTemplate.opsForList().rightPop(BIRDER_QUEUE);
-            Map<String, Object> job = objectMapper.readValue(jobJson, new TypeReference<>() {});
+            Map<String, Object> job = objectMapper.readValue(jobJson, new TypeReference<>() {
+            });
 
             String imageBase64 = (String) job.get("image_base64");
             byte[] decodedImage = Base64.getDecoder().decode(imageBase64);
@@ -453,7 +461,8 @@ class RedisQueueServiceTest extends BaseIntegrationTest {
             assertThat(jobId).isNotBlank();
 
             String jobJson = redisTemplate.opsForList().rightPop(BIRDER_QUEUE);
-            Map<String, Object> job = objectMapper.readValue(jobJson, new TypeReference<>() {});
+            Map<String, Object> job = objectMapper.readValue(jobJson, new TypeReference<>() {
+            });
 
             assertThat(job.get("filename")).isNull();
         }
@@ -468,7 +477,8 @@ class RedisQueueServiceTest extends BaseIntegrationTest {
             assertThat(jobId).isNotBlank();
 
             String jobJson = redisTemplate.opsForList().rightPop(SPECIESNET_QUEUE);
-            Map<String, Object> job = objectMapper.readValue(jobJson, new TypeReference<>() {});
+            Map<String, Object> job = objectMapper.readValue(jobJson, new TypeReference<>() {
+            });
 
             assertThat(job.get("filename")).isEqualTo("");
         }
@@ -486,7 +496,8 @@ class RedisQueueServiceTest extends BaseIntegrationTest {
             assertThat(jobId).isNotBlank();
 
             String jobJson = redisTemplate.opsForList().rightPop(BIRDER_QUEUE);
-            Map<String, Object> job = objectMapper.readValue(jobJson, new TypeReference<>() {});
+            Map<String, Object> job = objectMapper.readValue(jobJson, new TypeReference<>() {
+            });
 
             assertThat(job.get("filename")).isEqualTo(longFilename);
         }
@@ -504,7 +515,8 @@ class RedisQueueServiceTest extends BaseIntegrationTest {
             assertThat(jobId).isNotBlank();
 
             String jobJson = redisTemplate.opsForList().rightPop(BIRDER_QUEUE);
-            Map<String, Object> job = objectMapper.readValue(jobJson, new TypeReference<>() {});
+            Map<String, Object> job = objectMapper.readValue(jobJson, new TypeReference<>() {
+            });
 
             assertThat(job.get("filename")).isEqualTo(unicodeFilename);
         }
@@ -563,7 +575,8 @@ class RedisQueueServiceTest extends BaseIntegrationTest {
             assertThat(jobJson).isNotNull();
 
             // Verify JSON is valid and well-formed
-            Map<String, Object> job = objectMapper.readValue(jobJson, new TypeReference<>() {});
+            Map<String, Object> job = objectMapper.readValue(jobJson, new TypeReference<>() {
+            });
             assertThat(job).containsOnlyKeys("job_id", "image_base64", "filename", "animal_type");
         }
 
@@ -575,7 +588,8 @@ class RedisQueueServiceTest extends BaseIntegrationTest {
 
             // Then
             String jobJson = redisTemplate.opsForList().rightPop(SPECIESNET_QUEUE);
-            Map<String, Object> job = objectMapper.readValue(jobJson, new TypeReference<>() {});
+            Map<String, Object> job = objectMapper.readValue(jobJson, new TypeReference<>() {
+            });
 
             assertThat(job).containsKey("job_id");
             assertThat(job).containsKey("image_base64");
@@ -599,7 +613,8 @@ class RedisQueueServiceTest extends BaseIntegrationTest {
 
             // Then
             String jobJson = redisTemplate.opsForList().rightPop(BIRDER_QUEUE);
-            Map<String, Object> job = objectMapper.readValue(jobJson, new TypeReference<>() {});
+            Map<String, Object> job = objectMapper.readValue(jobJson, new TypeReference<>() {
+            });
 
             String imageBase64 = (String) job.get("image_base64");
             assertThat(imageBase64).isNotBlank();
@@ -620,15 +635,18 @@ class RedisQueueServiceTest extends BaseIntegrationTest {
 
             // Then - verify animal types are preserved
             String birdJob = redisTemplate.opsForList().rightPop(BIRDER_QUEUE);
-            Map<String, Object> birdJobMap = objectMapper.readValue(birdJob, new TypeReference<>() {});
+            Map<String, Object> birdJobMap = objectMapper.readValue(birdJob, new TypeReference<>() {
+            });
             assertThat(birdJobMap.get("animal_type")).isEqualTo("bird");
 
             String mammalJob = redisTemplate.opsForList().rightPop(SPECIESNET_QUEUE);
-            Map<String, Object> mammalJobMap = objectMapper.readValue(mammalJob, new TypeReference<>() {});
+            Map<String, Object> mammalJobMap = objectMapper.readValue(mammalJob, new TypeReference<>() {
+            });
             assertThat(mammalJobMap.get("animal_type")).isEqualTo("mammal");
 
             String reptileJob = redisTemplate.opsForList().rightPop(SPECIESNET_QUEUE);
-            Map<String, Object> reptileJobMap = objectMapper.readValue(reptileJob, new TypeReference<>() {});
+            Map<String, Object> reptileJobMap = objectMapper.readValue(reptileJob, new TypeReference<>() {
+            });
             assertThat(reptileJobMap.get("animal_type")).isEqualTo("reptile");
         }
     }

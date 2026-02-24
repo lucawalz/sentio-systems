@@ -315,4 +315,64 @@ class WeatherAlertControllerTest {
                 verifyNoMoreInteractions(brightSkyService);
                 verifyNoInteractions(weatherAlertMapper);
         }
+
+        @Test
+        void fetchRadarMetadata_returns200_whenNotNull() throws Exception {
+                org.example.backend.dto.RadarMetadataDTO metadata = org.example.backend.dto.RadarMetadataDTO.builder()
+                                .coveragePercent(50.5f)
+                                .build();
+                when(brightSkyService.fetchAndStoreRadarMetadataForCurrentLocation(null)).thenReturn(metadata);
+
+                mockMvc.perform(post("/api/alerts/radar/fetch"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.coveragePercent").value(50.5));
+        }
+
+        @Test
+        void fetchRadarMetadata_withDistance_returns200_whenNotNull() throws Exception {
+                org.example.backend.dto.RadarMetadataDTO metadata = org.example.backend.dto.RadarMetadataDTO.builder()
+                                .coveragePercent(50.5f)
+                                .build();
+                when(brightSkyService.fetchAndStoreRadarMetadataForCurrentLocation(100)).thenReturn(metadata);
+
+                mockMvc.perform(post("/api/alerts/radar/fetch").param("distance", "100"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.coveragePercent").value(50.5));
+        }
+
+        @Test
+        void fetchRadarMetadata_returns404_whenNull() throws Exception {
+                when(brightSkyService.fetchAndStoreRadarMetadataForCurrentLocation(null)).thenReturn(null);
+
+                mockMvc.perform(post("/api/alerts/radar/fetch"))
+                                .andExpect(status().isNotFound())
+                                .andExpect(jsonPath("$.error").value("NO_DEVICES_REGISTERED"));
+        }
+
+        @Test
+        void getLatestRadarMetadata_returns200_whenPresent() throws Exception {
+                org.example.backend.model.WeatherRadarMetadata metadata = new org.example.backend.model.WeatherRadarMetadata();
+                metadata.setCoveragePercent(80.0f);
+                metadata.setLatitude(52.52f);
+                metadata.setLongitude(13.40f);
+                metadata.setDistance(100000);
+
+                when(brightSkyService.getLatestRadarMetadata()).thenReturn(java.util.Optional.of(metadata));
+                when(brightSkyService.getRadarEndpointUrl(52.52f, 13.40f, 100000, "compressed"))
+                                .thenReturn("http://radarurl");
+
+                mockMvc.perform(get("/api/alerts/radar/latest"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.coveragePercent").value(80.0))
+                                .andExpect(jsonPath("$.hasActivePrecipitation").value(true))
+                                .andExpect(jsonPath("$.directApiUrl").value("http://radarurl"));
+        }
+
+        @Test
+        void getLatestRadarMetadata_returns404_whenEmpty() throws Exception {
+                when(brightSkyService.getLatestRadarMetadata()).thenReturn(java.util.Optional.empty());
+
+                mockMvc.perform(get("/api/alerts/radar/latest"))
+                                .andExpect(status().isNotFound());
+        }
 }

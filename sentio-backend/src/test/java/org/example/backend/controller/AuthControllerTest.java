@@ -280,4 +280,153 @@ class AuthControllerTest {
                 verifyNoMoreInteractions(authService);
                 verifyNoInteractions(cookieAuthService);
         }
+
+        @Test
+        void forgotPassword_callsService_andReturns200() throws Exception {
+                when(authService.userExistsByEmail(eq("test@test.com"))).thenReturn(true);
+                mockMvc.perform(post("/api/auth/forgot-password")
+                                .contentType("application/json")
+                                .content("{\"email\":\"test@test.com\"}"))
+                                .andExpect(status().isOk());
+                verify(authService).userExistsByEmail("test@test.com");
+                verify(passwordResetService).createResetToken("test@test.com");
+        }
+
+        @Test
+        void forgotPassword_whenUserDoesNotExist_returns200() throws Exception {
+                when(authService.userExistsByEmail(eq("test@test.com"))).thenReturn(false);
+                mockMvc.perform(post("/api/auth/forgot-password")
+                                .contentType("application/json")
+                                .content("{\"email\":\"test@test.com\"}"))
+                                .andExpect(status().isOk());
+                verify(authService).userExistsByEmail("test@test.com");
+                verifyNoInteractions(passwordResetService);
+        }
+
+        @Test
+        void validateResetToken_validToken_returns200() throws Exception {
+                when(passwordResetService.validateToken(eq("valid-token"))).thenReturn("user@example.com");
+                mockMvc.perform(get("/api/auth/validate-reset-token").param("token", "valid-token"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.valid").value(true))
+                                .andExpect(jsonPath("$.email").value("us***@example.com"));
+        }
+
+        @Test
+        void validateResetToken_validTokenShortEmail_returns200() throws Exception {
+                when(passwordResetService.validateToken(eq("valid-token"))).thenReturn("a@b.com");
+                mockMvc.perform(get("/api/auth/validate-reset-token").param("token", "valid-token"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.valid").value(true))
+                                .andExpect(jsonPath("$.email").value("***@b.com"));
+        }
+
+        @Test
+        void validateResetToken_invalidToken_returns400() throws Exception {
+                when(passwordResetService.validateToken(eq("invalid-token"))).thenReturn(null);
+                mockMvc.perform(get("/api/auth/validate-reset-token").param("token", "invalid-token"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.valid").value(false));
+        }
+
+        @Test
+        void resetPassword_invalidToken_returns400() throws Exception {
+                when(passwordResetService.validateToken(eq("invalid-token"))).thenReturn(null);
+                mockMvc.perform(post("/api/auth/reset-password")
+                                .contentType("application/json")
+                                .content("{\"token\":\"invalid-token\",\"password\":\"newPass123\",\"confirmPassword\":\"newPass123\"}"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.success").value(false));
+        }
+
+        @Test
+        void resetPassword_shortPassword_returns400() throws Exception {
+                when(passwordResetService.validateToken(eq("valid-token"))).thenReturn("user@example.com");
+                mockMvc.perform(post("/api/auth/reset-password")
+                                .contentType("application/json")
+                                .content("{\"token\":\"valid-token\",\"password\":\"short\",\"confirmPassword\":\"short\"}"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.success").value(false));
+        }
+
+        @Test
+        void resetPassword_mismatchedPasswords_returns400() throws Exception {
+                when(passwordResetService.validateToken(eq("valid-token"))).thenReturn("user@example.com");
+                mockMvc.perform(post("/api/auth/reset-password")
+                                .contentType("application/json")
+                                .content("{\"token\":\"valid-token\",\"password\":\"newPass123\",\"confirmPassword\":\"newPass456\"}"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.success").value(false));
+        }
+
+        @Test
+        void resetPassword_validRequest_returns200() throws Exception {
+                when(passwordResetService.validateToken(eq("valid-token"))).thenReturn("user@example.com");
+                mockMvc.perform(post("/api/auth/reset-password")
+                                .contentType("application/json")
+                                .content("{\"token\":\"valid-token\",\"password\":\"newPass123\",\"confirmPassword\":\"newPass123\"}"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.success").value(true));
+                verify(authService).updatePassword("user@example.com", "newPass123");
+                verify(passwordResetService).invalidateToken("valid-token");
+        }
+
+        @Test
+        void resetPassword_serviceThrows_returns500() throws Exception {
+                when(passwordResetService.validateToken(eq("valid-token"))).thenReturn("user@example.com");
+                doThrow(new RuntimeException("DB error")).when(authService).updatePassword(eq("user@example.com"),
+                                eq("newPass123"));
+                mockMvc.perform(post("/api/auth/reset-password")
+                                .contentType("application/json")
+                                .content("{\"token\":\"valid-token\",\"password\":\"newPass123\",\"confirmPassword\":\"newPass123\"}"))
+                                .andExpect(status().isInternalServerError())
+                                .andExpect(jsonPath("$.success").value(false));
+        }
+
+        @Test
+        void verifyEmail_invalidToken_returns400() throws Exception {
+                when(emailVerificationService.validateToken(eq("invalid"))).thenReturn(null);
+                mockMvc.perform(get("/api/auth/verify-email").param("token", "invalid"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.success").value(false));
+        }
+
+        @Test
+        void verifyEmail_validToken_returns200() throws Exception {
+                when(emailVerificationService.validateToken(eq("valid"))).thenReturn("user@example.com");
+                mockMvc.perform(get("/api/auth/verify-email").param("token", "valid"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.success").value(true));
+                verify(authService).markEmailVerified("user@example.com");
+                verify(emailVerificationService).invalidateToken("valid");
+        }
+
+        @Test
+        void verifyEmail_serviceThrows_returns500() throws Exception {
+                when(emailVerificationService.validateToken(eq("valid"))).thenReturn("user@example.com");
+                doThrow(new RuntimeException("DB error")).when(authService).markEmailVerified(eq("user@example.com"));
+                mockMvc.perform(get("/api/auth/verify-email").param("token", "valid"))
+                                .andExpect(status().isInternalServerError())
+                                .andExpect(jsonPath("$.success").value(false));
+        }
+
+        @Test
+        void resendVerification_userExists_returns200() throws Exception {
+                when(authService.userExistsByEmail(eq("user@example.com"))).thenReturn(true);
+                mockMvc.perform(post("/api/auth/resend-verification")
+                                .contentType("application/json")
+                                .content("{\"email\":\"user@example.com\"}"))
+                                .andExpect(status().isOk());
+                verify(emailVerificationService).createVerificationToken("user@example.com");
+        }
+
+        @Test
+        void resendVerification_userDoesNotExist_returns200() throws Exception {
+                when(authService.userExistsByEmail(eq("user@example.com"))).thenReturn(false);
+                mockMvc.perform(post("/api/auth/resend-verification")
+                                .contentType("application/json")
+                                .content("{\"email\":\"user@example.com\"}"))
+                                .andExpect(status().isOk());
+                verifyNoInteractions(emailVerificationService);
+        }
 }

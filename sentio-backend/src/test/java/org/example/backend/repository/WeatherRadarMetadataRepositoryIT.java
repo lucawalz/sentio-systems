@@ -292,11 +292,12 @@ class WeatherRadarMetadataRepositoryIT extends BaseIntegrationTest {
             repository.save(old);
 
             // When
-            Object[] stats = repository.getAverageStats(since);
+            Object[] rows = repository.getAverageStats(since);
 
             // Then
-            assertThat(stats).isNotNull();
-            assertThat(stats).hasSize(2);
+            assertThat(rows).isNotNull();
+            assertThat(rows).hasSize(1);
+            Object[] stats = (Object[]) rows[0];
 
             Double avgPrecipitation = (Double) stats[0];
             Double avgCoverage = (Double) stats[1];
@@ -312,11 +313,13 @@ class WeatherRadarMetadataRepositoryIT extends BaseIntegrationTest {
             LocalDateTime since = LocalDateTime.now().minusHours(6);
 
             // When
-            Object[] stats = repository.getAverageStats(since);
+            Object[] rows = repository.getAverageStats(since);
 
             // Then
-            assertThat(stats).isNotNull();
-            assertThat(stats).hasSize(2);
+            assertThat(rows).isNotNull();
+            assertThat(rows).hasSize(1);
+            Object[] stats = (Object[]) rows[0];
+
             assertThat(stats[0]).isNull();
             assertThat(stats[1]).isNull();
         }
@@ -333,11 +336,11 @@ class WeatherRadarMetadataRepositoryIT extends BaseIntegrationTest {
             LocalDateTime before = LocalDateTime.now().minusDays(30);
 
             WeatherRadarMetadata old = createMetadata(LocalDateTime.now(), 52.52f, 13.405f, 5.0f, 2.0f);
-            old.setCreatedAt(before.minusDays(10));
+            old.setTimestamp(before.minusDays(10));
             repository.save(old);
 
             WeatherRadarMetadata recent = createMetadata(LocalDateTime.now(), 48.137f, 11.576f, 3.0f, 1.5f);
-            recent.setCreatedAt(before.plusDays(1));
+            recent.setTimestamp(before.plusDays(1));
             repository.save(recent);
 
             // When
@@ -357,11 +360,11 @@ class WeatherRadarMetadataRepositoryIT extends BaseIntegrationTest {
             LocalDateTime before = LocalDateTime.now().minusDays(30);
 
             WeatherRadarMetadata recent1 = createMetadata(LocalDateTime.now(), 52.52f, 13.405f, 5.0f, 2.0f);
-            recent1.setCreatedAt(before.plusDays(1));
+            recent1.setTimestamp(before.plusDays(1));
             repository.save(recent1);
 
             WeatherRadarMetadata recent2 = createMetadata(LocalDateTime.now(), 48.137f, 11.576f, 3.0f, 1.5f);
-            recent2.setCreatedAt(before.plusDays(5));
+            recent2.setTimestamp(before.plusDays(5));
             repository.save(recent2);
 
             // When
