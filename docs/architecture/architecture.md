@@ -250,6 +250,47 @@ public class ContactService {
 }
 ```
 
+### 5) DIP (and testability) — Dependency injection enables isolated unit tests
+
+**Definition:** Depending on abstractions and injecting dependencies makes components replaceable and therefore easy to test in isolation.
+
+**Code example (ContactServiceTest):**
+```java
+@ExtendWith(MockitoExtension.class)
+class ContactServiceTest {
+
+    @Mock
+    private ResendEmailService emailService;
+
+    @InjectMocks
+    private ContactService contactService;
+
+    @BeforeEach
+    void setUp() {
+        ReflectionTestUtils.setField(contactService, "contactTo", "team@syslabs.dev");
+    }
+
+    @Test
+    void shouldSendEmailWithAllFields() {
+        ContactRequest request = new ContactRequest();
+        request.setReference("Product Inquiry");
+        request.setName("John");
+        request.setSurname("Doe");
+        request.setMail("john.doe@example.com");
+        request.setMessage("I am interested in your product.");
+
+        contactService.sendContactMail(request);
+
+        verify(emailService).sendEmail(
+                eq("team@syslabs.dev"),
+                eq("New contact message: Product Inquiry"),
+                anyString(),
+                eq("john.doe@example.com")
+        );
+    }
+}
+```
+
 ---
 
 This architecture ensures clear separation between frontend, backend, AI processing, infrastructure services, and external integrations.
