@@ -42,26 +42,31 @@ public class WeatherAlertController {
         private final WeatherAlertMapper weatherAlertMapper;
 
         /**
-         * Retrieves weather alerts for the current user's location based on IP
-         * geolocation.
+         * Retrieves weather alerts for the current user's device location.
+         * Returns 404 with helpful message if user has no registered devices.
          * 
          * @param lang Language preference (de for German, en for English, default: en)
-         * @return List of weather alerts for current location
+         * @return List of weather alerts for device location
          */
-        @Operation(summary = "Get alerts for current location", description = "Retrieves weather alerts for the current user's location based on IP geolocation")
+        @Operation(summary = "Get alerts for current location", description = "Retrieves weather alerts for the current user's device location. Requires at least one registered device.")
         @ApiResponses(value = {
-                        @ApiResponse(responseCode = "200", description = "Successfully retrieved alerts for current location", content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = WeatherAlertDTO.class))))
+                        @ApiResponse(responseCode = "200", description = "Successfully retrieved alerts for device location", content = @Content(mediaType = "application/json", array = @ArraySchema(schema = @Schema(implementation = WeatherAlertDTO.class)))),
+                        @ApiResponse(responseCode = "404", description = "No devices registered - register a device first", content = @Content(mediaType = "application/json"))
         })
         @GetMapping("/current-location")
-        public ResponseEntity<List<WeatherAlertDTO>> getCurrentLocationAlerts(
+        public ResponseEntity<?> getCurrentLocationAlerts(
                         @Parameter(description = "Language preference (de for German, en for English)") @RequestParam(defaultValue = "en") String lang) {
-                logger.info("Retrieving alerts for current location with language: {}", lang);
+                logger.info("Retrieving alerts for current user's device location with language: {}", lang);
 
                 boolean preferGerman = "de".equalsIgnoreCase(lang);
                 List<WeatherAlert> alerts = brightSkyService.getAlertsForCurrentLocation();
-                List<WeatherAlertDTO> dtos = weatherAlertMapper.toDTOList(alerts, preferGerman);
 
-                logger.debug("Retrieved {} alerts for current location", dtos.size());
+                if (alerts.isEmpty()) {
+                        logger.debug("No alerts or no device locations available");
+                }
+
+                List<WeatherAlertDTO> dtos = weatherAlertMapper.toDTOList(alerts, preferGerman);
+                logger.debug("Retrieved {} alerts for device location", dtos.size());
                 return ResponseEntity.ok(dtos);
         }
 
@@ -329,13 +334,13 @@ public class WeatherAlertController {
          * @param distance Distance in meters (default: 100000)
          * @return Radar metadata including precipitation statistics
          */
-        @Operation(summary = "Fetch and store radar metadata", description = "Fetches fresh radar data from BrightSky and stores metadata for AI analysis")
+        @Operation(summary = "Fetch and store radar metadata", description = "Fetches fresh radar data from BrightSky and stores metadata for AI analysis. Requires at least one registered device.")
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "200", description = "Successfully fetched and stored radar metadata", content = @Content(mediaType = "application/json", schema = @Schema(implementation = RadarMetadataDTO.class))),
-                        @ApiResponse(responseCode = "503", description = "Unable to fetch radar data", content = @Content)
+                        @ApiResponse(responseCode = "404", description = "No devices registered - register a device first", content = @Content(mediaType = "application/json"))
         })
         @PostMapping("/radar/fetch")
-        public ResponseEntity<RadarMetadataDTO> fetchRadarMetadata(
+        public ResponseEntity<?> fetchRadarMetadata(
                         @Parameter(description = "Distance in meters (default: 100000)") @RequestParam(required = false) Integer distance) {
                 logger.info("Fetching and storing radar metadata with distance: {}", distance);
 
@@ -345,8 +350,13 @@ public class WeatherAlertController {
                                         String.format("%.1f", metadata.getCoveragePercent()));
                         return ResponseEntity.ok(metadata);
                 }
-                logger.warn("Failed to fetch radar metadata");
-                return ResponseEntity.status(503).build();
+                logger.debug("No device locations available for radar metadata fetch");
+                return ResponseEntity.status(404).body(java.util.Map.of(
+                                "error", "NO_DEVICES_REGISTERED",
+                                "message",
+                                "You don't have any registered devices. Register a device to fetch radar data for your location.",
+                                "action",
+                                "Call GET /api/devices/has-any to check device registration, then POST /api/devices/register to register a device."));
         }
 
         /**

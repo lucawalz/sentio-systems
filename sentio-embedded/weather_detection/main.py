@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Weather Station System - Main Application
-Collects data from BME280, VEML6030, and LTR390 sensors
+Collects data from BME688, VEML6030, and LTR390 sensors
 Publishes to MQTT broker for backend consumption
 """
 
@@ -17,6 +17,10 @@ from pathlib import Path
 import socket
 from weather_sensors import WeatherSensorManager
 from mqtt_publisher import WeatherMQTTPublisher
+
+# Import from shared module
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from shared import get_local_ip, GPSSensor
 
 # Configuration file path
 CONFIG_FILE = "config.yaml"
@@ -38,14 +42,14 @@ DEFAULT_CONFIG = {
         'broker_host': 'localhost',
         'broker_port': 1883,
         'topic': 'weather/data',
-        'status_topic': 'weather/status',
+        # status_topic removed - handled by shared DeviceClient
         'username': None,
         'password': None,
         'qos': 1,
         'keepalive': 60
     },
     'sensors': {
-        'bme280': {'enabled': True, 'max_errors': 5},
+        'bme688': {'enabled': True, 'max_errors': 5},
         'veml6030': {'enabled': True, 'gain': 0.125, 'max_errors': 5},
         'ltr390': {'enabled': True, 'gain': 1, 'resolution': 3, 'max_errors': 5}
     }
@@ -98,6 +102,7 @@ class WeatherStation:
         self.config = self.load_config(config_path)
         self.sensor_manager = None
         self.mqtt_publisher = None
+        self.gps_sensor = None
 
         # Add threads list for tracking
         self.threads = []
@@ -105,7 +110,8 @@ class WeatherStation:
         # Component status tracking
         self._component_status = {
             'sensors': False,
-            'mqtt': False
+            'mqtt': False,
+            'gps': False
         }
 
         if self.quiet_mode:
@@ -117,17 +123,8 @@ class WeatherStation:
 
     @staticmethod
     def get_local_ip():
-        """Get local IP address"""
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.settimeout(0.1)
-            # Doesn't need to be reachable
-            s.connect(('10.255.255.255', 1))
-            ip = s.getsockname()[0]
-            s.close()
-            return ip
-        except Exception:
-            return '127.0.0.1'
+        """Get local IP address - uses shared module"""
+        return get_local_ip()
 
     def load_config(self, config_path: str) -> dict:
         """Load configuration from YAML file with fallback"""
@@ -186,10 +183,38 @@ class WeatherStation:
                 self._component_status['mqtt'] = False
                 self.mqtt_publisher = None
 
-            # Check if critical components are available
             if not self._component_status['sensors']:
                 self.logger.error("No sensors available - cannot continue")
                 return False
+
+            # Initialize GPS sensor (required)
+            try:
+                self.logger.info("Initializing GPS sensor...")
+                gps_config = self.config.get('gps', {})
+                self.gps_sensor = GPSSensor(gps_config)
+                if self.gps_sensor.connected:
+                    self.gps_sensor.start()
+                    self._component_status['gps'] = True
+                    self.logger.info("GPS sensor initialized and started")
+                    
+                    # Wait a few seconds for GPS to get first fix (warm start is fast)
+                    self.logger.info("Waiting for GPS fix...")
+                    for _ in range(5):  # Wait up to 5 seconds
+                        time.sleep(1)
+                        if self.gps_sensor.is_available():
+                            gps_data = self.gps_sensor.get_location()
+                            self.logger.info(f"GPS fix acquired: lat={gps_data.get('latitude')}, lon={gps_data.get('longitude')}")
+                            break
+                    else:
+                        self.logger.warning("GPS connected but no fix yet - will retry in background")
+                else:
+                    self._component_status['gps'] = False
+                    self.logger.warning("GPS sensor not connected - continuing without GPS")
+            except Exception as e:
+                self.logger.error(f"Failed to initialize GPS sensor: {e}")
+                self._component_status['gps'] = False
+                self.gps_sensor = None
+
 
             self.logger.info("All components initialized successfully")
             return True
@@ -319,6 +344,44 @@ class WeatherStation:
 
         self.logger.info("Statistics monitoring thread stopped")
 
+    def health_ping_thread(self):
+        """Thread for periodic health status pings with GPS data"""
+        ping_interval = 60  # Publish status every 60 seconds
+
+        self.logger.info("Health ping thread started")
+
+        while self.running and not self._shutdown_event.is_set():
+            try:
+                if self.mqtt_publisher and self.mqtt_publisher.is_connected():
+                    local_ip = self.get_local_ip()
+                    
+                    # Get GPS data if available
+                    gps_data = None
+                    if self.gps_sensor:
+                        if self.gps_sensor.is_available():
+                            gps_data = self.gps_sensor.get_location()
+                            self.logger.info(f"GPS fix available: lat={gps_data.get('latitude')}, lon={gps_data.get('longitude')}")
+                        else:
+                            self.logger.info(f"GPS connected but no fix yet (waiting for satellites)")
+                    else:
+                        self.logger.debug("GPS sensor not initialized")
+                    
+                    self.mqtt_publisher.publish_status(local_ip, "online", gps_data=gps_data)
+                    self.logger.debug(f"Health ping sent (IP: {local_ip}, GPS: {gps_data is not None})")
+                else:
+                    self.logger.debug("MQTT not connected, skipping health ping")
+
+                # Wait for next ping interval
+                if self._shutdown_event.wait(ping_interval):
+                    break
+
+            except Exception as e:
+                self.logger.error(f"Error in health ping: {e}")
+                if self._shutdown_event.wait(10):
+                    break
+
+        self.logger.info("Health ping thread stopped")
+
     def run_monitoring_loop(self):
         """Main monitoring loop with comprehensive logging"""
         collection_config = self.config.get('collection', {})
@@ -355,6 +418,15 @@ class WeatherStation:
         health_thread.start()
         self.threads.append(health_thread)
 
+        # Start health ping thread (publishes status every 30s like animal_detector)
+        ping_thread = threading.Thread(
+            target=self.health_ping_thread,
+            name="HealthPing"
+        )
+        ping_thread.daemon = True
+        ping_thread.start()
+        self.threads.append(ping_thread)
+
         try:
             while self.running and not self._shutdown_event.is_set():
                 loop_start = time.time()
@@ -367,10 +439,12 @@ class WeatherStation:
 
                 status_frequency = 60 if self.quiet_mode else 12
                 if loop_count % status_frequency == 0 or loop_count == 1:
-                    # Publish status with IP
                     if self.mqtt_publisher:
                         local_ip = self.get_local_ip()
-                        self.mqtt_publisher.publish_status(local_ip, "online")
+                        gps_data = None
+                        if self.gps_sensor and self.gps_sensor.is_available():
+                            gps_data = self.gps_sensor.get_location()
+                        self.mqtt_publisher.publish_status(local_ip, "online", gps_data=gps_data)
 
                     success_rate = (self.publish_count / self.reading_count * 100) if self.reading_count > 0 else 0
                     self.logger.info(

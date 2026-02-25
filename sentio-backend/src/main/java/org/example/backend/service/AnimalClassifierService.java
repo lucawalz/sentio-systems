@@ -2,7 +2,7 @@ package org.example.backend.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.extern.slf4j.Slf4j;
 import org.example.backend.dto.AnimalDetectionDTO;
 import org.example.backend.model.AnimalDetection;
@@ -32,12 +32,15 @@ import java.util.Optional;
  * Routes images through preprocessing service before classification.
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class AnimalClassifierService {
 
     @Value("${preprocessing.service.url}")
     private String preprocessingServiceUrl;
+
+    @Value("${queue.enabled:true}")
+    private boolean queueEnabled;
+
     private static final int MAX_ALTERNATE_SPECIES = 4;
     private static final String DETECTION_KEY = "detection";
     private static final String CLASSIFICATION_KEY = "classification";
@@ -53,6 +56,23 @@ public class AnimalClassifierService {
     private final RestTemplate restTemplate;
     private final ImageStorageService imageStorageService;
     private final ObjectMapper objectMapper;
+    private final RedisQueueService redisQueueService;
+    private final ClassificationResultProcessor resultProcessor;
+
+    public AnimalClassifierService(
+            AnimalDetectionRepository animalDetectionRepository,
+            RestTemplate restTemplate,
+            ImageStorageService imageStorageService,
+            ObjectMapper objectMapper,
+            RedisQueueService redisQueueService,
+            ClassificationResultProcessor resultProcessor) {
+        this.animalDetectionRepository = animalDetectionRepository;
+        this.restTemplate = restTemplate;
+        this.imageStorageService = imageStorageService;
+        this.objectMapper = objectMapper;
+        this.redisQueueService = redisQueueService;
+        this.resultProcessor = resultProcessor;
+    }
 
     /**
      * Asynchronously classifies animal species and updates the detection record.
@@ -79,7 +99,16 @@ public class AnimalClassifierService {
                 return;
             }
 
-            // Call preprocessing service which will forward to appropriate classifier
+            // Use EDA: submit to queue and return immediately
+            // Result will be processed by ClassificationResultListener
+            if (queueEnabled && redisQueueService.isAvailable()) {
+                log.debug("Using event-driven queue for classification");
+                submitToQueueAsync(detection, imageFile.get());
+                return; // Result will be processed asynchronously via Pub/Sub
+            }
+
+            // Fallback to synchronous HTTP if queue is disabled or unavailable
+            log.debug("Using HTTP preprocessing service for classification");
             Map<String, Object> responseBody = callPreprocessingService(imageFile.get(), detection.getAnimalType());
             if (responseBody != null) {
                 processClassificationResponse(detection, responseBody);
@@ -87,6 +116,35 @@ public class AnimalClassifierService {
         } catch (Exception e) {
             log.error("Error during AI classification for detection ID {}: {}",
                     detection.getId(), e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Submit classification job to queue (EDA - fire and forget).
+     * Result will be received via Redis Pub/Sub.
+     */
+    private void submitToQueueAsync(AnimalDetection detection, File imageFile) {
+        try {
+            byte[] imageBytes = java.nio.file.Files.readAllBytes(imageFile.toPath());
+
+            redisQueueService.submitClassificationJobAsync(
+                    imageBytes,
+                    imageFile.getName(),
+                    detection.getAnimalType(),
+                    detection.getId(),
+                    resultProcessor);
+
+            log.info("Submitted detection {} to queue for async classification", detection.getId());
+
+        } catch (Exception e) {
+            log.warn("Queue submission failed for detection {}: {}, falling back to HTTP",
+                    detection.getId(), e.getMessage());
+
+            // Fallback to sync HTTP
+            Map<String, Object> responseBody = callPreprocessingService(imageFile, detection.getAnimalType());
+            if (responseBody != null) {
+                processClassificationResponse(detection, responseBody);
+            }
         }
     }
 
@@ -123,6 +181,7 @@ public class AnimalClassifierService {
      * Calls the preprocessing service which handles image enhancement and
      * forwarding to classifier
      */
+    @CircuitBreaker(name = "aiClassifier", fallbackMethod = "callPreprocessingServiceFallback")
     private Map<String, Object> callPreprocessingService(File imageFile, String animalType) {
         try {
             // Prepare request with image and animal type
@@ -270,8 +329,9 @@ public class AnimalClassifierService {
 
         String displaySpecies = extractCommonName(topSpecies);
 
-        if ("blank".equalsIgnoreCase(displaySpecies)) {
-            log.debug("Top species is 'blank', searching for better candidate in predictions...");
+        // Check if the AI returned an invalid species
+        if (!isValidAnimalSpecies(displaySpecies)) {
+            log.debug("AI returned invalid species '{}', searching for better candidate...", displaySpecies);
 
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> predictionsList = (List<Map<String, Object>>) classificationMap
@@ -280,26 +340,27 @@ public class AnimalClassifierService {
             boolean foundBetterCandidate = false;
 
             if (predictionsList != null) {
-                // Iterate through predictions to find first non-blank
+                // Iterate through predictions to find first valid species
                 for (Map<String, Object> pred : predictionsList) {
                     String predSpecies = (String) pred.get(SPECIES_KEY);
                     String predCommon = extractCommonName(predSpecies);
 
-                    if (!"blank".equalsIgnoreCase(predCommon)) {
+                    if (isValidAnimalSpecies(predCommon)) {
                         // Found a better candidate
                         displaySpecies = predCommon;
                         Double conf = ((Number) pred.get(CONFIDENCE_KEY)).doubleValue();
                         topConfidence = conf;
-                        topSpecies = predSpecies; // Update for alternate processing check
+                        topSpecies = predSpecies;
                         foundBetterCandidate = true;
-                        log.info("Promoted candidate '{}' ({:.2f}) over 'blank'", displaySpecies, topConfidence);
+                        log.info("Promoted candidate '{}' ({:.2f}) over invalid species", displaySpecies,
+                                topConfidence);
                         break;
                     }
                 }
             }
 
             if (!foundBetterCandidate) {
-                log.warn("All predictions are 'blank'. Falling back to original species: {}",
+                log.warn("No valid species found in AI predictions. Falling back to original: {}",
                         detection.getOriginalSpecies());
                 displaySpecies = detection.getOriginalSpecies() != null ? detection.getOriginalSpecies()
                         : displaySpecies;
@@ -317,6 +378,24 @@ public class AnimalClassifierService {
 
         log.info("Successfully updated detection ID {} - Type: {}, Primary: {} ({:.2f})",
                 detection.getId(), detection.getAnimalType(), displaySpecies, topConfidence);
+    }
+
+    /**
+     * Checks if a species name is a valid animal/person classification.
+     * Filters out non-animal results like 'blank', 'vehicle', etc.
+     */
+    private boolean isValidAnimalSpecies(String species) {
+        if (species == null || species.isEmpty()) {
+            return false;
+        }
+
+        String lower = species.toLowerCase().trim();
+
+        // Invalid species that should be filtered out
+        return switch (lower) {
+            case "blank", "vehicle", "unknown", "error", "none", "n/a" -> false;
+            default -> true;
+        };
     }
 
     /**
@@ -462,5 +541,13 @@ public class AnimalClassifierService {
             // Default to the original classification or unknown
             default -> "unknown";
         };
+    }
+
+
+    @SuppressWarnings("unused")
+    private Map<String, Object> callPreprocessingServiceFallback(File imageFile, String animalType, Exception ex) {
+        log.warn("AI preprocessing service unavailable for {}: {}. Skipping AI classification.",
+                animalType, ex.getMessage());
+        return null;
     }
 }

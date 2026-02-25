@@ -28,6 +28,13 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/api/internal/mqtt/**").permitAll() // Called by Mosquitto auth plugin
+                        .requestMatchers("/api/stream/auth").permitAll() // Called by MediaMTX auth webhook
+                        .requestMatchers("/api/stream/ready").permitAll() // Stream ready notification
+                        .requestMatchers("/api/stream/not-ready").permitAll() // Stream ended notification
+                        .requestMatchers("/api/devices/pair").permitAll() // Device pairing (no auth required)
+                        .requestMatchers("/api/contact/**").permitAll() // Contact form (public)
+                        .requestMatchers("/ws/**").permitAll() // WebSocket handshake
                         .requestMatchers("/api/**").authenticated() // Require auth for other API endpoints
                         .requestMatchers("/swagger-ui.html",
                                 "/swagger-ui/**",

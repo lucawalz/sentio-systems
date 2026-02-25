@@ -8,3 +8,13 @@ ultralytics
 birder
 python-dotenv
 python-multipart
+
+# Redis queue support
+arq>=0.25
+redis>=4.0
+msgpack
+
+# Testing
+pytest
+httpx
+pytest-asyncio

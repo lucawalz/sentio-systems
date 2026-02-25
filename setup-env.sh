@@ -3,7 +3,7 @@
 # Sentio Systems - Environment Setup Script
 # This script helps set up your local development environment
 
-set -e  # Exit on error
+set -euo pipefail
 
 echo "Sentio Systems - Environment Setup"
 echo "======================================"
@@ -24,7 +24,6 @@ fi
 echo "Copying .env.example to .env..."
 cp .env.example .env
 
-echo ""
 echo "Generating secure passwords..."
 echo ""
 
@@ -32,6 +31,8 @@ echo ""
 DB_PASSWORD=$(openssl rand -base64 32 | tr -d '=')
 KC_ADMIN_PASSWORD=$(openssl rand -base64 32 | tr -d '=')
 KC_CLIENT_SECRET=$(openssl rand -hex 32)
+N8N_CLIENT_SECRET=$(openssl rand -hex 32)
+MQTT_PASSWORD=$(openssl rand -hex 16)
 
 # Update .env file with generated passwords (macOS compatible)
 if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -39,11 +40,15 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
     sed -i '' "s|POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=${DB_PASSWORD}|" .env
     sed -i '' "s|KEYCLOAK_ADMIN_PASSWORD=.*|KEYCLOAK_ADMIN_PASSWORD=${KC_ADMIN_PASSWORD}|" .env
     sed -i '' "s|KEYCLOAK_ADMIN_CLIENT_SECRET=.*|KEYCLOAK_ADMIN_CLIENT_SECRET=${KC_CLIENT_SECRET}|" .env
+    sed -i '' "s|N8N_CLIENT_SECRET=.*|N8N_CLIENT_SECRET=${N8N_CLIENT_SECRET}|" .env
+    sed -i '' "s|MQTT_PASSWORD=.*|MQTT_PASSWORD=${MQTT_PASSWORD}|" .env
 else
     # Linux
     sed -i "s|POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=${DB_PASSWORD}|" .env
     sed -i "s|KEYCLOAK_ADMIN_PASSWORD=.*|KEYCLOAK_ADMIN_PASSWORD=${KC_ADMIN_PASSWORD}|" .env
     sed -i "s|KEYCLOAK_ADMIN_CLIENT_SECRET=.*|KEYCLOAK_ADMIN_CLIENT_SECRET=${KC_CLIENT_SECRET}|" .env
+    sed -i "s|N8N_CLIENT_SECRET=.*|N8N_CLIENT_SECRET=${N8N_CLIENT_SECRET}|" .env
+    sed -i "s|MQTT_PASSWORD=.*|MQTT_PASSWORD=${MQTT_PASSWORD}|" .env
 fi
 
 echo "SUCCESS: Environment file created!"
@@ -53,14 +58,17 @@ echo "========================="
 echo "Database Password:        ${DB_PASSWORD}"
 echo "Keycloak Admin Password:  ${KC_ADMIN_PASSWORD}"
 echo "Keycloak Client Secret:   ${KC_CLIENT_SECRET}"
+echo "n8n Client Secret:        ${N8N_CLIENT_SECRET}"
+echo "MQTT Service Password:    ${MQTT_PASSWORD}"
+echo ""
 echo ""
 echo "IMPORTANT: Save these credentials securely!"
 echo "The .env file has been created with these values."
 echo ""
 echo "Generating Keycloak realm configuration..."
-# Generate the realm JSON from template with the actual client secret
-# Use | as delimiter instead of / to handle base64 characters (which include /)
-sed "s|KEYCLOAK_CLIENT_SECRET_PLACEHOLDER|${KC_CLIENT_SECRET}|g" \
+# Generate the realm JSON from template with the actual client secrets
+sed -e "s|KEYCLOAK_CLIENT_SECRET_PLACEHOLDER|${KC_CLIENT_SECRET}|g" \
+    -e "s|N8N_CLIENT_SECRET_PLACEHOLDER|${N8N_CLIENT_SECRET}|g" \
     init-scripts/sentio-realm.json.template > init-scripts/sentio-realm.json
 echo "Keycloak realm configuration generated."
 echo ""

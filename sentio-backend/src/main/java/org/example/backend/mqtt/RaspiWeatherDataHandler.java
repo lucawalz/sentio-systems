@@ -30,6 +30,12 @@ public class RaspiWeatherDataHandler {
     }
 
     public void processWeatherData(String payload) {
+        // Null check for payload
+        if (payload == null) {
+            log.warn("Received null weather data payload, skipping processing");
+            return;
+        }
+
         log.debug("Processing weather data payload of length: {}", payload.length());
 
         try {
@@ -63,12 +69,31 @@ public class RaspiWeatherDataHandler {
                 return;
             }
 
-            // Extract sensor readings
-            float temperature = (float) rootNode.get("temperature").asDouble();
-            float humidity = (float) rootNode.get("humidity").asDouble();
-            float pressure = (float) rootNode.get("pressure").asDouble();
-            float lux = (float) rootNode.get("lux").asDouble();
-            float uvi = (float) rootNode.get("uvi").asDouble();
+            // Extract sensor readings with validation
+            JsonNode tempNode = rootNode.get("temperature");
+            JsonNode humNode = rootNode.get("humidity");
+            JsonNode pressNode = rootNode.get("pressure");
+            JsonNode luxNode = rootNode.get("lux");
+            JsonNode uviNode = rootNode.get("uvi");
+
+            // Validate that numeric fields are actually numeric
+            if (!tempNode.isNumber() || !humNode.isNumber() || !pressNode.isNumber() ||
+                !luxNode.isNumber() || !uviNode.isNumber()) {
+                log.warn("One or more sensor readings have invalid (non-numeric) values in payload");
+                return;
+            }
+
+            float temperature = (float) tempNode.asDouble();
+            float humidity = (float) humNode.asDouble();
+            float pressure = (float) pressNode.asDouble();
+            float lux = (float) luxNode.asDouble();
+            float uvi = (float) uviNode.asDouble();
+
+            // Gas resistance from BME688 (optional - may not be present in older data)
+            Integer gasResistance = null;
+            if (rootNode.has("gas_resistance") && !rootNode.get("gas_resistance").isNull()) {
+                gasResistance = rootNode.get("gas_resistance").asInt();
+            }
 
             // Create weather data object
             RaspiWeatherData raspiWeatherData = new RaspiWeatherData();
@@ -80,10 +105,12 @@ public class RaspiWeatherDataHandler {
             raspiWeatherData.setPressure(pressure);
             raspiWeatherData.setLux(lux);
             raspiWeatherData.setUvi(uvi);
+            raspiWeatherData.setGasResistance(gasResistance);
 
             // Log parsed weather measurements
-            log.info("Parsed weather data - Temperature: {}°C, Humidity: {}%, Pressure: {} hPa, Lux: {} lux, UVI: {}, Timestamp: {}",
-                    temperature, humidity, pressure, lux, uvi, timestamp);
+            log.info(
+                    "Parsed weather data - Temperature: {}°C, Humidity: {}%, Pressure: {} hPa, Lux: {} lux, UVI: {}, Gas: {} Ω, Timestamp: {}",
+                    temperature, humidity, pressure, lux, uvi, gasResistance, timestamp);
 
             // Persist weather data through service
             RaspiWeatherData saved = raspiWeatherDataService.saveWeatherData(raspiWeatherData);

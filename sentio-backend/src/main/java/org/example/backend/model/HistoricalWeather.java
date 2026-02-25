@@ -10,13 +10,16 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
- * JPA entity representing historical weather data from OpenMeteo Historical API.
- * Stores actual weather conditions that occurred on specific dates for comparison
+ * JPA entity representing historical weather data from OpenMeteo Historical
+ * API.
+ * Stores actual weather conditions that occurred on specific dates for
+ * comparison
  * with forecasts and trend analysis.
  * <p>
  * This entity contains weather conditions (temperature, precipitation, wind),
  * sunrise/sunset times, UV index, and other meteorological data for past dates.
- * It implements automatic timestamping and ensures unique records per date and location.
+ * It implements automatic timestamping and ensures unique records per date and
+ * location.
  * </p>
  *
  * @author Sentio Team
@@ -28,19 +31,20 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Slf4j
-@Table(name = "historical_weather",
-        indexes = {
-                @Index(name = "idx_historical_unique",
-                        columnList = "weatherDate, city, country",
-                        unique = true),
-                @Index(name = "idx_historical_date",
-                        columnList = "weatherDate")
-        })
+@Table(name = "historical_weather", indexes = {
+        @Index(name = "idx_historical_device_date", columnList = "device_id, weatherDate", unique = true),
+        @Index(name = "idx_historical_date", columnList = "weatherDate"),
+        @Index(name = "idx_historical_device", columnList = "device_id")
+})
 public class HistoricalWeather {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    /** Device ID that this historical data belongs to (for user data isolation) */
+    @Column(name = "device_id", length = 100)
+    private String deviceId;
 
     /** Date when the weather conditions occurred */
     @Column(nullable = false)
@@ -127,8 +131,12 @@ public class HistoricalWeather {
     @PrePersist
     protected void onCreate() {
         LocalDateTime now = LocalDateTime.now();
-        this.createdAt = now;
-        this.updatedAt = now;
+        if (this.createdAt == null) {
+            this.createdAt = now;
+        }
+        if (this.updatedAt == null) {
+            this.updatedAt = now;
+        }
         log.debug("HistoricalWeather entity created with timestamps: {}", now);
     }
 
