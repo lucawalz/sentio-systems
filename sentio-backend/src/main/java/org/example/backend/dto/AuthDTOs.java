@@ -6,6 +6,10 @@ import lombok.NoArgsConstructor;
 
 public class AuthDTOs {
 
+    private AuthDTOs() {
+        // Utility class
+    }
+
     @Data
     @NoArgsConstructor
     @AllArgsConstructor

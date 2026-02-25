@@ -1,78 +1,147 @@
 package org.example.backend.config;
 
+import org.example.backend.model.Device;
 import org.example.backend.repository.AnimalDetectionRepository;
 import org.example.backend.repository.DeviceRepository;
 import org.example.backend.repository.RaspiWeatherDataRepository;
 import org.example.backend.service.ViewerSessionService;
-import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.keycloak.admin.client.Keycloak;
+import org.keycloak.admin.client.resource.RealmResource;
+import org.keycloak.admin.client.resource.UsersResource;
+import org.keycloak.representations.idm.UserRepresentation;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.boot.DefaultApplicationArguments;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.test.util.ReflectionTestUtils;
+import jakarta.ws.rs.core.Response;
+import java.net.URI;
+import java.util.Collections;
+import java.util.List;
 
-import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("DataInitializer Unit Tests")
 class DataInitializerTest {
 
     @Mock
     private DeviceRepository deviceRepository;
-
     @Mock
     private RaspiWeatherDataRepository weatherDataRepository;
-
     @Mock
     private AnimalDetectionRepository animalDetectionRepository;
-
     @Mock
     private ViewerSessionService viewerSessionService;
+    @Mock
+    private Keycloak keycloak;
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
+    @Mock
+    private RealmResource realmResource;
+    @Mock
+    private UsersResource usersResource;
 
     @InjectMocks
     private DataInitializer dataInitializer;
 
-    @Test
-    @DisplayName("Should initialize demo data when device repository is empty")
-    void shouldInitializeData() {
-        when(deviceRepository.count()).thenReturn(0L);
-
-        dataInitializer.run(new DefaultApplicationArguments());
-
-        verify(deviceRepository).saveAll(anyList());
-        verify(weatherDataRepository).saveAll(anyList());
-        verify(animalDetectionRepository).saveAll(anyList());
-        verify(viewerSessionService).joinStream(eq("demo-device-001"), eq("demo-viewer-session-001"));
+    @BeforeEach
+    void setUp() {
+        ReflectionTestUtils.setField(dataInitializer, "realm", "test-realm");
     }
 
     @Test
-    @DisplayName("Should gracefully handle exceptions during viewer session join")
-    void shouldHandleViewerSessionException() {
-        when(deviceRepository.count()).thenReturn(0L);
-        doThrow(new RuntimeException("Redis unavailable")).when(viewerSessionService).joinStream(anyString(),
-                anyString());
-
-        dataInitializer.run(new DefaultApplicationArguments());
-
-        verify(deviceRepository).saveAll(anyList());
-        verify(weatherDataRepository).saveAll(anyList());
-        verify(animalDetectionRepository).saveAll(anyList());
-        verify(viewerSessionService).joinStream(eq("demo-device-001"), eq("demo-viewer-session-001"));
-        // Exception should be caught and logged, not propagated
-    }
-
-    @Test
-    @DisplayName("Should skip initialization when demo data is already present")
-    void shouldSkipInitialization() {
+    void run_shouldSkip_whenDevicesExist() {
         when(deviceRepository.count()).thenReturn(1L);
 
-        dataInitializer.run(new DefaultApplicationArguments());
+        dataInitializer.run(null);
+
+        verify(deviceRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void run_shouldInitializeData_whenDevicesDoNotExistAndUserExists() {
+        when(deviceRepository.count()).thenReturn(0L);
+
+        when(keycloak.realm("test-realm")).thenReturn(realmResource);
+        when(realmResource.users()).thenReturn(usersResource);
+
+        UserRepresentation existingUser = new UserRepresentation();
+        existingUser.setId("user-123");
+        when(usersResource.search("demo", true)).thenReturn(List.of(existingUser));
+
+        dataInitializer.run(null);
+
+        verify(deviceRepository, times(1)).saveAll(anyList());
+        verify(weatherDataRepository, times(1)).saveAll(anyList());
+        verify(animalDetectionRepository, times(1)).saveAll(anyList());
+        verify(viewerSessionService, times(1)).joinStream(eq("demo-device-001"), eq("demo-viewer-session-001"));
+        verify(eventPublisher, times(2)).publishEvent(any());
+    }
+
+    @Test
+    void run_shouldInitializeData_whenDevicesDoNotExistAndUserDoesNotExist() throws Exception {
+        when(deviceRepository.count()).thenReturn(0L);
+
+        when(keycloak.realm("test-realm")).thenReturn(realmResource);
+        when(realmResource.users()).thenReturn(usersResource);
+
+        when(usersResource.search("demo", true)).thenReturn(Collections.emptyList());
+
+        Response response = mock(Response.class);
+        when(response.getStatus()).thenReturn(201);
+        when(response.getLocation())
+                .thenReturn(new URI("http://localhost/auth/admin/realms/test-realm/users/user-456"));
+        when(usersResource.create(any(UserRepresentation.class))).thenReturn(response);
+
+        dataInitializer.run(null);
+
+        verify(usersResource, times(1)).create(any(UserRepresentation.class));
+        verify(deviceRepository, times(1)).saveAll(anyList());
+        verify(weatherDataRepository, times(1)).saveAll(anyList());
+        verify(animalDetectionRepository, times(1)).saveAll(anyList());
+        verify(viewerSessionService, times(1)).joinStream(eq("demo-device-001"), eq("demo-viewer-session-001"));
+        verify(eventPublisher, times(2)).publishEvent(any());
+    }
+
+    @Test
+    void run_shouldThrowException_whenKeycloakUserCreationFails() {
+        when(deviceRepository.count()).thenReturn(0L);
+
+        when(keycloak.realm("test-realm")).thenReturn(realmResource);
+        when(realmResource.users()).thenReturn(usersResource);
+
+        when(usersResource.search("demo", true)).thenReturn(Collections.emptyList());
+
+        Response response = mock(Response.class);
+        when(response.getStatus()).thenReturn(500);
+        when(usersResource.create(any(UserRepresentation.class))).thenReturn(response);
+
+        assertThrows(RuntimeException.class, () -> dataInitializer.run(null));
 
         verify(deviceRepository, never()).saveAll(anyList());
-        verify(weatherDataRepository, never()).saveAll(anyList());
-        verify(animalDetectionRepository, never()).saveAll(anyList());
-        verify(viewerSessionService, never()).joinStream(anyString(), anyString());
+    }
+
+    @Test
+    void run_shouldHandleViewerSessionException() {
+        when(deviceRepository.count()).thenReturn(0L);
+
+        when(keycloak.realm("test-realm")).thenReturn(realmResource);
+        when(realmResource.users()).thenReturn(usersResource);
+
+        UserRepresentation existingUser = new UserRepresentation();
+        existingUser.setId("user-123");
+        when(usersResource.search("demo", true)).thenReturn(List.of(existingUser));
+
+        doThrow(new RuntimeException("Redis error")).when(viewerSessionService).joinStream(anyString(), anyString());
+
+        dataInitializer.run(null); // Should not throw
+
+        verify(viewerSessionService, times(1)).joinStream(eq("demo-device-001"), eq("demo-viewer-session-001"));
     }
 }
