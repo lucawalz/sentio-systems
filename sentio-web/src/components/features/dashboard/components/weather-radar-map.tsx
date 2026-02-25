@@ -14,6 +14,7 @@ import pako from 'pako'
 import { Play, Pause, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { precipitationToRGBA } from '@/lib/turbo-colormap'
+import { weatherService } from '@/services/api/weather'
 import type { Device, BrightSkyRadarResponse, BrightSkyRadarRecord } from '@/types/api'
 import 'ol/ol.css'
 
@@ -162,12 +163,7 @@ export function WeatherRadarMap({ devices = [], coveragePercent, focusLocation, 
                 setIsLoading(true)
                 setError(null)
 
-                const response = await fetch('https://api.brightsky.dev/radar?tz=Europe/Berlin')
-                if (!response.ok) {
-                    throw new Error(`Failed to fetch radar data: ${response.status}`)
-                }
-
-                const data: BrightSkyRadarResponse = await response.json()
+                const data: BrightSkyRadarResponse = await weatherService.fetchRadarData()
 
                 if (!data.radar || data.radar.length === 0) {
                     throw new Error('No radar data available')

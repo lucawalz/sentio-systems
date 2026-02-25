@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams, useNavigate, Link } from 'react-router-dom'
+import { authService } from '@/services/api/auth'
 import { LogoIcon } from '@/components/ui/logo'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -58,8 +59,7 @@ export default function ResetPasswordPage() {
             }
 
             try {
-                const response = await fetch(`/api/auth/validate-reset-token?token=${encodeURIComponent(token)}`)
-                const data = await response.json()
+                const data = await authService.validateResetToken(token)
 
                 if (data.valid) {
                     setTokenValid(true)
@@ -88,21 +88,15 @@ export default function ResetPasswordPage() {
             return
         }
 
-        if (!passwordsMatch) {
-            setError('Passwords do not match')
+        if (!token) {
+            setError('Missing reset token')
             return
         }
 
         setIsLoading(true)
 
         try {
-            const response = await fetch('/api/auth/reset-password', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ token, password, confirmPassword }),
-            })
-
-            const data = await response.json()
+            const data = await authService.resetPassword({ token, password, confirmPassword })
 
             if (data.success) {
                 setSuccess(true)

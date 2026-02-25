@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card } from '@/components/ui/card'
 import { Loader2, CheckCircle } from 'lucide-react'
+import { contactService } from '@/services/api/contact'
 
 interface FieldErrors {
     name?: string
@@ -59,23 +60,13 @@ export default function ContactSection() {
 
         setIsLoading(true)
         try {
-            const response = await fetch('/api/contact', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    name: formData.name.split(' ')[0] || '',
-                    surname: formData.name.split(' ').slice(1).join(' ') || '',
-                    mail: formData.email,
-                    reference: formData.job || formData.country || 'General Inquiry',
-                    message: formData.message,
-                }),
+            await contactService.submitContactForm({
+                name: formData.name.split(' ')[0] || '',
+                surname: formData.name.split(' ').slice(1).join(' ') || '',
+                mail: formData.email,
+                reference: formData.job || formData.country || 'General Inquiry',
+                message: formData.message,
             })
-
-            if (!response.ok) {
-                throw new Error('Failed to send message')
-            }
 
             setSuccess(true)
         } catch (error) {

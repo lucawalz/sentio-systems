@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Loader2, Check, X, Mail } from 'lucide-react'
+import { authService } from '@/services/api/auth'
 
 export default function VerifyEmailPage() {
     const [searchParams] = useSearchParams()
@@ -29,8 +30,7 @@ export default function VerifyEmailPage() {
             }
 
             try {
-                const response = await fetch(`/api/auth/verify-email?token=${encodeURIComponent(token)}`)
-                const data = await response.json()
+                const data = await authService.verifyEmail(token)
 
                 if (data.success) {
                     setSuccess(true)
@@ -53,11 +53,7 @@ export default function VerifyEmailPage() {
 
         setIsResending(true)
         try {
-            await fetch('/api/auth/resend-verification', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: resendEmail }),
-            })
+            await authService.resendVerification(resendEmail)
             setResendSuccess(true)
         } catch {
             // Still show success to prevent email enumeration

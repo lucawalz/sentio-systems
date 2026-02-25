@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Link } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
+import { authService } from '@/services/api/auth'
 
 export default function ForgotPasswordPage() {
     const [email, setEmail] = useState('')
@@ -34,13 +35,7 @@ export default function ForgotPasswordPage() {
 
         setIsLoading(true)
         try {
-            await fetch('/api/auth/forgot-password', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ email }),
-            })
+            await authService.forgotPassword(email)
 
             // Always show success message to prevent email enumeration
             setSuccess(true)
