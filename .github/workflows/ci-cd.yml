@@ -57,57 +57,16 @@ jobs:
           SHORT_SHA=$(git rev-parse --short=7 HEAD)
           echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
           echo "Short SHA: $SHORT_SHA"
-      - name: Get latest tag
-        id: get_latest_tag
-        run: |
-          # Get the latest semver tag
-          LATEST_TAG=$(git tag -l "v[0-9]*.[0-9]*.[0-9]*" | sort -V | tail -n 1)
-          if [ -z "$LATEST_TAG" ]; then
-            LATEST_TAG="v0.0.0"
-          fi
-          echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
-          echo "Latest tag: $LATEST_TAG"
       - name: Calculate semantic version
         id: semver
         run: |
-          LATEST_TAG="${{ steps.get_latest_tag.outputs.latest_tag }}"
+          # Extract the version explicitly from the backend pom.xml
+          cd sentio-backend
+          BASE_VERSION=$(./mvnw help:evaluate -Dexpression=project.version -q -DforceStdout)
+          cd ..
 
-          # Remove the 'v' prefix for calculation
-          VERSION=${LATEST_TAG#v}
-          IFS='.' read -ra VERSION_PARTS <<< "$VERSION"
-          MAJOR=${VERSION_PARTS[0]}
-          MINOR=${VERSION_PARTS[1]}
-          PATCH=${VERSION_PARTS[2]}
-
-          # Determine version bump based on branch or manual input
-          BUMP_TYPE="${{ github.event.inputs.version_bump }}"
-
-          if [ -z "$BUMP_TYPE" ]; then
-            # Auto-determine based on branch
-            if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-              BUMP_TYPE="minor"
-            else
-              BUMP_TYPE="patch"
-            fi
-          fi
-
-          # Apply version bump
-          case "$BUMP_TYPE" in
-            major)
-              MAJOR=$((MAJOR + 1))
-              MINOR=0
-              PATCH=0
-              ;;
-            minor)
-              MINOR=$((MINOR + 1))
-              PATCH=0
-              ;;
-            patch)
-              PATCH=$((PATCH + 1))
-              ;;
-          esac
-
-          NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+          # Remove any existing -SNAPSHOT or trailing modifiers if present in pom
+          NEW_VERSION=${BASE_VERSION%-SNAPSHOT}
 
           # FIX: Use Unix timestamp for pre-release to ensure proper semver ordering
           # Commit hash (e.g., dev.c25d939) doesn't sort chronologically

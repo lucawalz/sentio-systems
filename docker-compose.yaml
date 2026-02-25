@@ -131,6 +131,7 @@ services:
 
       # Server Configuration
       SERVER_PORT: 8080
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-demo}
 
       # Keycloak Configuration
       KEYCLOAK_ISSUER_URI: http://localhost:8080/realms/sentio
