@@ -143,7 +143,18 @@ The backend integrates with external systems:
 
 ## SOLID Principles (Examples from the Code)
 
-### 1) DIP – Dependency Inversion (DeviceController)
+### 1) SOLID: Evidence from the Codebase (Overview)
+
+The backend codebase already reflects multiple SOLID principles:
+
+- **SRP:** Services are focused on a single responsibility (e.g., classification orchestration, weather integration, verification, password reset).
+- **OCP:** Event-driven listeners allow new event types and handlers to be added without modifying existing components.
+- **LSP:** The `AuthService` abstraction has multiple interchangeable implementations (e.g., Keycloak-based and cookie-based authentication).
+- **ISP:** Repository interfaces are kept small and focused (e.g., device-related operations stay within `DeviceRepository`).
+- **DIP:** Controllers and services rely on injected dependencies instead of manual instantiation, enabling modularity and easy testing.
+
+
+### 2) DIP – Dependency Inversion (DeviceController)
 **Definition:** High-level modules (e.g., controllers) should depend on abstractions instead of concrete low-level implementations.
 
 **Code example (DeviceController):**
@@ -169,7 +180,7 @@ As a result, the system becomes more modular and easier to test, since mock impl
 
 --- 
 
-### 2) SRP – Single Responsibility (DeviceController + improvement)
+### 3) SRP – Single Responsibility (DeviceController + improvement)
 **Definition:** A class should have one reason to change.
 
 **Code example (DeviceController):**
@@ -210,7 +221,7 @@ However, logic such as client IP extraction and rate limiting could be further e
 
 ---
 
-### 3) ISP – Interface Segregation (DeviceService vs DeviceLocationService vs RateLimitService)
+### 4) ISP – Interface Segregation (DeviceService vs DeviceLocationService vs RateLimitService)
 **Definition:** Prefer multiple small, specific interfaces/services over one large “do everything” interface.
 
 **Code example (DeviceController):**
@@ -226,7 +237,7 @@ This reduces coupling and improves maintainability.
 
 ---
 
-### 4) OCP – Open/Closed (Strategy/Multiple implementations)  (falls vorhanden)
+### 5) OCP – Open/Closed (Strategy/Multiple implementations)  (falls vorhanden)
 **Definition:** A class should be open for extension but closed for modification.
 
 **Code example (ContactService):**
@@ -276,7 +287,7 @@ This keeps the class stable while allowing behavior to be extended through new i
 
 ---
 
-### 5) DIP (and testability) — Dependency injection enables isolated unit tests
+### 6) DIP (and testability) — Dependency injection enables isolated unit tests
 
 **Definition:** Depending on abstractions and injecting dependencies makes components replaceable and therefore easy to test in isolation.
 
