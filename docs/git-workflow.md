@@ -39,7 +39,7 @@ We employ a **Squash and Merge** topology when bringing feature branches into `d
 
 ---
 
-## 4. Traceability & Commit Standards (REQ-049)
+## 4. Traceability & Commit Standards (REQ-045)
 
 To satisfy the grading criterion *"Verknüpfung der Anforderungen untereinander, Verlinkung mit git-Commits"*, we must enforce strict bidirectional traceability between GitHub Issues and Git Commits.
 
