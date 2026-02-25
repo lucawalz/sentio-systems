@@ -1,3 +1,5 @@
+![Sentio Systems Banner](docs/banners/root-banner.png)
+
 # Sentio Systems Monorepo
 
 Unified repository for the Sentio environmental monitoring platform.

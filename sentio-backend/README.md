@@ -1,3 +1,5 @@
+![Sentio Backend Banner](../docs/banners/backend-banner.png)
+
 # Sentio Backend
 
 Backend application for the Sentio platform, built with Spring Boot, Jakarta EE, and PostgreSQL.
