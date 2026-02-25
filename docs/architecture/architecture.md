@@ -141,4 +141,115 @@ The backend integrates with external systems:
 
 ---
 
+## SOLID Principles (Examples from the Code)
+
+### 1) DIP – Dependency Inversion (DeviceController)
+**Definition:** High-level modules (e.g., controllers) should depend on abstractions instead of concrete low-level implementations.
+
+**Code example (DeviceController):**
+```java
+@RequiredArgsConstructor
+@RestController
+@RequestMapping("/api/devices")
+public class DeviceController {
+
+    private final DeviceService deviceService;
+    private final DeviceLocationService deviceLocationService;
+    private final RateLimitService rateLimitService;
+
+    // ...
+}
+```
+
+### 2) SRP – Single Responsibility (DeviceController + improvement)
+**Definition:** A class should have one reason to change.
+
+**Code example (DeviceController):**
+```java
+@PostMapping("/pair")
+public ResponseEntity<?> pairDevice(@RequestBody DevicePairRequest request, HttpServletRequest httpRequest) {
+    String clientIp = getClientIp(httpRequest);
+
+    if (!rateLimitService.allowPairingRequest(clientIp)) {
+        return ResponseEntity.status(429)
+                .body(Map.of("error", "Too many pairing attempts. Please wait 1 minute."));
+    }
+
+    String deviceToken = deviceService.exchangePairingCode(request.getDeviceId(), request.getPairingCode());
+
+    DevicePairResponse response = DevicePairResponse.builder()
+            .deviceId(request.getDeviceId())
+            .deviceToken(deviceToken)
+            .mqttUrl(mqttExternalUrl)
+            .message("Device paired successfully")
+            .build();
+
+    return ResponseEntity.ok(response);
+}
+
+private String getClientIp(HttpServletRequest request) {
+    String xForwardedFor = request.getHeader("X-Forwarded-For");
+    if (xForwardedFor != null && !xForwardedFor.isEmpty()) {
+        return xForwardedFor.split(",")[0].trim();
+    }
+    return request.getRemoteAddr();
+}
+```
+
+### 3) ISP – Interface Segregation (DeviceService vs DeviceLocationService vs RateLimitService)
+**Definition:** Prefer multiple small, specific interfaces/services over one large “do everything” interface.
+
+**Code example (DeviceController):**
+```java
+private final DeviceService deviceService;
+private final DeviceLocationService deviceLocationService;
+private final RateLimitService rateLimitService;
+```
+
+### 4) OCP – Open/Closed (Strategy/Multiple implementations)  (falls vorhanden)
+**Definition:** A class should be open for extension but closed for modification.
+
+**Code example (ContactService):**
+```java
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class ContactService {
+
+    private final ResendEmailService emailService;
+
+    @Value("${contact.mail.to:team@syslabs.dev}")
+    private String contactTo;
+
+    public void sendContactMail(ContactRequest request) {
+
+        String subject = "New contact message: " + safe(request.getReference());
+
+        String text = """
+                New contact message from Sentio website:
+
+                Reference: %s
+                Name: %s %s
+                Email: %s
+
+                Message:
+                %s
+                """.formatted(
+                safe(request.getReference()),
+                safe(request.getName()),
+                safe(request.getSurname()),
+                safe(request.getMail()),
+                safe(request.getMessage()));
+
+        emailService.sendEmail(contactTo, subject, text, request.getMail());
+    }
+
+    private String safe(String value) {
+        return value == null ? "" : value;
+    }
+}
+```
+
+---
+
 This architecture ensures clear separation between frontend, backend, AI processing, infrastructure services, and external integrations.
