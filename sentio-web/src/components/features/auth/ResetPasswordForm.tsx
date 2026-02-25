@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { useSearchParams, useNavigate, Link } from 'react-router-dom'
 import { authService } from '@/services/api/auth'
 import { LogoIcon } from '@/components/ui/logo'
@@ -7,19 +7,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Loader2, Check, X, Eye, EyeOff } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { usePasswordValidation } from '@/hooks/auth/use-password-validation'
 
-interface PasswordRequirement {
-    label: string
-    test: (password: string) => boolean
-}
 
-const passwordRequirements: PasswordRequirement[] = [
-    { label: 'At least 8 characters', test: (p) => p.length >= 8 },
-    { label: 'One uppercase letter', test: (p) => /[A-Z]/.test(p) },
-    { label: 'One lowercase letter', test: (p) => /[a-z]/.test(p) },
-    { label: 'One number', test: (p) => /[0-9]/.test(p) },
-    { label: 'One special character (!@#$%^&*)', test: (p) => /[!@#$%^&*(),.?":{}|<>]/.test(p) },
-]
 
 export default function ResetPasswordPage() {
     const [searchParams] = useSearchParams()
@@ -36,17 +26,13 @@ export default function ResetPasswordPage() {
     const [tokenValid, setTokenValid] = useState(false)
     const [maskedEmail, setMaskedEmail] = useState('')
     const [success, setSuccess] = useState(false)
-    const [showPasswordRequirements, setShowPasswordRequirements] = useState(false)
 
-    // Password validation
-    const passwordValidation = useMemo(() => {
-        return passwordRequirements.map(req => ({
-            ...req,
-            passed: req.test(password),
-        }))
-    }, [password])
-
-    const allPasswordRequirementsMet = passwordValidation.every(req => req.passed)
+    const {
+        showPasswordRequirements,
+        setShowPasswordRequirements,
+        passwordValidation,
+        allPasswordRequirementsMet
+    } = usePasswordValidation(password)
     const passwordsMatch = password === confirmPassword && confirmPassword.length > 0
 
     // Validate token on mount

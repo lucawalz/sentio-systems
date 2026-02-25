@@ -10,29 +10,21 @@ import { register } from 'ol/proj/proj4'
 import { get as getProjection } from 'ol/proj'
 import Overlay from 'ol/Overlay'
 import proj4 from 'proj4'
-import pako from 'pako'
 import { Play, Pause, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { precipitationToRGBA } from '@/lib/turbo-colormap'
 import { weatherService } from '@/services/api/weather'
-import type { Device, BrightSkyRadarResponse, BrightSkyRadarRecord } from '@/types/api'
+import {
+    GRID_PROJECTION_NAME,
+    GRID_PROJ_STRING,
+    GRID_EXTENT,
+    type RadarFrame,
+    processRadarRecords,
+    getMapCenter
+} from '@/utils/weather-utils'
+import type { Device, BrightSkyRadarResponse } from '@/types/api'
 import 'ol/ol.css'
 
-// DWD DE1200 projection constants
-const GRID_WIDTH = 1100
-const GRID_HEIGHT = 1200
-const GRID_PROJECTION_NAME = 'DE1200'
-const GRID_PROJ_STRING = '+proj=stere +lat_0=90 +lat_ts=60 +lon_0=10 +a=6378137 +b=6356752.3142451802 +no_defs +x_0=543196.83521776402 +y_0=3622588.8619310018'
-const GRID_EXTENT: [number, number, number, number] = [-500, -1199500, 1099500, 500]
 
-// Germany center coordinates
-const GERMANY_CENTER: [number, number] = [10.4515, 51.1657] // [lon, lat]
-
-interface RadarFrame {
-    label: string
-    timestamp: string
-    imageUrl: string
-}
 
 // Location to focus/zoom on
 interface FocusLocation {
@@ -53,75 +45,7 @@ interface WeatherRadarMapProps {
 proj4.defs(GRID_PROJECTION_NAME, GRID_PROJ_STRING)
 register(proj4)
 
-/**
- * Decompresses base64-encoded, zlib-compressed radar data to Uint16Array.
- */
-function decompressRadarData(base64Data: string): Uint16Array {
-    // Decode base64 to bytes
-    const compressed = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0))
-    // Decompress zlib
-    const decompressed = pako.inflate(compressed)
-    // Interpret as 2-byte integers
-    return new Uint16Array(decompressed.buffer)
-}
 
-/**
- * Creates a canvas data URL from radar precipitation data.
- */
-function createRadarImageUrl(precipitationData: Uint16Array): string {
-    const canvas = document.createElement('canvas')
-    canvas.width = GRID_WIDTH
-    canvas.height = GRID_HEIGHT
-    const ctx = canvas.getContext('2d')!
-    const imageData = ctx.createImageData(GRID_WIDTH, GRID_HEIGHT)
-
-    for (let i = 0; i < precipitationData.length; i++) {
-        const [r, g, b, a] = precipitationToRGBA(precipitationData[i])
-        imageData.data[i * 4] = r
-        imageData.data[i * 4 + 1] = g
-        imageData.data[i * 4 + 2] = b
-        imageData.data[i * 4 + 3] = a
-    }
-
-    ctx.putImageData(imageData, 0, 0)
-    return canvas.toDataURL()
-}
-
-/**
- * Processes radar records into displayable frames.
- */
-function processRadarRecords(records: BrightSkyRadarRecord[]): RadarFrame[] {
-    return records.map(record => {
-        const data = decompressRadarData(record.precipitation_5)
-        const imageUrl = createRadarImageUrl(data)
-        // Extract time HH:MM from ISO timestamp
-        const label = record.timestamp.substring(11, 16)
-        return {
-            label,
-            timestamp: record.timestamp,
-            imageUrl
-        }
-    })
-}
-
-/**
- * Calculate map center from device locations.
- */
-function getMapCenter(devices: Device[]): [number, number] {
-    // Ensure devices is an array
-    const deviceList = Array.isArray(devices) ? devices : []
-    const devicesWithLocation = deviceList.filter(d => d.latitude != null && d.longitude != null)
-
-    if (devicesWithLocation.length === 0) {
-        return GERMANY_CENTER
-    }
-
-    // Calculate centroid of all device locations
-    const avgLon = devicesWithLocation.reduce((s, d) => s + d.longitude!, 0) / devicesWithLocation.length
-    const avgLat = devicesWithLocation.reduce((s, d) => s + d.latitude!, 0) / devicesWithLocation.length
-
-    return [avgLon, avgLat]
-}
 
 /**
  * Weather radar map component with animated precipitation overlay and device markers.

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { LogoIcon } from '@/components/ui/logo'
 import { Button } from '@/components/ui/button'
@@ -7,7 +7,8 @@ import { Label } from '@/components/ui/label'
 import { authApi } from '@/lib/api'
 import { Loader2, Check, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import axios from 'axios'
+import { usePasswordValidation } from '@/hooks/auth/use-password-validation'
+import { getAuthErrorMessage } from '@/utils/error-handlers'
 
 interface FieldErrors {
     username?: string
@@ -17,58 +18,7 @@ interface FieldErrors {
     password?: string
 }
 
-interface PasswordRequirement {
-    label: string
-    test: (password: string) => boolean
-}
 
-const passwordRequirements: PasswordRequirement[] = [
-    { label: 'At least 8 characters', test: (p) => p.length >= 8 },
-    { label: 'One uppercase letter', test: (p) => /[A-Z]/.test(p) },
-    { label: 'One lowercase letter', test: (p) => /[a-z]/.test(p) },
-    { label: 'One number', test: (p) => /[0-9]/.test(p) },
-    { label: 'One special character (!@#$%^&*)', test: (p) => /[!@#$%^&*(),.?":{}|<>]/.test(p) },
-]
-
-function getErrorMessage(error: unknown): string {
-    if (axios.isAxiosError(error)) {
-        const status = error.response?.status
-        const data = error.response?.data
-
-        // Handle specific status codes
-        switch (status) {
-            case 400:
-                return data?.message || 'Invalid request. Please check your input.'
-            case 409:
-                // Conflict - username or email already exists
-                if (data?.message?.toLowerCase().includes('username')) {
-                    return 'This username is already taken. Please choose a different one.'
-                }
-                if (data?.message?.toLowerCase().includes('email')) {
-                    return 'An account with this email already exists.'
-                }
-                return 'An account with this username or email already exists.'
-            case 422:
-                return data?.message || 'Validation failed. Please check your input.'
-            case 429:
-                return 'Too many attempts. Please wait a moment and try again.'
-            case 500:
-                return 'Server error. Please try again later.'
-            case 502:
-            case 503:
-            case 504:
-                return 'Service temporarily unavailable. Please try again later.'
-            default:
-                return data?.message || 'Registration failed. Please try again.'
-        }
-    }
-
-    if (error instanceof Error) {
-        return error.message
-    }
-
-    return 'An unexpected error occurred. Please try again.'
-}
 
 export default function SignUpPage() {
     const navigate = useNavigate()
@@ -83,17 +33,13 @@ export default function SignUpPage() {
     const [isLoading, setIsLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
-    const [showPasswordRequirements, setShowPasswordRequirements] = useState(false)
 
-    // Live password validation
-    const passwordValidation = useMemo(() => {
-        return passwordRequirements.map(req => ({
-            ...req,
-            passed: req.test(formData.password),
-        }))
-    }, [formData.password])
-
-    const allPasswordRequirementsMet = passwordValidation.every(req => req.passed)
+    const {
+        showPasswordRequirements,
+        setShowPasswordRequirements,
+        passwordValidation,
+        allPasswordRequirementsMet
+    } = usePasswordValidation(formData.password)
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target
@@ -153,7 +99,7 @@ export default function SignUpPage() {
             navigate('/login', { state: { message: 'Account created! Please check your email to verify your account before signing in.' } })
         } catch (err: unknown) {
             console.error('Registration failed:', err)
-            setError(getErrorMessage(err))
+            setError(getAuthErrorMessage(err, 'register'))
         } finally {
             setIsLoading(false)
         }
