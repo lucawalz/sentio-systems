@@ -136,7 +136,7 @@ export default function HeroSection() {
                                     className="bg-foreground/10 rounded-[calc(var(--radius-xl)+0.125rem)] border p-0.5">
                                     <NativeStartNow
                                         label="Get Started"
-                                        onStart={() => { navigate('/login') }}
+                                        onStart={() => { navigate('/dashboard') }}
                                         size="md"
                                     />
                                 </div>

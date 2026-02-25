@@ -15,7 +15,7 @@ export default function CallToAction() {
                     <div className="mt-12 flex flex-wrap justify-center gap-4">
                         <NativeStartNow
                             label="Get Started"
-                            onStart={() => { navigate('/login') }}
+                            onStart={() => { navigate('/dashboard') }}
                             size="md"
                         />
 
