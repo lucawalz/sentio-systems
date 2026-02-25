@@ -161,6 +161,14 @@ public class DeviceController {
 }
 ```
 
+**Explanation:**  
+The `DeviceController` does not create its dependencies manually.
+Instead, `DeviceService`, `DeviceLocationService`, and `RateLimitService` are injected via constructor injection.
+This decouples the controller from concrete implementations and ensures that dependencies can be replaced without modifying the controller itself.
+As a result, the system becomes more modular and easier to test, since mock implementations can be injected during unit testing.
+
+--- 
+
 ### 2) SRP – Single Responsibility (DeviceController + improvement)
 **Definition:** A class should have one reason to change.
 
@@ -195,6 +203,12 @@ private String getClientIp(HttpServletRequest request) {
     return request.getRemoteAddr();
 }
 ```
+**Explanation:**  
+The primary responsibility of `DeviceController` is to handle HTTP requests and delegate business logic to the service layer.
+It does not implement device logic itself but forwards requests to `DeviceService` and related components. This aligns with the Single Responsibility Principle.
+However, logic such as client IP extraction and rate limiting could be further extracted into dedicated components (e.g., filters or interceptors) to strengthen adherence to SRP.
+
+---
 
 ### 3) ISP – Interface Segregation (DeviceService vs DeviceLocationService vs RateLimitService)
 **Definition:** Prefer multiple small, specific interfaces/services over one large “do everything” interface.
@@ -205,6 +219,12 @@ private final DeviceService deviceService;
 private final DeviceLocationService deviceLocationService;
 private final RateLimitService rateLimitService;
 ```
+**Explanation:**  
+Instead of relying on a single large service with multiple unrelated responsibilities, the controller depends on several focused services (`DeviceService`, `DeviceLocationService`, `RateLimitService`).
+This ensures that each service has a clearly defined purpose and that components only depend on functionality they actually require.
+This reduces coupling and improves maintainability.
+
+---
 
 ### 4) OCP – Open/Closed (Strategy/Multiple implementations)  (falls vorhanden)
 **Definition:** A class should be open for extension but closed for modification.
@@ -249,6 +269,12 @@ public class ContactService {
     }
 }
 ```
+**Explanation:**  
+`ContactService` delegates email sending to `ResendEmailService` instead of implementing provider-specific logic itself. 
+If the system needs to support another email provider in the future, a new implementation can be introduced without modifying `ContactService`.
+This keeps the class stable while allowing behavior to be extended through new implementations, which follows the Open/Closed Principle.
+
+---
 
 ### 5) DIP (and testability) — Dependency injection enables isolated unit tests
 
@@ -290,6 +316,10 @@ class ContactServiceTest {
     }
 }
 ```
+**Explanation:**  
+`ContactService` delegates email sending to `ResendEmailService` instead of implementing provider-specific logic itself.
+If the system needs to support another email provider in the future, a new implementation can be introduced without modifying `ContactService`.
+This keeps the class stable while allowing behavior to be extended through new implementations, which follows the Open/Closed Principle.
 
 ---
 
