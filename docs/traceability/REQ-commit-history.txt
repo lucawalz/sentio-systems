@@ -1,0 +1,163 @@
+1af474c Merge pull request #118 from lucawalz/feature/REQ-015-integration-tests-v2
+42a20d0 REQ-015: add remaining tests to secure coverage
+357d1ee REQ-015: increase timeout and remove skipped it tests
+27d5e96 REQ-015: unify sunfire and jacoco
+cb30265 REQ-015: lower jacoco threshold and ensure spring respects the delay
+d9aa346 REQ-015: increase sleep on stream stop
+43b45e2 REQ-015: fix timeout in event listener and update test accordingly
+11a38d9 REQ-015: permission change for paths filter
+d13320b REQ-015: Add integration and unit tests across all services with CI/CD pipeline hardening
+f3a6114 Merge pull request #83 from lucawalz/feature/REQ-032-update-landing-page
+0382d5c Merge branch 'develop' into feature/REQ-032-update-landing-page
+390c564 Merge pull request #94 from lucawalz/feature/REQ-035-redis-queue-parallel-classification
+a8b15c8 REQ-035: Fix viewer session drift with Redis Sorted Set instead of separate counter
+384eec9 Merge pull request #93 from lucawalz/feature/REQ-035-redis-queue-parallel-classification
+be37875 REQ-035: Allow Docker builds to run even when test jobs fail (artifact quota workaround)
+c3f5acf Merge pull request #92 from lucawalz/feature/REQ-035-redis-queue-parallel-classification
+b712982 REQ-035: Reduce artifact retention to 7 days to prevent storage quota issues
+f30626e REQ-035: Add graceful stream stop with delayed shutdown and connection resilience
+93e13aa REQ-035: Adjust redis queue system to be event based and overhault install.sh and resolve freezing issue on rpi5
+8685dfe REQ-035: Add ARQ Redis queue system for async AI classification with dedicated queues per service
+4798ccd Merge pull request #87 from lucawalz/feature/REQ-023-contact-page
+a723432 REQ-023: refactor DTOs to centralized file and fix imports
+d753c2a REQ-023: add custom email auth flows with Resend
+bc67cdc Merge origin/develop into feature/REQ-023-contact-page
+4aad447 Merge branch 'develop' into feature/REQ-032-update-landing-page
+4aa28e7 Merge pull request #60 from lucawalz/feature/REQ-14-privacy-policy
+ee8c4c7 Merge branch 'develop' into feature/REQ-032-update-landing-page
+468e259 #REQ-014: -update: package-lock.json back in gitignore
+4965bd8 #REQ-014: -update: add package-lock.json
+703070b Merge branch 'develop' into feature/REQ-14-privacy-policy
+d1078f8 #REQ-014: -update: rm package.json
+426fea1 #REQ-032: -updated: push pictures
+0290f86 #REQ-032: -updated: team section. Implemented own pictures and linkedIn links
+2e113e9 #REQ-14: -updates: remove package.json
+d3d4585 #REQ-14: -updates: remove package.json
+a00f1a0 Merge branch 'develop' into feature/REQ-032-update-landing-page
+2c73ce6 #REQ-14: -updates: made it fit for new frontend after renaming
+dc83113 Merge branch 'develop' into feature/REQ-14-privacy-policy
+9587c01 Merge pull request #74 from lucawalz/feature/REQ-035-video-streaming
+c5936d5 REQ-035: Add RTMPS streaming security enhancements
+f0dc53a REQ-035: Add RTMP/HLS streaming with fault-tolerant reconnection
+6d6a698 Merge pull request #72 from lucawalz/feature/REQ-031-device-cert-auth
+3d3d2d8 REQ-031: Frontend integration for device certificate authentication
+cfbafad REQ-031: Device certificate authentication with MQTT auth controller
+98bab39 #REQ-14: -add: links to footer
+f78462a #REQ-14: -add: Privacy to new Frontend; implemented routing; implemented in Nav bar; styling fits new style
+38303ef Merge branch 'develop' into feature/REQ-14-privacy-policy
+4ba3784 #REQ-23: -add: Privacy to landing page
+0e87ed0 #REQ-23: -update: SecurityConfig to get connection to backend -fix: contactController
+18f013b Merge pull request #65 from lucawalz/feature/REQ-032-n8n
+da5d0a0 Merge pull request #64 from lucawalz/feature/experimental-frontend
+266cde7 Merge pull request #63 from lucawalz/feature/REQ-027-dashboard-layout
+1543a52 Merge pull request #62 from lucawalz/feature/REQ-025-embedded-service-refactor
+d513dde REQ-027: Dashboard layout with weather radar and device context
+ffd2ad5 REQ-025: Unified embedded service manager with GPS/BME688 integration
+e27a360 #REQ-14: -add: privacy policy
+81947fa #REQ-023: -fix: connection to backend cause of 500 connection loss. trys to connect to backend but is just not working - couldn't find the issue !!
+dba719c REQ-032: Restructure dashboard component hierarchy
+0c479f6 REQ-032: Minor updates to frontend and backend handling
+70c078e REQ-032: Introduce n8n-driven workflow management, replacing the previous AISummary implementation with a more generalized system
+bb93981 Merge pull request #57 from lucawalz/feature/REQ-030-device-only-ip-policy
+f86bd12 REQ-030: fix frotnend issues and use browser native websockets
+4fdb7f7 Merge remote-tracking branch 'origin/develop' into feature/REQ-030-device-only-ip-policy
+076346d Merge pull request #55 from lucawalz/feature/REQ-24-uni-tests
+6d6dd35 REQ-024: Added remaining service unit tests
+314a1a5 #REQ-024: -update: clean code
+9ffae28 #REQ-024: -extra: merged develop into branch - ready for PR
+ddac43a Merge branch 'develop' into feature/REQ-24-uni-tests
+581f758 REQ-030: Architecture change to EDA
+5f47893 Merge develop into feature/REQ-030-device-only-ip-policy
+2f07bfe #REQ-024: -updated: md testing strategy file
+cd433e3 #REQ-024: -add:implemented all mapper tests -add: testing-strategy.md -not finished yet
+d65f1f4 #REQ-024: -add:implemented all Controller Tests
+e7213ea REQ-030: Enforce device-only IP policy across all weather services
+8de42dc Merge pull request #50 from lucawalz/feature/REQ-029-brightsky-radar
+ad52fb1 REQ-029: Implemented brightsky weather radar
+019a3c8 #REQ-024: -add:HistoricalWeatherTest + comments -add: LocationDataTest + comments -add:RaspiWeatherDataTest + comments -add: other test but not programmed yet
+dacf4d3 #REQ-024: -add:AnimalDetectionTest -add: AISummaryTest
+06544a5 #REQ-023: -fix: connection to backend - still not fixed
+6bd5610 Merge pull request #46 from lucawalz/feature/REQ-028-device-management-auth
+988064e REQ-028: minor adjustments to comments
+05c70dc REQ-028: prevent 'blank' AI classification from overriding valid detections
+a13dd11 REQ-028: Remove redundant embedded config and install scripts
+1f8426d REQ-028: Add device auto-discovery, optimize backend status tracking, and unify frontend data context
+2ea9992 REQ-028: add live detection stream with overlay support
+daa9e21 REQ-028: Streamline user device registration with unified embedded installer
+929f273 #REQ-024: -add: all model tests -still need to be implemented
+4d45454 #REQ-024: -add: WeatherAlertTest.java
+ed37f8e #REQ-024: -add: WeatherForecastTest.java
+601c9eb #REQ-023: -update: added sys out to check if it works - add: /api/contact path -update: port number
+4c5f007 #REQ-023: -fix: not fixed yet but problem is with SecurityConfig (Resource Server (JWT-Teil)) need to check it out
+59fe969 Merge branch 'develop' into feature/REQ-023-contact-page
+427c6be #REQ-023: -fix: connection to backend
+54878f0 #REQ-023: -add: properties for mail -add: ContactController -add: ContactRequest -add: ContactService -add: mail dependencie in pom.xml
+63248cc Merge pull request #41 from lucawalz/feature/REQ-022-keycloak-authentication
+d256342 #REQ-023: -add: implemented function to send form
+d27b1bf #REQ-023: -add: button send message
+d8ee6c5 #REQ-023: -updates styling
+01bb356 REQ-022: Remove custom Keycloak theme files and adjust login/create account UI padding and grid columns
+3924838 REQ-022: Implement dynamic Keycloak realm configuration generation using a new  service and shared volume, and delete the  README
+5a60782 #REQ-023: -add: Contact Page
+fa934d3 REQ-022: Adjust API proxying for frontend requests through Vite and Nginx for Docker
+9ea3ba6 REQ-022: Add confirm password field with real-time validation and disable submit button until passwords match
+e74205f REQ-022: Add client-side email and password validation to account creation, update navigation links to login, and configure secure cookie settings
+72309e2 REQ-022: Reverted pipeline changes
+f9afc3d REQ-022: Implement direct username/password login and registration, replacing Keycloak redirect flows
+396b534 REQ-022: Minor changes to keycloak json template
+764ca2a REQ-022: Implement custom Keycloak login theme, update realm configuration, and adjust authentication flows and services
+658b1d4 REQ-022: Switching from github to tekton deployment
+6e0b405 REQ-022: Implement cookie-based authentication and authorization across frontend and backend
+60eb2cc Merge branch 'develop' of https://github.com/lucawalz/sentio-systems into feature/REQ-022-keycloak-authentication
+558ae18 REQ-022: Bump web Docker image to node:24-alpine and remove deprecated docker-compose version field
+7ea997e #REQ-023: -add: Contact Page
+a0e4fae Merge pull request #38 from lucawalz/feature/REQ-004-login
+8daf963 #REQ-004: -delete: react import. just necessary for  me
+94022a5 #REQ-004: -delete: react import. just necessary for  me
+677eb43 #REQ-004: -delete: react import. just necessary for  me
+1dbed43 Merge pull request #37 from lucawalz/feature/REQ-005-adr
+9a71651 #REQ-004: -update: pulled changes from develop-prep merge
+645367a Merge branch 'develop' into feature/REQ-004-login
+52bc88e REQ-005: added adr´s 1-12 to new folder docs, updated README
+6e12699 Merge pull request #33 from lucawalz/feature/REQ-007-footer
+dafa3ed #REQ-007: -update: add copyright sign
+bc629ee #REQ-007: -update: quick style change line
+96b3614 #REQ-007: -update: style- underline animation
+b126a9a #REQ-007: -update: style
+6ad6b4e REQ-022: Update datasource credentials to use POSTGRES_USER and POSTGRES_PASSWORD environment variables
+7c936a8 REQ-022: Implement Keycloak-based Authentication with OAuth2, realm configuration, and automatic setup scripts
+f4d22f0 #REQ-007: -fix: rebase branch
+9ee6595 Merge remote-tracking branch 'origin/feature/REQ-004-login' into feature/REQ-004-login
+66c712d #REQ-007: -update: Landing.tsx add footer -add: footer.tsx -update: App.tsx - added routing -add: Privacy.tsx -add: Contact.tsx
+ddcbc85 #REQ-004: -update: login-box.tsx to switch between login and create account -update: LogIn.tsx add mode -update: App.tsx add routing -add: create-account-box.tsx with mail validation and password requirements + error handling
+0f9793d #REQ-004: -get all Login pages and components
+60ca60b #REQ-004: - Login into footer
+f210ba8 #REQ-004: -update: outputs - clean code
+5e78be9 #REQ-004: -add: Mock data to test fake mail verification -add: created Sentio Outlook mail address -add: generate random password
+777141d #REQ-004: -update: login-box.tsx styling -update: create-account-box.tsx styling
+1d05bf5 #REQ-004: -update: login-box.tsx to switch between login and create account -update: LogIn.tsx add mode -update: App.tsx add routing -add: create-account-box.tsx with mail validation and password requirements + error handling
+77ba171 #REQ-004: -created function to check if mail is valid. -created link in case forgot passwort
+b925cf8 #REQ-004: -created function to check if mail is valid. -created link in case forgot passwort
+a47a6af #REQ-004: -created component login-box -styled login-box
+2f7e89d #REQ-004: -routing login Page -create Login -add temporary button for Login
+f90c29a #REQ-004: -update: outputs - clean code
+82e2052 #REQ-004: -add: Mock data to test fake mail verification -add: created Sentio Outlook mail address -add: generate random password
+d9dac93 Merge pull request #12 from lucawalz/feature/REQ-007-profile-dropdown
+9d4775c REQ-006: Added Dummy Login Button, And Dropdown Logout for Login Page implementation
+55a107f Merge pull request #20 from lucawalz/feature/REQ-010-standardize-embedded-services
+2120e0b REQ-010: Added null check and removed unused url
+687ac6a REQ-010: Standardize MQTT JSON handling and fix AI service timeouts (Refs #18)
+545d7b4 REQ-010: Fix numpy compatibility and version parsing in install scripts (Refs #18)
+241de8e REQ-010: Migrate weather station to use new WeatherMQTTPublisher (Refs #18)
+f0c21b0 REQ-010: Add missing start/stop scripts and fix location prompt casing (Refs #18)
+d65bcc3 REQ-010: Fix install script inconsistencies and remove inline config (Refs #18)
+3d7213d REQ-010: Standardize embedded services configuration and scripts (Refs #18)
+e8c6c4d Merge pull request #16 from lucawalz/feature/REQ-008-cicd-pipeline
+d745ea5 REQ-008: Add disk cleanup steps and restrict pipeline to main/develop branches (#15)
+aacf776 #REQ-004: -update: login-box.tsx styling -update: create-account-box.tsx styling
+ca80b2d #REQ-004: -update: login-box.tsx to switch between login and create account -update: LogIn.tsx add mode -update: App.tsx add routing -add: create-account-box.tsx with mail validation and password requirements + error handling
+84d09ae REQ-007: Add profile dropdown component (Closes #9)
+7aa2b50 #REQ-004: -created function to check if mail is valid. -created link in case forgot passwort
+13b3f93 #REQ-004: -created function to check if mail is valid. -created link in case forgot passwort
+b0ea25f #REQ-004: -created component login-box -styled login-box
+cd0af38 #REQ-004: -routing login Page -create Login -add temporary button for Login
