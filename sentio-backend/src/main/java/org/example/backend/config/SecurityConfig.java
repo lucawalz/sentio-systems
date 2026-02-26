@@ -88,9 +88,11 @@ public class SecurityConfig {
         List<String> origins = Arrays.asList(allowedOriginsRaw.split("\\s*,\\s*"));
         configuration.setAllowedOrigins(origins);
 
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(Arrays.asList("*"));
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(Arrays.asList(
+                "Authorization", "Content-Type", "Accept", "X-Requested-With", "Cache-Control"));
         configuration.setAllowCredentials(true);
+        configuration.setMaxAge(3600L); // Cache preflight responses for 1 hour
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
