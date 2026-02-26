@@ -58,16 +58,16 @@ class ContactControllerTest {
 
         // Act & Assert
         mockMvc.perform(post("/api/contact")
-                        .contentType("application/json")
-                        .content("""
-                                {
-                                    "mail": "test@example.com",
-                                    "message": "This is a test message",
-                                    "name": "John",
-                                    "surname": "Doe",
-                                    "reference": "REF123"
-                                }
-                                """))
+                .contentType("application/json")
+                .content("""
+                        {
+                            "mail": "test@example.com",
+                            "message": "This is a test message",
+                            "name": "John",
+                            "surname": "Doe",
+                            "reference": "REF123"
+                        }
+                        """))
                 .andExpect(status().isOk());
 
         verify(contactService, times(1)).sendContactMail(any(ContactRequest.class));
@@ -78,13 +78,13 @@ class ContactControllerTest {
     void send_withBlankEmail_returns400() throws Exception {
         // Act & Assert
         mockMvc.perform(post("/api/contact")
-                        .contentType("application/json")
-                        .content("""
-                                {
-                                    "mail": "",
-                                    "message": "This is a test message"
-                                }
-                                """))
+                .contentType("application/json")
+                .content("""
+                        {
+                            "mail": "",
+                            "message": "This is a test message"
+                        }
+                        """))
                 .andExpect(status().isBadRequest());
 
         verifyNoInteractions(contactService);
@@ -95,12 +95,12 @@ class ContactControllerTest {
     void send_withNullEmail_returns400() throws Exception {
         // Act & Assert
         mockMvc.perform(post("/api/contact")
-                        .contentType("application/json")
-                        .content("""
-                                {
-                                    "message": "This is a test message"
-                                }
-                                """))
+                .contentType("application/json")
+                .content("""
+                        {
+                            "message": "This is a test message"
+                        }
+                        """))
                 .andExpect(status().isBadRequest());
 
         verifyNoInteractions(contactService);
@@ -111,13 +111,13 @@ class ContactControllerTest {
     void send_withBlankMessage_returns400() throws Exception {
         // Act & Assert
         mockMvc.perform(post("/api/contact")
-                        .contentType("application/json")
-                        .content("""
-                                {
-                                    "mail": "test@example.com",
-                                    "message": ""
-                                }
-                                """))
+                .contentType("application/json")
+                .content("""
+                        {
+                            "mail": "test@example.com",
+                            "message": ""
+                        }
+                        """))
                 .andExpect(status().isBadRequest());
 
         verifyNoInteractions(contactService);
@@ -128,12 +128,12 @@ class ContactControllerTest {
     void send_withNullMessage_returns400() throws Exception {
         // Act & Assert
         mockMvc.perform(post("/api/contact")
-                        .contentType("application/json")
-                        .content("""
-                                {
-                                    "mail": "test@example.com"
-                                }
-                                """))
+                .contentType("application/json")
+                .content("""
+                        {
+                            "mail": "test@example.com"
+                        }
+                        """))
                 .andExpect(status().isBadRequest());
 
         verifyNoInteractions(contactService);
@@ -144,13 +144,13 @@ class ContactControllerTest {
     void send_withBothBlank_returns400() throws Exception {
         // Act & Assert
         mockMvc.perform(post("/api/contact")
-                        .contentType("application/json")
-                        .content("""
-                                {
-                                    "mail": "",
-                                    "message": ""
-                                }
-                                """))
+                .contentType("application/json")
+                .content("""
+                        {
+                            "mail": "",
+                            "message": ""
+                        }
+                        """))
                 .andExpect(status().isBadRequest());
 
         verifyNoInteractions(contactService);
@@ -165,13 +165,14 @@ class ContactControllerTest {
 
         // Act & Assert
         mockMvc.perform(post("/api/contact")
-                        .contentType("application/json")
-                        .content("""
-                                {
-                                    "mail": "test@example.com",
-                                    "message": "This is a test message"
-                                }
-                                """))
+                .contentType("application/json")
+                .content("""
+                        {
+                            "name": "John",
+                            "mail": "test@example.com",
+                            "message": "This is a test message"
+                        }
+                        """))
                 .andExpect(status().isInternalServerError());
 
         verify(contactService, times(1)).sendContactMail(any(ContactRequest.class));
@@ -185,13 +186,14 @@ class ContactControllerTest {
 
         // Act & Assert
         mockMvc.perform(post("/api/contact")
-                        .contentType("application/json")
-                        .content("""
-                                {
-                                    "mail": "minimal@example.com",
-                                    "message": "Minimal message"
-                                }
-                                """))
+                .contentType("application/json")
+                .content("""
+                        {
+                            "name": "Minimal",
+                            "mail": "minimal@example.com",
+                            "message": "Minimal message"
+                        }
+                        """))
                 .andExpect(status().isOk());
 
         verify(contactService, times(1)).sendContactMail(any(ContactRequest.class));
@@ -205,16 +207,16 @@ class ContactControllerTest {
 
         // Act & Assert
         mockMvc.perform(post("/api/contact")
-                        .contentType("application/json")
-                        .content("""
-                                {
-                                    "reference": "REF-2024-001",
-                                    "name": "Jane",
-                                    "surname": "Smith",
-                                    "mail": "jane.smith@example.com",
-                                    "message": "Complete contact form submission"
-                                }
-                                """))
+                .contentType("application/json")
+                .content("""
+                        {
+                            "reference": "REF-2024-001",
+                            "name": "Jane",
+                            "surname": "Smith",
+                            "mail": "jane.smith@example.com",
+                            "message": "Complete contact form submission"
+                        }
+                        """))
                 .andExpect(status().isOk());
 
         verify(contactService, times(1)).sendContactMail(any(ContactRequest.class));

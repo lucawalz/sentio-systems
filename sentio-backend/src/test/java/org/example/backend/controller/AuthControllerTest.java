@@ -82,7 +82,7 @@ class AuthControllerTest {
                 mockMvc.perform(post("/api/auth/register")
                                 .contentType("application/json")
                                 .content("""
-                                                {"username":"lilly","password":"pw","email":"lilly@test.de"}
+                                                {"username":"lilly","password":"secureP@ss1","email":"lilly@test.de","firstName":"Lilly","lastName":"Test"}
                                                 """))
                                 .andExpect(status().isCreated());
 
@@ -341,12 +341,15 @@ class AuthControllerTest {
 
         @Test
         void resetPassword_shortPassword_returns400() throws Exception {
-                when(passwordResetService.validateToken(eq("valid-token"))).thenReturn("user@example.com");
+                // Bean Validation @Size(min=8) on password now intercepts before the
+                // controller.
+                // The GlobalExceptionHandler returns an error response with "Validation
+                // Failed".
                 mockMvc.perform(post("/api/auth/reset-password")
                                 .contentType("application/json")
                                 .content("{\"token\":\"valid-token\",\"password\":\"short\",\"confirmPassword\":\"short\"}"))
                                 .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$.success").value(false));
+                                .andExpect(jsonPath("$.error").value("Validation Failed"));
         }
 
         @Test
