@@ -66,7 +66,13 @@ public class ClassificationResultListener implements MessageListener {
     @Override
     public void onMessage(@NonNull Message message, @Nullable byte[] pattern) {
         try {
-            String json = new String(message.getBody());
+            byte[] body = message.getBody();
+            if (body == null) {
+                log.warn("Received message with null body - ignoring");
+                return;
+            }
+
+            String json = new String(body);
             log.debug("Received classification result from Redis channel");
 
             Map<String, Object> result = objectMapper.readValue(

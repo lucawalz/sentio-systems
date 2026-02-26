@@ -83,11 +83,9 @@ public class ImageStorageService {
                 log.debug("Created date directory: {}", dateDir);
             }
 
-            // Save the image file
             Path filePath = dateDir.resolve(fileName);
             Files.write(filePath, imageBytes);
 
-            // Return the public URL
             String publicUrl = String.format("%s/%s/%s", imageBaseUrl, datePrefix, fileName);
 
             log.info("Successfully saved image: {} (size: {} bytes)", fileName, imageBytes.length);

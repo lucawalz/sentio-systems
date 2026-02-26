@@ -3,7 +3,6 @@ package org.example.backend.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -69,11 +68,11 @@ public class N8nWorkflowTriggerService {
 
             HttpEntity<Map<String, Object>> request = new HttpEntity<>(payload, headers);
 
-                ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+            ResponseEntity<Map> response = restTemplate.exchange(
                     webhookUrl,
                     HttpMethod.POST,
                     request,
-                        new ParameterizedTypeReference<>() {});
+                    Map.class);
 
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 Object agentResponse = response.getBody().get("response");
@@ -102,6 +101,7 @@ public class N8nWorkflowTriggerService {
     private boolean triggerWebhook(String webhookPath, String userId) {
         String webhookUrl = n8nWebhookBaseUrl + "/" + webhookPath;
         log.info("Triggering n8n webhook: {} for user: {}", webhookPath, userId);
+        log.info("Exactly constructed webhookUrl: '{}'", webhookUrl);
 
         try {
             HttpHeaders headers = new HttpHeaders();

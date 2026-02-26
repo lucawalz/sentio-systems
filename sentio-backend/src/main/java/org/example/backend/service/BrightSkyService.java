@@ -19,6 +19,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.Locale;
 import java.util.Optional;
 
 /**
@@ -50,6 +53,7 @@ public class BrightSkyService implements IBrightSkyService {
     private final BrightSkyAlertMapper brightSkyAlertMapper;
     private final BrightSkyRadarMetadataCalculator radarMetadataCalculator;
     private volatile boolean isUpdating = false;
+    private final ConcurrentHashMap<String, ReentrantLock> alertLocks = new ConcurrentHashMap<>();
 
     /**
      * Retrieves weather alerts for the current user's device location.
@@ -81,28 +85,31 @@ public class BrightSkyService implements IBrightSkyService {
      * @param longitude Geographic longitude coordinate
      * @return List of processed and persisted weather alerts
      */
-    @Transactional
     @CircuitBreaker(name = "brightSky", fallbackMethod = "getAlertsForLocationFallback")
     public List<WeatherAlert> getAlertsForLocation(Float latitude, Float longitude, String deviceId) {
-        log.info("Processing weather alerts for location: lat: {}, lon: {}, device: {}", latitude, longitude, deviceId);
-
+        String lockKey = deviceId != null ? deviceId : latitude + "," + longitude;
+        ReentrantLock lock = alertLocks.computeIfAbsent(lockKey, k -> new ReentrantLock());
+        if (!lock.tryLock()) {
+            log.debug("Alert update already in progress for device {}, skipping duplicate request", deviceId);
+            return new ArrayList<>();
+        }
         try {
-            // Clean up expired alerts before fetching new data
+            log.info("Processing weather alerts for location: lat: {}, lon: {}, device: {}", latitude, longitude, deviceId);
+
             cleanupExpiredAlerts();
             var payload = brightSkyApiClient.fetchAlerts(latitude, longitude);
             List<WeatherAlert> processedAlerts = brightSkyAlertMapper.mapAlerts(payload, deviceId);
-
-            // Persist all processed alerts
             List<WeatherAlert> savedAlerts = weatherAlertRepository.saveAll(processedAlerts);
 
             log.info("Successfully processed {} weather alerts for location: lat: {}, lon: {}",
                     savedAlerts.size(), latitude, longitude);
-
             return savedAlerts;
 
         } catch (Exception e) {
             log.error("Failed to fetch weather alerts for location: lat: {}, lon: {}", latitude, longitude, e);
             return new ArrayList<>();
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -160,8 +167,6 @@ public class BrightSkyService implements IBrightSkyService {
         log.debug("Retrieving active alerts for location: {}, warn cell: {}", city, warnCellId);
         return weatherAlertRepository.findActiveAlertsForLocation(city, warnCellId, LocalDateTime.now());
     }
-
-    // ===== Device-scoped methods =====
 
     /**
      * Retrieves active alerts for a specific device after verifying ownership.
@@ -351,8 +356,6 @@ public class BrightSkyService implements IBrightSkyService {
         return weatherAlertRepository.findDistinctCitiesWithActiveAlerts(LocalDateTime.now());
     }
 
-    // ==================== RADAR METADATA METHODS ====================
-
     /**
      * Fetches radar data from BrightSky and stores metadata for AI analysis.
      * Only metadata (precipitation stats) is stored, not the raw grid data.
@@ -497,8 +500,6 @@ public class BrightSkyService implements IBrightSkyService {
         weatherRadarMetadataRepository.deleteOldMetadata(cutoff);
         log.info("Cleaned up radar metadata older than {}", cutoff);
     }
-
-    // ==================== Circuit Breaker Fallback Methods ====================
 
     /**
      * Fallback for getAlertsForLocation when BrightSky API is unavailable.

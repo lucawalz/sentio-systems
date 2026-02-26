@@ -106,6 +106,10 @@ public class HistoricalWeatherService implements IHistoricalWeatherService {
                 .filter(date -> !existingDates.contains(date) || needsUpdate(date, locationData, oneWeekAgo))
                 .collect(Collectors.toList());
 
+        log.debug("historicalDates: {}", historicalDates);
+        log.debug("existingDates: {}", existingDates);
+        log.debug("datesToFetch: {}", datesToFetch);
+
         if (datesToFetch.isEmpty()) {
             log.info("All historical data is up to date for device: {}", deviceId);
             return deviceId != null
@@ -156,7 +160,10 @@ public class HistoricalWeatherService implements IHistoricalWeatherService {
                 : historicalWeatherRepository.findByWeatherDateAndLocation(
                         date, locationData.getCity(), locationData.getCountry());
 
-        return existing.isEmpty() || existing.get().getUpdatedAt().isBefore(cutoff);
+        boolean needIt = existing.isEmpty() || existing.get().getUpdatedAt().isBefore(cutoff);
+        log.debug("needsUpdate - date: {}, existing: {}, updatedAt: {}, cutoff: {}, result: {}",
+                date, existing.isPresent(), existing.map(HistoricalWeather::getUpdatedAt).orElse(null), cutoff, needIt);
+        return needIt;
     }
 
 
@@ -316,8 +323,6 @@ public class HistoricalWeatherService implements IHistoricalWeatherService {
         log.debug("Retrieving available cities with historical weather");
         return historicalWeatherRepository.findDistinctCitiesWithHistoricalWeather(LocalDate.now().minusYears(1));
     }
-
-    // ==================== Circuit Breaker Fallback Methods ====================
 
     @SuppressWarnings("unused")
     private List<HistoricalWeather> getHistoricalWeatherForLocationFallback(Float latitude, Float longitude,

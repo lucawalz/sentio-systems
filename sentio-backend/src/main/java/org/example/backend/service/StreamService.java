@@ -134,8 +134,6 @@ public class StreamService {
         }
 
         try {
-            // Validate token using Spring Security's configured JwtDecoder
-            // This automatically validates against Keycloak's public key
             Jwt jwt = jwtDecoder.decode(keycloakToken);
 
             String userId = jwt.getSubject();
@@ -174,8 +172,6 @@ public class StreamService {
      * @return HLS URL (token will be appended by frontend)
      */
     public String getStreamUrl(String deviceId) {
-        // URL format: https://media.syslabs.dev/live/{deviceId}/index.m3u8
-        // Token will be appended by frontend: ?token={keycloak_access_token}
         return String.format("%s/live/%s/index.m3u8", mediamtxBaseUrl, deviceId);
     }
 

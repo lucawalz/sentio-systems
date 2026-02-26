@@ -14,6 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
 /**
@@ -31,6 +33,7 @@ public class WeatherForecastService implements IWeatherForecastService {
     private final OpenMeteoForecastClient openMeteoForecastClient;
     private final ForecastEntityMapper forecastEntityMapper;
     private volatile boolean isUpdating = false;
+    private final ConcurrentHashMap<String, ReentrantLock> forecastLocks = new ConcurrentHashMap<>();
 
     /**
      * Retrieves weather forecasts for the current user's device location.
@@ -54,13 +57,18 @@ public class WeatherForecastService implements IWeatherForecastService {
      * location.
      * Uses the new Open-Meteo hourly API parameters.
      */
-    @Transactional
     @CircuitBreaker(name = "openMeteo", fallbackMethod = "getForecastForLocationFallback")
     public List<WeatherForecast> getForecastForLocation(Float latitude, Float longitude, LocationData locationData) {
-        log.info("Processing hourly weather forecast for location: {}, {} (lat: {}, lon: {})",
-                locationData.getCity(), locationData.getCountry(), latitude, longitude);
-
+        String lockKey = locationData.getDeviceId() != null ? locationData.getDeviceId() : latitude + "," + longitude;
+        ReentrantLock lock = forecastLocks.computeIfAbsent(lockKey, k -> new ReentrantLock());
+        if (!lock.tryLock()) {
+            log.debug("Forecast update already in progress for device {}, skipping duplicate request", locationData.getDeviceId());
+            return new ArrayList<>();
+        }
         try {
+            log.info("Processing hourly weather forecast for location: {}, {} (lat: {}, lon: {})",
+                    locationData.getCity(), locationData.getCountry(), latitude, longitude);
+
             // Clean up expired forecasts before fetching new data
             weatherForecastRepository.deleteExpiredForecasts(LocalDate.now().minusDays(1));
             log.debug("Cleaned up expired forecasts before processing new data");
@@ -68,43 +76,37 @@ public class WeatherForecastService implements IWeatherForecastService {
             var jsonNode = openMeteoForecastClient.fetchHourlyForecast(latitude, longitude);
 
             // Get existing forecasts for intelligent update/insert logic
-            // Use deviceId-based lookup if available, otherwise fall back to city/country
             LocalDate startDate = LocalDate.now();
             LocalDate endDate = LocalDate.now().plusDays(7);
             List<WeatherForecast> existingForecasts;
             if (locationData.getDeviceId() != null) {
-                // Device-specific: use deviceId to avoid collision with other devices
                 existingForecasts = weatherForecastRepository.findByDeviceIdAndDateRange(
                         locationData.getDeviceId(), startDate, endDate);
             } else {
-                // Fallback to city/country for non-device locations
                 existingForecasts = weatherForecastRepository.findByLocationAndDateRange(
                         locationData.getCity(), locationData.getCountry(), startDate, endDate);
             }
 
-            // Create lookup map for existing forecasts
             Map<LocalDateTime, WeatherForecast> existingMap = existingForecasts.stream()
                     .collect(Collectors.toMap(WeatherForecast::getForecastDateTime, f -> f));
 
             var hourlyNode = jsonNode.get("hourly");
             List<WeatherForecast> processedForecasts = new ArrayList<>();
-
             if (hourlyNode != null) {
                 processedForecasts = forecastEntityMapper.processHourlyForecast(hourlyNode, locationData, existingMap);
             }
 
-            // Persist all processed forecasts
             List<WeatherForecast> savedForecasts = weatherForecastRepository.saveAll(processedForecasts);
-
             log.info("Successfully processed {} hourly weather forecasts for location: {}, {}",
                     savedForecasts.size(), locationData.getCity(), locationData.getCountry());
-
             return savedForecasts;
 
         } catch (Exception e) {
             log.error("Failed to fetch weather forecast for location: {}, {} (lat: {}, lon: {})",
                     locationData.getCity(), locationData.getCountry(), latitude, longitude, e);
             return new ArrayList<>();
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -262,7 +264,6 @@ public class WeatherForecastService implements IWeatherForecastService {
         return weatherForecastRepository.findDistinctCitiesWithUpcomingForecasts(LocalDate.now());
     }
 
-    // ==================== Circuit Breaker Fallback Methods ====================
 
     @SuppressWarnings("unused")
     private List<WeatherForecast> getForecastForLocationFallback(Float latitude, Float longitude,

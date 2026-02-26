@@ -1,9 +1,9 @@
 package org.example.backend.listener;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.backend.event.StreamStopScheduledEvent;
 import org.example.backend.service.ViewerSessionService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.EventListener;
 import org.springframework.integration.mqtt.support.MqttHeaders;
 import org.springframework.integration.support.MessageBuilder;
@@ -25,14 +25,19 @@ import java.util.concurrent.ConcurrentHashMap;
  * 4. If new viewers joined, the stop is cancelled via timestamp comparison
  */
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class StreamEventListener {
 
     private final ViewerSessionService viewerSessionService;
     private final MessageChannel mqttOutboundChannel;
 
-    private static final long STOP_DELAY_MS = 60_000; // 60 seconds
+    @Value("${sentio.stream.stop-delay-ms:60000}")
+    private long stopDelayMs;
+
+    public StreamEventListener(ViewerSessionService viewerSessionService, MessageChannel mqttOutboundChannel) {
+        this.viewerSessionService = viewerSessionService;
+        this.mqttOutboundChannel = mqttOutboundChannel;
+    }
 
     // Track when stops were scheduled - allows cancellation by publishing new event
     private final ConcurrentHashMap<String, Instant> scheduledStops = new ConcurrentHashMap<>();
@@ -47,14 +52,20 @@ public class StreamEventListener {
         String deviceId = event.getDeviceId();
         Instant scheduledAt = event.getScheduledAt();
 
+        // Validate device ID
+        if (deviceId == null) {
+            log.warn("Received StreamStopScheduledEvent with null deviceId - ignoring");
+            return;
+        }
+
         // Record this stop request
         scheduledStops.put(deviceId, scheduledAt);
         log.info("Stream stop scheduled for device {} at {} - waiting {}s",
-                deviceId, scheduledAt, STOP_DELAY_MS / 1000);
+                deviceId, scheduledAt, stopDelayMs / 1000);
 
         try {
             // Wait for the delay period
-            Thread.sleep(STOP_DELAY_MS);
+            Thread.sleep(stopDelayMs);
 
             // Check if this stop request is still valid (not superseded by new viewers)
             Instant currentScheduled = scheduledStops.get(deviceId);
@@ -64,7 +75,23 @@ public class StreamEventListener {
             }
 
             // Double-check no viewers currently watching
-            if (viewerSessionService.getViewerCount(deviceId) > 0) {
+            long viewerCount;
+            try {
+                viewerCount = viewerSessionService.getViewerCount(deviceId);
+            } catch (Exception e) {
+                log.error("Failed to get viewer count for device {} - aborting stop: {}", deviceId, e.getMessage());
+                scheduledStops.remove(deviceId);
+                return;
+            }
+
+            // Negative viewer count indicates an error - don't send stop command
+            if (viewerCount < 0) {
+                log.warn("Invalid negative viewer count ({}) for device {} - aborting stop", viewerCount, deviceId);
+                scheduledStops.remove(deviceId);
+                return;
+            }
+
+            if (viewerCount > 0) {
                 log.info("Stream stop cancelled for device {} - viewers present after delay", deviceId);
                 scheduledStops.remove(deviceId);
                 return;
@@ -72,7 +99,7 @@ public class StreamEventListener {
 
             // Send stop command
             log.info("No viewers after {}s delay - stopping stream for device {}",
-                    STOP_DELAY_MS / 1000, deviceId);
+                    stopDelayMs / 1000, deviceId);
             sendStreamCommand(deviceId, "stop");
             scheduledStops.remove(deviceId);
 

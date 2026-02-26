@@ -25,17 +25,18 @@ import java.util.List;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 
-@WebMvcTest(
-        controllers = WeatherForecastController.class,
-        excludeAutoConfiguration = {
-                SecurityAutoConfiguration.class,
-                OAuth2ResourceServerAutoConfiguration.class
-        }
-)
+@WebMvcTest(controllers = WeatherForecastController.class, excludeAutoConfiguration = {
+        SecurityAutoConfiguration.class,
+        OAuth2ResourceServerAutoConfiguration.class
+})
 @Import(WeatherForecastControllerTest.TestBeans.class)
+@org.springframework.test.context.TestPropertySource(properties = {
+        "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration"
+})
 class WeatherForecastControllerTest {
 
-    @Autowired MockMvc mockMvc;
+    @Autowired
+    MockMvc mockMvc;
 
     @Autowired IWeatherForecastService weatherForecastService;
     @Autowired WeatherForecastMapper weatherForecastMapper;
@@ -101,8 +102,8 @@ class WeatherForecastControllerTest {
         when(weatherForecastMapper.toDTOList(forecasts)).thenReturn(dtos);
 
         mockMvc.perform(get("/api/forecast/date-range")
-                        .param("startDate", "2025-12-01")
-                        .param("endDate", "2025-12-03"))
+                .param("startDate", "2025-12-01")
+                .param("endDate", "2025-12-03"))
                 .andExpect(status().isOk())
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$").isArray())
@@ -170,7 +171,8 @@ class WeatherForecastControllerTest {
     @Test
     void getRecentForecasts_returns200_andPassesHours() throws Exception {
         List<WeatherForecast> forecasts = List.of(new WeatherForecast(), new WeatherForecast(), new WeatherForecast());
-        List<WeatherForecastDTO> dtos = List.of(new WeatherForecastDTO(), new WeatherForecastDTO(), new WeatherForecastDTO());
+        List<WeatherForecastDTO> dtos = List.of(new WeatherForecastDTO(), new WeatherForecastDTO(),
+                new WeatherForecastDTO());
 
         when(weatherForecastService.getRecentForecasts(12)).thenReturn(forecasts);
         when(weatherForecastMapper.toDTOList(forecasts)).thenReturn(dtos);
@@ -232,7 +234,8 @@ class WeatherForecastControllerTest {
     @Test
     void getLastUpdateInfo_returns200_andHasNextUpdateEstimate() throws Exception {
         // Wir testen hier nur "stabile" Teile: JSON Keys existieren.
-        // nextUpdateEstimate hängt von LocalDateTime.now() ab, daher nicht auf exakten Wert prüfen.
+        // nextUpdateEstimate hängt von LocalDateTime.now() ab, daher nicht auf exakten
+        // Wert prüfen.
 
         LocalDate today = LocalDate.now();
         WeatherForecast latest = new WeatherForecast();

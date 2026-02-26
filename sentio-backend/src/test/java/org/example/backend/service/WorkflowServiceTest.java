@@ -90,7 +90,8 @@ class WorkflowServiceTest {
 
             // Then
             ArgumentCaptor<LocalDateTime> cutoffCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
-            verify(workflowResultRepository).deleteOldResultsByType(eq(WorkflowType.WEATHER_SUMMARY), cutoffCaptor.capture());
+            verify(workflowResultRepository).deleteOldResultsByType(eq(WorkflowType.WEATHER_SUMMARY),
+                    cutoffCaptor.capture());
 
             LocalDateTime capturedCutoff = cutoffCaptor.getValue();
             assertThat(capturedCutoff).isBefore(LocalDateTime.now().minusHours(23));
@@ -240,6 +241,173 @@ class WorkflowServiceTest {
             LocalDateTime capturedCutoff = cutoffCaptor.getValue();
             assertThat(capturedCutoff).isBefore(LocalDateTime.now().minusDays(6));
             assertThat(capturedCutoff).isAfter(LocalDateTime.now().minusDays(8));
+        }
+    }
+
+    @Nested
+    @DisplayName("cleanupOldResultsByType")
+    class CleanupOldResultsByTypeTests {
+
+        @Test
+        @DisplayName("should delete results older than 7 days for type")
+        void shouldDeleteResultsOlderThan7DaysForType() {
+            // When
+            workflowService.cleanupOldResultsByType(WorkflowType.WEATHER_SUMMARY);
+
+            // Then
+            ArgumentCaptor<LocalDateTime> cutoffCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
+            verify(workflowResultRepository).deleteOldResultsByType(eq(WorkflowType.WEATHER_SUMMARY),
+                    cutoffCaptor.capture());
+
+            LocalDateTime capturedCutoff = cutoffCaptor.getValue();
+            assertThat(capturedCutoff).isBefore(LocalDateTime.now().minusDays(6));
+            assertThat(capturedCutoff).isAfter(LocalDateTime.now().minusDays(8));
+        }
+    }
+
+    @Nested
+    @DisplayName("saveUserWorkflowResult")
+    class SaveUserWorkflowResultTests {
+
+        @Test
+        @DisplayName("should save user workflow result and cleanup old ones")
+        void shouldSaveUserWorkflowResultAndCleanupOldOnes() {
+            // Given
+            String userId = "user-123";
+            WorkflowResult inputResult = new WorkflowResult();
+            inputResult.setAnalysisText("Test analysis");
+            inputResult.setWorkflowType(WorkflowType.WEATHER_SUMMARY);
+
+            WorkflowResult savedResult = new WorkflowResult();
+            savedResult.setId(1L);
+            savedResult.setUserId(userId);
+            savedResult.setAnalysisText("Test analysis");
+            savedResult.setWorkflowType(WorkflowType.WEATHER_SUMMARY);
+
+            when(workflowResultRepository.save(any(WorkflowResult.class))).thenReturn(savedResult);
+
+            // When
+            WorkflowResult result = workflowService.saveUserWorkflowResult(userId, inputResult);
+
+            // Then
+            assertThat(result).isNotNull();
+            assertThat(result.getUserId()).isEqualTo(userId);
+            assertThat(result.getId()).isEqualTo(1L);
+
+            ArgumentCaptor<LocalDateTime> cutoffCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
+            verify(workflowResultRepository).deleteOldResultsByUser(eq(userId), cutoffCaptor.capture());
+
+            LocalDateTime capturedCutoff = cutoffCaptor.getValue();
+            assertThat(capturedCutoff).isBefore(LocalDateTime.now().minusHours(23));
+        }
+    }
+
+    @Nested
+    @DisplayName("getCurrentWeatherSummary")
+    class GetCurrentWeatherSummaryTests {
+
+        @Test
+        @DisplayName("should return most recent weather summary for user")
+        void shouldReturnMostRecentWeatherSummaryForUser() {
+            // Given
+            String userId = "user-123";
+            WorkflowResult summary = new WorkflowResult();
+            summary.setId(1L);
+            summary.setUserId(userId);
+            summary.setWorkflowType(WorkflowType.WEATHER_SUMMARY);
+
+            when(workflowResultRepository.findTopByUserIdAndWorkflowTypeOrderByTimestampDesc(userId,
+                    WorkflowType.WEATHER_SUMMARY))
+                    .thenReturn(Optional.of(summary));
+
+            // When
+            Optional<WorkflowResult> result = workflowService.getCurrentWeatherSummary(userId);
+
+            // Then
+            assertThat(result).isPresent();
+            assertThat(result.get().getWorkflowType()).isEqualTo(WorkflowType.WEATHER_SUMMARY);
+            assertThat(result.get().getUserId()).isEqualTo(userId);
+        }
+    }
+
+    @Nested
+    @DisplayName("getCurrentSightingsSummary")
+    class GetCurrentSightingsSummaryTests {
+
+        @Test
+        @DisplayName("should return most recent sightings summary for user")
+        void shouldReturnMostRecentSightingsSummaryForUser() {
+            // Given
+            String userId = "user-123";
+            WorkflowResult summary = new WorkflowResult();
+            summary.setId(1L);
+            summary.setUserId(userId);
+            summary.setWorkflowType(WorkflowType.SIGHTINGS_SUMMARY);
+
+            when(workflowResultRepository.findTopByUserIdAndWorkflowTypeOrderByTimestampDesc(userId,
+                    WorkflowType.SIGHTINGS_SUMMARY))
+                    .thenReturn(Optional.of(summary));
+
+            // When
+            Optional<WorkflowResult> result = workflowService.getCurrentSightingsSummary(userId);
+
+            // Then
+            assertThat(result).isPresent();
+            assertThat(result.get().getWorkflowType()).isEqualTo(WorkflowType.SIGHTINGS_SUMMARY);
+            assertThat(result.get().getUserId()).isEqualTo(userId);
+        }
+    }
+
+    @Nested
+    @DisplayName("getUserRecentResults")
+    class GetUserRecentResultsTests {
+
+        @Test
+        @DisplayName("should return user results from last 24 hours")
+        void shouldReturnUserResultsFromLast24Hours() {
+            // Given
+            String userId = "user-123";
+            WorkflowResult result1 = new WorkflowResult();
+            result1.setUserId(userId);
+
+            when(workflowResultRepository.findByUserIdAndTimestampAfterOrderByTimestampDesc(eq(userId),
+                    any(LocalDateTime.class)))
+                    .thenReturn(List.of(result1));
+
+            // When
+            List<WorkflowResult> results = workflowService.getUserRecentResults(userId);
+
+            // Then
+            assertThat(results).hasSize(1);
+            assertThat(results.get(0).getUserId()).isEqualTo(userId);
+        }
+    }
+
+    @Nested
+    @DisplayName("getUserRecentResultsByType")
+    class GetUserRecentResultsByTypeTests {
+
+        @Test
+        @DisplayName("should return user results of type from last 24 hours")
+        void shouldReturnUserResultsOfTypeFromLast24Hours() {
+            // Given
+            String userId = "user-123";
+            WorkflowResult result1 = new WorkflowResult();
+            result1.setUserId(userId);
+            result1.setWorkflowType(WorkflowType.AGENT_RESPONSE);
+
+            when(workflowResultRepository.findByUserIdAndWorkflowTypeAndTimestampAfterOrderByTimestampDesc(eq(userId),
+                    eq(WorkflowType.AGENT_RESPONSE), any(LocalDateTime.class)))
+                    .thenReturn(List.of(result1));
+
+            // When
+            List<WorkflowResult> results = workflowService.getUserRecentResultsByType(userId,
+                    WorkflowType.AGENT_RESPONSE);
+
+            // Then
+            assertThat(results).hasSize(1);
+            assertThat(results.get(0).getUserId()).isEqualTo(userId);
+            assertThat(results.get(0).getWorkflowType()).isEqualTo(WorkflowType.AGENT_RESPONSE);
         }
     }
 }

@@ -28,6 +28,7 @@ COPY speciesnet_ai.py .
 COPY worker.py .
 COPY queue_bridge.py .
 COPY entrypoint.sh .
+COPY tests/ ./tests/
 RUN chmod +x entrypoint.sh
 
 EXPOSE 8081

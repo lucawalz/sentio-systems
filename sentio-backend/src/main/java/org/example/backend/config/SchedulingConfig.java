@@ -2,8 +2,8 @@ package org.example.backend.config;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.example.backend.repository.DeviceRepository;
 import org.example.backend.service.BrightSkyService;
+import org.example.backend.service.DeviceService;
 import org.example.backend.service.HistoricalWeatherService;
 import org.example.backend.service.WeatherForecastService;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -21,20 +21,12 @@ public class SchedulingConfig {
     private final WeatherForecastService weatherForecastService;
     private final HistoricalWeatherService historicalWeatherService;
     private final BrightSkyService brightSkyService;
-    private final DeviceRepository deviceRepository;
+    private final DeviceService deviceService;
 
-    /**
-     * Check if any devices are registered in the system.
-     * We use existsBy instead of count for efficiency.
-     */
     private boolean hasAnyDevices() {
-        return deviceRepository.count() > 0;
+        return deviceService.existsAnyDevice();
     }
 
-    /**
-     * Update weather on application ready.
-     * Performs initial data fetch for all devices with GPS coordinates.
-     */
     @EventListener(ApplicationReadyEvent.class)
     public void onApplicationReady() {
         log.info("Application ready - checking for devices with GPS coordinates");
@@ -44,8 +36,6 @@ public class SchedulingConfig {
             return;
         }
 
-        // Fetch weather data for all existing devices on startup
-        // This ensures data is available immediately after server restart
         log.info("Found devices - fetching initial weather data for all device locations");
         try {
             weatherForecastService.updateForecastsForAllDeviceLocations();

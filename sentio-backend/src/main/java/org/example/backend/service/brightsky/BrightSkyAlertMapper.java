@@ -13,7 +13,8 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Mapper component for converting BrightSky alerts payloads into weather alert entities.
+ * Mapper component for converting BrightSky alerts payloads into weather alert
+ * entities.
  * Handles update-or-insert mapping based on BrightSky alert identifiers.
  *
  * @author Sentio Team
@@ -51,7 +52,7 @@ public class BrightSkyAlertMapper {
     private WeatherAlert processAlertNode(JsonNode alertNode, JsonNode locationNode, String deviceId) {
         try {
             String alertId = alertNode.get("alert_id").asText();
-            Optional<WeatherAlert> existingAlert = weatherAlertRepository.findByAlertId(alertId);
+            Optional<WeatherAlert> existingAlert = weatherAlertRepository.findByAlertIdAndDeviceId(alertId, deviceId);
             WeatherAlert alert = existingAlert.orElse(new WeatherAlert());
 
             alert.setDeviceId(deviceId);
