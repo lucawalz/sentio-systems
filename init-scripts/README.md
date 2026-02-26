@@ -1,3 +1,5 @@
+![Init Scripts Banner](../docs/banners/init-scripts-banner.png)
+
 # init-scripts
 
 ## Overview

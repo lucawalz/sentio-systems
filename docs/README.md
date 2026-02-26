@@ -1,3 +1,5 @@
+![Docs Banner](banners/docs-banner.png)
+
 # Documentation (`docs/`)
 
 ## Overview

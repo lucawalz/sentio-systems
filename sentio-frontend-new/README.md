@@ -1,3 +1,5 @@
+![Sentio Frontend Banner](../docs/banners/web-banner.png)
+
 # sentio-frontend-new
 
 ## Overview
