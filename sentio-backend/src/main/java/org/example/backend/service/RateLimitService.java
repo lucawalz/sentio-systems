@@ -114,7 +114,6 @@ public class RateLimitService {
      * Core rate-limit check: increment the counter and compare against the max.
      */
     private boolean isAllowed(String purpose, String identifier, int maxRequests, Duration window) {
-        String key = KEY_PREFIX + purpose + ":" + identifier;
         Long count = increment(purpose, identifier, window);
         boolean allowed = count != null && count <= maxRequests;
 

@@ -49,6 +49,9 @@ class StreamServiceTest {
     private ViewerSessionService viewerSessionService;
 
     @Mock
+    private RateLimitService rateLimitService;
+
+    @Mock
     private MessageChannel mqttOutboundChannel;
 
     @Mock
@@ -72,11 +75,14 @@ class StreamServiceTest {
                 deviceService,
                 jwtDecoder,
                 viewerSessionService,
+                rateLimitService,
                 mqttOutboundChannel,
                 eventPublisher,
-                streamEventListener
-        );
+                streamEventListener);
         ReflectionTestUtils.setField(streamService, "mediamtxBaseUrl", "https://media.syslabs.dev");
+
+        // By default, allow all rate-limited requests
+        lenient().when(rateLimitService.allowStreamAuthAttempt(anyString())).thenReturn(true);
     }
 
     @Nested
@@ -139,23 +145,18 @@ class StreamServiceTest {
         }
 
         @Test
-        @DisplayName("should block after 5 failed attempts from same IP")
+        @DisplayName("should block when rate limit exceeded")
         void shouldBlockAfterMaxAttempts() {
-            // Given
-            when(deviceService.validateMqttToken(anyString(), anyString())).thenReturn(false);
+            // Given — rate limit service says this IP is blocked
+            when(rateLimitService.allowStreamAuthAttempt(TEST_SOURCE_IP)).thenReturn(false);
 
-            // When - Make 5 failed attempts
-            for (int i = 0; i < 5; i++) {
-                streamService.validatePublishAuth(TEST_DEVICE_ID, "wrong-token", TEST_SOURCE_IP);
-            }
-
-            // Try 6th attempt
+            // When
             boolean result = streamService.validatePublishAuth(TEST_DEVICE_ID, TEST_DEVICE_TOKEN, TEST_SOURCE_IP);
 
             // Then
             assertThat(result).isFalse();
-            // Only first 5 attempts should call validateMqttToken
-            verify(deviceService, times(5)).validateMqttToken(anyString(), anyString());
+            // Should not even reach token validation
+            verify(deviceService, never()).validateMqttToken(anyString(), anyString());
         }
 
         @Test
@@ -180,24 +181,15 @@ class StreamServiceTest {
         void shouldResetRateLimitOnSuccess() {
             // Given
             Device device = createTestDevice();
-            when(deviceService.validateMqttToken(anyString(), anyString()))
-                    .thenReturn(false) // First attempt fails
-                    .thenReturn(true);  // Second attempt succeeds
+            when(deviceService.validateMqttToken(TEST_DEVICE_ID, TEST_DEVICE_TOKEN)).thenReturn(true);
             when(deviceRepository.findById(TEST_DEVICE_ID)).thenReturn(Optional.of(device));
 
             // When
-            streamService.validatePublishAuth(TEST_DEVICE_ID, "wrong-token", TEST_SOURCE_IP);
             boolean result = streamService.validatePublishAuth(TEST_DEVICE_ID, TEST_DEVICE_TOKEN, TEST_SOURCE_IP);
 
             // Then
             assertThat(result).isTrue();
-
-            // Now can make more attempts without being blocked
-            when(deviceService.validateMqttToken(anyString(), anyString())).thenReturn(false);
-            for (int i = 0; i < 5; i++) {
-                streamService.validatePublishAuth(TEST_DEVICE_ID, "wrong", TEST_SOURCE_IP);
-            }
-            verify(deviceService, times(7)).validateMqttToken(anyString(), anyString());
+            verify(rateLimitService).resetStreamAuthCounter(TEST_SOURCE_IP);
         }
 
         @Test
@@ -385,27 +377,20 @@ class StreamServiceTest {
         void shouldTrackFailedAttemptsPerIp() {
             // Given
             String ip1 = "192.168.1.1";
-            String ip2 = "192.168.1.2";
             when(deviceService.validateMqttToken(anyString(), anyString())).thenReturn(false);
 
-            // When - Make 3 failed attempts from ip1
-            for (int i = 0; i < 3; i++) {
-                streamService.validatePublishAuth(TEST_DEVICE_ID, "wrong", ip1);
-            }
+            // When - Make failed attempts from ip1
+            streamService.validatePublishAuth(TEST_DEVICE_ID, "wrong", ip1);
 
-            // Make 2 failed attempts from ip2
-            for (int i = 0; i < 2; i++) {
-                streamService.validatePublishAuth(TEST_DEVICE_ID, "wrong", ip2);
-            }
-
-            // Then - Both IPs should still be allowed (under limit)
-            verify(deviceService, times(5)).validateMqttToken(anyString(), anyString());
+            // Then - recordStreamAuthFailure should have been called
+            verify(rateLimitService).recordStreamAuthFailure(ip1);
         }
 
         @Test
         @DisplayName("should handle null IP gracefully for failed auth")
         void shouldHandleNullIpGracefully() {
             // Given
+            when(rateLimitService.allowStreamAuthAttempt(null)).thenReturn(true);
             when(deviceService.validateMqttToken(TEST_DEVICE_ID, "wrong-token")).thenReturn(false);
 
             // When
@@ -414,30 +399,21 @@ class StreamServiceTest {
             // Then
             assertThat(result).isFalse();
             verify(deviceService).validateMqttToken(TEST_DEVICE_ID, "wrong-token");
-            // Null IP should not cause rate limiting issues on failed auth
         }
 
         @Test
         @DisplayName("should reset rate limit window after successful auth")
         void shouldResetWindowOnSuccess() {
             // Given
-            when(deviceService.validateMqttToken(anyString(), anyString()))
-                    .thenReturn(false, false, true); // 2 fails, then success
             Device device = createTestDevice();
+            when(deviceService.validateMqttToken(TEST_DEVICE_ID, TEST_DEVICE_TOKEN)).thenReturn(true);
             when(deviceRepository.findById(TEST_DEVICE_ID)).thenReturn(Optional.of(device));
 
             // When
-            streamService.validatePublishAuth(TEST_DEVICE_ID, "wrong1", TEST_SOURCE_IP);
-            streamService.validatePublishAuth(TEST_DEVICE_ID, "wrong2", TEST_SOURCE_IP);
             streamService.validatePublishAuth(TEST_DEVICE_ID, TEST_DEVICE_TOKEN, TEST_SOURCE_IP);
 
-            // Then - Should be able to make new attempts without being blocked
-            when(deviceService.validateMqttToken(anyString(), anyString())).thenReturn(false);
-            for (int i = 0; i < 5; i++) {
-                streamService.validatePublishAuth(TEST_DEVICE_ID, "attempt", TEST_SOURCE_IP);
-            }
-
-            verify(deviceService, times(8)).validateMqttToken(anyString(), anyString());
+            // Then - Reset should have been called
+            verify(rateLimitService).resetStreamAuthCounter(TEST_SOURCE_IP);
         }
     }
 
@@ -497,7 +473,8 @@ class StreamServiceTest {
 
             // Then
             assertThat(result).isTrue();
-            ArgumentCaptor<StreamStopScheduledEvent> eventCaptor = ArgumentCaptor.forClass(StreamStopScheduledEvent.class);
+            ArgumentCaptor<StreamStopScheduledEvent> eventCaptor = ArgumentCaptor
+                    .forClass(StreamStopScheduledEvent.class);
             verify(eventPublisher).publishEvent(eventCaptor.capture());
 
             StreamStopScheduledEvent event = eventCaptor.getValue();

@@ -14,8 +14,6 @@ import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
-import java.time.Instant;
 
 import org.example.backend.event.StreamStopScheduledEvent;
 import org.example.backend.listener.StreamEventListener;
@@ -34,6 +32,7 @@ public class StreamService {
     private final DeviceService deviceService;
     private final JwtDecoder jwtDecoder;
     private final ViewerSessionService viewerSessionService;
+    private final RateLimitService rateLimitService;
     private final MessageChannel mqttOutboundChannel;
     private final ApplicationEventPublisher eventPublisher;
     private final StreamEventListener streamEventListener;
@@ -41,20 +40,12 @@ public class StreamService {
     @Value("${mediamtx.base-url:https://media.syslabs.dev}")
     private String mediamtxBaseUrl;
 
-    // Rate limiting: track failed auth attempts per IP
-    private static final int MAX_ATTEMPTS_PER_MINUTE = 5;
-    private final ConcurrentHashMap<String, RateLimitEntry> rateLimitMap = new ConcurrentHashMap<>();
-
-    private static class RateLimitEntry {
-        int attempts = 0;
-        Instant windowStart = Instant.now();
-    }
-
     public StreamService(
             DeviceRepository deviceRepository,
             DeviceService deviceService,
             JwtDecoder jwtDecoder,
             ViewerSessionService viewerSessionService,
+            RateLimitService rateLimitService,
             @Qualifier("mqttOutboundChannel") MessageChannel mqttOutboundChannel,
             ApplicationEventPublisher eventPublisher,
             StreamEventListener streamEventListener) {
@@ -62,6 +53,7 @@ public class StreamService {
         this.deviceService = deviceService;
         this.jwtDecoder = jwtDecoder;
         this.viewerSessionService = viewerSessionService;
+        this.rateLimitService = rateLimitService;
         this.mqttOutboundChannel = mqttOutboundChannel;
         this.eventPublisher = eventPublisher;
         this.streamEventListener = streamEventListener;
@@ -82,8 +74,8 @@ public class StreamService {
             return false;
         }
 
-        // Check rate limit first
-        if (isRateLimited(sourceIp)) {
+        // Check rate limit first (distributed via Redis)
+        if (!rateLimitService.allowStreamAuthAttempt(sourceIp)) {
             log.warn("Stream publish auth blocked: rate limit exceeded for IP {}", sourceIp);
             return false;
         }
@@ -108,11 +100,11 @@ public class StreamService {
             }
 
             log.info("Stream publish auth successful for device: {} from IP: {}", deviceId, sourceIp);
-            recordSuccessfulAuth(sourceIp);
+            rateLimitService.resetStreamAuthCounter(sourceIp);
         } else {
             log.warn("Stream publish auth FAILED for device: {} from IP: {} - invalid token",
                     deviceId, sourceIp);
-            recordFailedAuth(sourceIp);
+            rateLimitService.recordStreamAuthFailure(sourceIp);
         }
 
         return valid;
@@ -201,35 +193,7 @@ public class StreamService {
         });
     }
 
-    // --- Rate Limiting Helpers ---
-
-    private boolean isRateLimited(String ip) {
-        if (ip == null)
-            return false;
-
-        RateLimitEntry entry = rateLimitMap.computeIfAbsent(ip, k -> new RateLimitEntry());
-
-        // Reset window if expired (1 minute)
-        if (Instant.now().isAfter(entry.windowStart.plusSeconds(60))) {
-            entry.attempts = 0;
-            entry.windowStart = Instant.now();
-        }
-
-        return entry.attempts >= MAX_ATTEMPTS_PER_MINUTE;
-    }
-
-    private void recordSuccessfulAuth(String ip) {
-        // Reset on success
-        rateLimitMap.remove(ip);
-    }
-
-    private void recordFailedAuth(String ip) {
-        if (ip == null)
-            return;
-
-        RateLimitEntry entry = rateLimitMap.computeIfAbsent(ip, k -> new RateLimitEntry());
-        entry.attempts++;
-    }
+    // Rate limiting is now handled by RateLimitService (Redis-backed, distributed)
 
     // --- On-Demand Stream Control with Session Tracking ---
 
