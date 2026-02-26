@@ -4,29 +4,41 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-
-import java.lang.reflect.Field;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.awaitility.Awaitility.await;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.*;
 
 /**
  * Unit tests for {@link RateLimitService}.
- * Tests in-memory rate limiting logic, window expiration, and cleanup.
+ * Tests Redis-backed rate limiting logic with mocked StringRedisTemplate.
+ *
+ * <p>
+ * The tests use Mockito mocks for StringRedisTemplate to verify that
+ * the correct Redis keys are used and that TTL is set appropriately.
+ * </p>
  */
+@ExtendWith(MockitoExtension.class)
 class RateLimitServiceTest {
+
+    @Mock
+    private StringRedisTemplate redisTemplate;
+
+    @Mock
+    private ValueOperations<String, String> valueOps;
 
     private RateLimitService rateLimitService;
 
     @BeforeEach
     void setUp() {
-        rateLimitService = new RateLimitService();
+        lenient().when(redisTemplate.opsForValue()).thenReturn(valueOps);
+        rateLimitService = new RateLimitService(redisTemplate);
     }
 
     @Nested
@@ -38,58 +50,84 @@ class RateLimitServiceTest {
         void shouldAllowFirstRequest() {
             // Given
             String clientIp = "192.168.1.100";
+            when(valueOps.increment("rate_limit:pairing:192.168.1.100")).thenReturn(1L);
 
             // When
             boolean allowed = rateLimitService.allowPairingRequest(clientIp);
 
             // Then
             assertThat(allowed).isTrue();
+            verify(redisTemplate).expire(eq("rate_limit:pairing:192.168.1.100"), any());
         }
 
         @Test
-        @DisplayName("should allow requests up to limit")
-        void shouldAllowRequestsUpToLimit() {
+        @DisplayName("should allow requests up to limit (count=10)")
+        void shouldAllowRequestsAtLimit() {
             // Given
             String clientIp = "192.168.1.101";
+            when(valueOps.increment("rate_limit:pairing:192.168.1.101")).thenReturn(10L);
 
-            // When/Then - Allow first 10 requests
-            for (int i = 0; i < 10; i++) {
-                boolean allowed = rateLimitService.allowPairingRequest(clientIp);
-                assertThat(allowed).isTrue();
-            }
+            // When
+            boolean allowed = rateLimitService.allowPairingRequest(clientIp);
+
+            // Then
+            assertThat(allowed).isTrue();
+            // TTL should NOT be set again (count != 1)
+            verify(redisTemplate, never()).expire(any(), any());
         }
 
         @Test
-        @DisplayName("should block request exceeding limit")
+        @DisplayName("should block request exceeding limit (count=11)")
         void shouldBlockRequestExceedingLimit() {
             // Given
             String clientIp = "192.168.1.102";
+            when(valueOps.increment("rate_limit:pairing:192.168.1.102")).thenReturn(11L);
 
-            // When - Make 10 allowed requests
-            for (int i = 0; i < 10; i++) {
-                rateLimitService.allowPairingRequest(clientIp);
-            }
-
-            // Then - 11th request should be blocked
+            // When
             boolean allowed = rateLimitService.allowPairingRequest(clientIp);
+
+            // Then
             assertThat(allowed).isFalse();
         }
 
         @Test
-        @DisplayName("should isolate rate limits per IP")
-        void shouldIsolateRateLimitsPerIp() {
+        @DisplayName("should use correct Redis key format")
+        void shouldUseCorrectRedisKey() {
             // Given
-            String ip1 = "192.168.1.1";
-            String ip2 = "192.168.1.2";
+            String clientIp = "10.0.0.1";
+            when(valueOps.increment("rate_limit:pairing:10.0.0.1")).thenReturn(1L);
 
-            // When - Exhaust limit for ip1
-            for (int i = 0; i < 11; i++) {
-                rateLimitService.allowPairingRequest(ip1);
-            }
+            // When
+            rateLimitService.allowPairingRequest(clientIp);
 
-            // Then - ip2 should still be allowed
-            boolean allowedIp2 = rateLimitService.allowPairingRequest(ip2);
-            assertThat(allowedIp2).isTrue();
+            // Then
+            verify(valueOps).increment("rate_limit:pairing:10.0.0.1");
+        }
+
+        @Test
+        @DisplayName("should set TTL only on first request (count=1)")
+        void shouldSetTtlOnlyOnFirstRequest() {
+            // Given
+            when(valueOps.increment("rate_limit:pairing:192.168.1.103")).thenReturn(1L);
+
+            // When
+            rateLimitService.allowPairingRequest("192.168.1.103");
+
+            // Then
+            verify(redisTemplate).expire(eq("rate_limit:pairing:192.168.1.103"), any());
+        }
+
+        @Test
+        @DisplayName("should NOT set TTL on subsequent requests (count>1)")
+        void shouldNotSetTtlOnSubsequentRequests() {
+            // Given
+            when(valueOps.increment("rate_limit:pairing:192.168.1.104")).thenReturn(5L);
+
+            // When
+            rateLimitService.allowPairingRequest("192.168.1.104");
+
+            // Then
+            verify(redisTemplate, never()).expire(any(), any());
         }
 
         @Test
@@ -98,8 +136,9 @@ class RateLimitServiceTest {
             // When
             boolean allowed = rateLimitService.allowPairingRequest(null);
 
-            // Then - Should not block unknown clients
+            // Then — null IPs are allowed to avoid blocking unidentifiable clients
             assertThat(allowed).isTrue();
+            verifyNoInteractions(valueOps);
         }
 
         @Test
@@ -108,145 +147,157 @@ class RateLimitServiceTest {
             // When
             boolean allowed = rateLimitService.allowPairingRequest("");
 
-            // Then - Should not block unknown clients
+            // Then
+            assertThat(allowed).isTrue();
+            verifyNoInteractions(valueOps);
+        }
+
+        @Test
+        @DisplayName("should handle IPv6 addresses")
+        void shouldHandleIpv6() {
+            // Given
+            String ipv6 = "2001:0db8:85a3:0000:0000:8a2e:0370:7334";
+            when(valueOps.increment("rate_limit:pairing:" + ipv6)).thenReturn(1L);
+
+            // When
+            boolean allowed = rateLimitService.allowPairingRequest(ipv6);
+
+            // Then
             assertThat(allowed).isTrue();
         }
 
         @Test
-        @DisplayName("should reset counter after window expires")
-        void shouldResetCounterAfterWindowExpires() throws Exception {
+        @DisplayName("should isolate rate limits per IP")
+        void shouldIsolateRateLimitsPerIp() {
             // Given
-            String clientIp = "192.168.1.103";
+            when(valueOps.increment("rate_limit:pairing:192.168.1.1")).thenReturn(11L);
+            when(valueOps.increment("rate_limit:pairing:192.168.1.2")).thenReturn(1L);
 
-            // When - Exhaust limit
-            for (int i = 0; i < 11; i++) {
-                rateLimitService.allowPairingRequest(clientIp);
-            }
-            boolean blockedBefore = !rateLimitService.allowPairingRequest(clientIp);
+            // When
+            boolean blockedIp1 = rateLimitService.allowPairingRequest("192.168.1.1");
+            boolean allowedIp2 = rateLimitService.allowPairingRequest("192.168.1.2");
 
-            // Simulate window expiration by manipulating internal state
-            forceWindowExpiration(clientIp);
-
-            // Then - Should allow again after window reset
-            boolean allowedAfter = rateLimitService.allowPairingRequest(clientIp);
-            assertThat(blockedBefore).isTrue();
-            assertThat(allowedAfter).isTrue();
-        }
-
-        @Test
-        @DisplayName("should handle concurrent requests from same IP")
-        void shouldHandleConcurrentRequests() throws InterruptedException {
-            // Given
-            String clientIp = "192.168.1.104";
-            int threadCount = 15;
-            CountDownLatch latch = new CountDownLatch(threadCount);
-            AtomicInteger allowedCount = new AtomicInteger(0);
-            AtomicInteger blockedCount = new AtomicInteger(0);
-
-            ExecutorService executor = Executors.newFixedThreadPool(threadCount);
-
-            // When - Concurrent requests
-            for (int i = 0; i < threadCount; i++) {
-                executor.submit(() -> {
-                    try {
-                        boolean allowed = rateLimitService.allowPairingRequest(clientIp);
-                        if (allowed) {
-                            allowedCount.incrementAndGet();
-                        } else {
-                            blockedCount.incrementAndGet();
-                        }
-                    } finally {
-                        latch.countDown();
-                    }
-                });
-            }
-
-            latch.await();
-            executor.shutdown();
-
-            // Then - Exactly 10 should be allowed, rest blocked
-            assertThat(allowedCount.get()).isEqualTo(10);
-            assertThat(blockedCount.get()).isEqualTo(5);
+            // Then
+            assertThat(blockedIp1).isFalse();
+            assertThat(allowedIp2).isTrue();
         }
     }
 
     @Nested
-    @DisplayName("cleanup")
-    class CleanupTests {
+    @DisplayName("allowStreamAuthAttempt")
+    class AllowStreamAuthAttemptTests {
 
         @Test
-        @DisplayName("should remove old entries")
-        void shouldRemoveOldEntries() throws Exception {
+        @DisplayName("should allow first stream auth attempt")
+        void shouldAllowFirstAttempt() {
             // Given
-            String oldIp = "192.168.1.200";
-            rateLimitService.allowPairingRequest(oldIp);
-
-            // Force entry to be old
-            forceWindowExpiration(oldIp);
-
-            // Wait for 2x window size to ensure cleanup threshold is met
-            Thread.sleep(100); // Small delay to simulate passage of time
+            when(valueOps.increment("rate_limit:stream_auth:192.168.1.50")).thenReturn(1L);
 
             // When
-            rateLimitService.cleanup();
+            boolean allowed = rateLimitService.allowStreamAuthAttempt("192.168.1.50");
 
-            // Then - Entry should be removed (verify by checking internal state)
-            int sizeBefore = getPairingLimitsSize();
-            rateLimitService.allowPairingRequest(oldIp); // Create new entry
-            int sizeAfter = getPairingLimitsSize();
-
-            // If cleanup worked, the old entry was removed, so adding new entry increases size
-            assertThat(sizeAfter).isGreaterThanOrEqualTo(sizeBefore);
+            // Then
+            assertThat(allowed).isTrue();
         }
 
         @Test
-        @DisplayName("should keep recent entries")
-        void shouldKeepRecentEntries() {
+        @DisplayName("should block stream auth after 5 attempts")
+        void shouldBlockAfterMaxAttempts() {
             // Given
-            String recentIp = "192.168.1.201";
-            rateLimitService.allowPairingRequest(recentIp);
-            int sizeBefore = getPairingLimitsSize();
+            when(valueOps.increment("rate_limit:stream_auth:192.168.1.51")).thenReturn(6L);
 
             // When
-            rateLimitService.cleanup();
+            boolean allowed = rateLimitService.allowStreamAuthAttempt("192.168.1.51");
 
-            // Then - Entry should still be there
-            int sizeAfter = getPairingLimitsSize();
-            assertThat(sizeAfter).isEqualTo(sizeBefore);
+            // Then
+            assertThat(allowed).isFalse();
         }
 
         @Test
-        @DisplayName("should handle cleanup on empty map")
-        void shouldHandleCleanupOnEmptyMap() {
-            // When/Then - Should not throw
-            rateLimitService.cleanup();
+        @DisplayName("should allow null IP")
+        void shouldAllowNullIp() {
+            // When
+            boolean allowed = rateLimitService.allowStreamAuthAttempt(null);
 
-            int size = getPairingLimitsSize();
-            assertThat(size).isEqualTo(0);
+            // Then
+            assertThat(allowed).isTrue();
+            verifyNoInteractions(valueOps);
+        }
+    }
+
+    @Nested
+    @DisplayName("recordStreamAuthFailure")
+    class RecordStreamAuthFailureTests {
+
+        @Test
+        @DisplayName("should increment failure counter for IP")
+        void shouldIncrementFailureCounter() {
+            // Given
+            when(valueOps.increment("rate_limit:stream_auth:192.168.1.60")).thenReturn(1L);
+
+            // When
+            rateLimitService.recordStreamAuthFailure("192.168.1.60");
+
+            // Then
+            verify(valueOps).increment("rate_limit:stream_auth:192.168.1.60");
         }
 
         @Test
-        @DisplayName("should cleanup multiple old entries")
-        void shouldCleanupMultipleOldEntries() throws Exception {
-            // Given - Create multiple entries and force them to be old
-            for (int i = 0; i < 5; i++) {
-                String ip = "192.168.1." + (210 + i);
-                rateLimitService.allowPairingRequest(ip);
-                forceWindowExpiration(ip);
-            }
-
-            Thread.sleep(100); // Simulate time passage
+        @DisplayName("should set TTL on first failure")
+        void shouldSetTtlOnFirstFailure() {
+            // Given
+            when(valueOps.increment("rate_limit:stream_auth:192.168.1.61")).thenReturn(1L);
 
             // When
-            rateLimitService.cleanup();
+            rateLimitService.recordStreamAuthFailure("192.168.1.61");
 
-            // Then - Add new entry to verify cleanup occurred
-            String newIp = "192.168.1.220";
-            rateLimitService.allowPairingRequest(newIp);
-            int sizeAfter = getPairingLimitsSize();
+            // Then
+            verify(redisTemplate).expire(eq("rate_limit:stream_auth:192.168.1.61"), any());
+        }
 
-            // After cleanup, should have minimal entries
-            assertThat(sizeAfter).isLessThanOrEqualTo(6); // At most the 5 old + 1 new
+        @Test
+        @DisplayName("should handle null IP gracefully")
+        void shouldHandleNullIp() {
+            // When
+            rateLimitService.recordStreamAuthFailure(null);
+
+            // Then — no Redis interaction expected
+            verifyNoInteractions(valueOps);
+        }
+    }
+
+    @Nested
+    @DisplayName("resetStreamAuthCounter")
+    class ResetStreamAuthCounterTests {
+
+        @Test
+        @DisplayName("should delete the Redis key for IP")
+        void shouldDeleteRedisKey() {
+            // When
+            rateLimitService.resetStreamAuthCounter("192.168.1.70");
+
+            // Then
+            verify(redisTemplate).delete("rate_limit:stream_auth:192.168.1.70");
+        }
+
+        @Test
+        @DisplayName("should handle null IP gracefully")
+        void shouldHandleNullIp() {
+            // When
+            rateLimitService.resetStreamAuthCounter(null);
+
+            // Then — no Redis interaction
+            verify(redisTemplate, never()).delete(anyString());
+        }
+
+        @Test
+        @DisplayName("should handle empty IP gracefully")
+        void shouldHandleEmptyIp() {
+            // When
+            rateLimitService.resetStreamAuthCounter("");
+
+            // Then
+            verify(redisTemplate, never()).delete(anyString());
         }
     }
 
@@ -255,30 +306,28 @@ class RateLimitServiceTest {
     class EdgeCaseTests {
 
         @Test
-        @DisplayName("should handle exact boundary at 10 requests")
+        @DisplayName("should handle exact boundary at limit (count=10 pairing)")
         void shouldHandleExactBoundary() {
             // Given
-            String clientIp = "192.168.1.250";
+            when(valueOps.increment("rate_limit:pairing:192.168.1.250")).thenReturn(10L);
 
-            // When - Make exactly 10 requests
-            for (int i = 0; i < 10; i++) {
-                boolean allowed = rateLimitService.allowPairingRequest(clientIp);
-                assertThat(allowed).as("Request %d should be allowed", i + 1).isTrue();
-            }
+            // When
+            boolean allowed = rateLimitService.allowPairingRequest("192.168.1.250");
 
-            // Then - 11th should be blocked
-            boolean eleventhRequest = rateLimitService.allowPairingRequest(clientIp);
-            assertThat(eleventhRequest).isFalse();
+            // Then
+            assertThat(allowed).isTrue();
         }
 
         @Test
-        @DisplayName("should handle IPv6 addresses")
-        void shouldHandleIpv6() {
+        @DisplayName("should handle exact boundary at limit (count=5 stream_auth)")
+        void shouldHandleStreamAuthBoundary() {
             // Given
-            String ipv6 = "2001:0db8:85a3:0000:0000:8a2e:0370:7334";
+            when(valueOps.increment("rate_limit:stream_auth:192.168.1.251")).thenReturn(5L);
 
-            // When/Then
-            boolean allowed = rateLimitService.allowPairingRequest(ipv6);
+            // When
+            boolean allowed = rateLimitService.allowStreamAuthAttempt("192.168.1.251");
+
+            // Then
             assertThat(allowed).isTrue();
         }
 
@@ -287,39 +336,26 @@ class RateLimitServiceTest {
         void shouldHandleSpecialCharacters() {
             // Given
             String specialIp = "192.168.1.1:8080";
+            when(valueOps.increment("rate_limit:pairing:" + specialIp)).thenReturn(1L);
 
-            // When/Then
+            // When
             boolean allowed = rateLimitService.allowPairingRequest(specialIp);
+
+            // Then
             assertThat(allowed).isTrue();
         }
-    }
 
-    // Helper methods to access private fields for testing
+        @Test
+        @DisplayName("should handle null increment return value")
+        void shouldHandleNullIncrementReturn() {
+            // Given - Redis returns null (unusual but possible edge case)
+            when(valueOps.increment("rate_limit:pairing:192.168.1.252")).thenReturn(null);
 
-    private int getPairingLimitsSize() {
-        try {
-            Field field = RateLimitService.class.getDeclaredField("pairingLimits");
-            field.setAccessible(true);
-            @SuppressWarnings("unchecked")
-            Map<String, ?> pairingLimits = (Map<String, ?>) field.get(rateLimitService);
-            return pairingLimits.size();
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to access pairingLimits field", e);
-        }
-    }
+            // When
+            boolean allowed = rateLimitService.allowPairingRequest("192.168.1.252");
 
-    private void forceWindowExpiration(String ip) throws Exception {
-        Field field = RateLimitService.class.getDeclaredField("pairingLimits");
-        field.setAccessible(true);
-        @SuppressWarnings("unchecked")
-        Map<String, Object> pairingLimits = (Map<String, Object>) field.get(rateLimitService);
-
-        Object bucket = pairingLimits.get(ip);
-        if (bucket != null) {
-            // Set windowStart to 2 hours ago (well past window size)
-            Field windowStartField = bucket.getClass().getDeclaredField("windowStart");
-            windowStartField.setAccessible(true);
-            windowStartField.setLong(bucket, System.currentTimeMillis() - 7200_000); // 2 hours ago
+            // Then - Should be blocked when count is null (fail-safe)
+            assertThat(allowed).isFalse();
         }
     }
 }
