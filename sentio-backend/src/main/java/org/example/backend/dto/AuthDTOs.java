@@ -1,5 +1,8 @@
 package org.example.backend.dto;
 
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -14,7 +17,10 @@ public class AuthDTOs {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class LoginRequest {
+        @NotBlank(message = "Username is required")
         private String username;
+
+        @NotBlank(message = "Password is required")
         private String password;
     }
 
@@ -22,10 +28,24 @@ public class AuthDTOs {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class RegisterRequest {
+        @NotBlank(message = "Username is required")
+        @Size(min = 3, max = 50, message = "Username must be between 3 and 50 characters")
         private String username;
+
+        @NotBlank(message = "Password is required")
+        @Size(min = 8, message = "Password must be at least 8 characters")
         private String password;
+
+        @NotBlank(message = "Email is required")
+        @Email(message = "Email must be a valid email address")
         private String email;
+
+        @NotBlank(message = "First name is required")
+        @Size(max = 50, message = "First name must be at most 50 characters")
         private String firstName;
+
+        @NotBlank(message = "Last name is required")
+        @Size(max = 50, message = "Last name must be at most 50 characters")
         private String lastName;
     }
 
@@ -54,18 +74,25 @@ public class AuthDTOs {
     public record RegisterResponse(boolean success, String message) {
     }
 
-    public record ForgotPasswordRequest(String email) {
+    public record ForgotPasswordRequest(
+            @NotBlank(message = "Email is required") @Email(message = "Email must be a valid email address") String email) {
     }
 
     public record TokenValidationResponse(boolean valid, String email, String error) {
     }
 
-    public record ResetPasswordRequest(String token, String password, String confirmPassword) {
+    public record ResetPasswordRequest(
+            @NotBlank(message = "Token is required") String token,
+
+            @NotBlank(message = "Password is required") @Size(min = 8, message = "Password must be at least 8 characters") String password,
+
+            @NotBlank(message = "Password confirmation is required") String confirmPassword) {
     }
 
     public record MessageResponse(boolean success, String message) {
     }
 
-    public record ResendVerificationRequest(String email) {
+    public record ResendVerificationRequest(
+            @NotBlank(message = "Email is required") @Email(message = "Email must be a valid email address") String email) {
     }
 }

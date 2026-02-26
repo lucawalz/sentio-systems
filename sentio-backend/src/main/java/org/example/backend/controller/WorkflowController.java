@@ -276,6 +276,7 @@ public class WorkflowController {
         @lombok.NoArgsConstructor
         @lombok.AllArgsConstructor
         public static class AgentQuery {
+                @jakarta.validation.constraints.NotBlank(message = "Query is required")
                 private String query;
         }
 
