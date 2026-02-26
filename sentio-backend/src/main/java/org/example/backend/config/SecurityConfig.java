@@ -18,10 +18,36 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.util.Arrays;
 import java.util.List;
 
+/**
+ * Central security configuration for the Sentio backend.
+ *
+ * <h3>Authentication</h3>
+ * Uses Keycloak-issued JWTs validated as an OAuth 2.0 Resource Server.
+ * Tokens are resolved from both the {@code Authorization} header and
+ * the {@code access_token} HTTP-only cookie (for browser clients).
+ *
+ * <h3>CORS (REQ-042)</h3>
+ * Allowed origins are externalised via the {@code CORS_ALLOWED_ORIGINS}
+ * environment variable (comma-separated). The default value preserves
+ * backward-compatibility with existing development and production origins.
+ * Allowed headers are restricted to an explicit allowlist; wildcard ({@code *})
+ * is intentionally avoided.
+ *
+ * <h3>CSRF</h3>
+ * CSRF protection is disabled. The API relies on stateless JWT authentication
+ * with {@code SameSite=Lax} cookies, which mitigates cross-site request forgery
+ * for cookie-based flows.
+ *
+ * @see CorsLoggingFilter
+ */
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
 
+    /**
+     * Comma-separated list of allowed CORS origins.
+     * Configurable via the {@code CORS_ALLOWED_ORIGINS} environment variable.
+     */
     @Value("${cors.allowed-origins:http://localhost:5173,http://localhost:3000,https://sentio.syslabs.dev}")
     private String allowedOriginsRaw;
 
@@ -29,7 +55,7 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .csrf(csrf -> csrf.disable()) // CSRF disabled for now, relying on SameSite=Lax cookies
+                .csrf(csrf -> csrf.disable()) // CSRF disabled — JWT auth with SameSite=Lax cookies
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
@@ -56,6 +82,10 @@ public class SecurityConfig {
         return http.build();
     }
 
+    /**
+     * Resolves bearer tokens from both the {@code Authorization} header
+     * and the {@code access_token} HTTP-only cookie, with header taking precedence.
+     */
     @Bean
     public BearerTokenResolver bearerTokenResolver() {
         BearerTokenResolver defaultResolver = new DefaultBearerTokenResolver();
@@ -80,6 +110,20 @@ public class SecurityConfig {
         };
     }
 
+    /**
+     * Configures CORS with externalised origins and hardened header/method
+     * policies.
+     *
+     * <ul>
+     * <li>Origins: read from {@code cors.allowed-origins} property (env:
+     * {@code CORS_ALLOWED_ORIGINS})</li>
+     * <li>Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS</li>
+     * <li>Headers: Authorization, Content-Type, Accept, X-Requested-With,
+     * Cache-Control</li>
+     * <li>Credentials: enabled (required for cookie-based JWT auth)</li>
+     * <li>Max-Age: 3600s (preflight cache for 1 hour)</li>
+     * </ul>
+     */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
