@@ -1,6 +1,7 @@
 package org.example.backend.controller;
 
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.example.backend.dto.AuthDTOs;
 import org.example.backend.service.AuthService;
@@ -24,16 +25,17 @@ public class AuthController {
     private final EmailVerificationService emailVerificationService;
 
     @PostMapping("/register")
-    public ResponseEntity<AuthDTOs.RegisterResponse> register(@RequestBody AuthDTOs.RegisterRequest request) {
+    public ResponseEntity<AuthDTOs.RegisterResponse> register(@Valid @RequestBody AuthDTOs.RegisterRequest request) {
         authService.register(request);
         // Send custom verification email
         emailVerificationService.createVerificationToken(request.getEmail());
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(new AuthDTOs.RegisterResponse(true, "Account created! Please check your email to verify your account."));
+                .body(new AuthDTOs.RegisterResponse(true,
+                        "Account created! Please check your email to verify your account."));
     }
 
     @PostMapping("/login")
-    public ResponseEntity<Void> login(@RequestBody AuthDTOs.LoginRequest request, HttpServletResponse response) {
+    public ResponseEntity<Void> login(@Valid @RequestBody AuthDTOs.LoginRequest request, HttpServletResponse response) {
         AuthDTOs.TokenResponse tokens = authService.login(request.getUsername(), request.getPassword());
 
         response.addHeader(HttpHeaders.SET_COOKIE,
@@ -117,7 +119,7 @@ public class AuthController {
     }
 
     @PostMapping("/forgot-password")
-    public ResponseEntity<Void> forgotPassword(@RequestBody AuthDTOs.ForgotPasswordRequest request) {
+    public ResponseEntity<Void> forgotPassword(@Valid @RequestBody AuthDTOs.ForgotPasswordRequest request) {
         if (authService.userExistsByEmail(request.email())) {
             passwordResetService.createResetToken(request.email());
         }
@@ -135,11 +137,13 @@ public class AuthController {
     }
 
     @PostMapping("/reset-password")
-    public ResponseEntity<AuthDTOs.MessageResponse> resetPassword(@RequestBody AuthDTOs.ResetPasswordRequest request) {
+    public ResponseEntity<AuthDTOs.MessageResponse> resetPassword(
+            @Valid @RequestBody AuthDTOs.ResetPasswordRequest request) {
         String email = passwordResetService.validateToken(request.token());
         if (email == null) {
             return ResponseEntity.badRequest()
-                    .body(new AuthDTOs.MessageResponse(false, "Invalid or expired token. Please request a new reset link."));
+                    .body(new AuthDTOs.MessageResponse(false,
+                            "Invalid or expired token. Please request a new reset link."));
         }
 
         if (request.password() == null || request.password().length() < 8) {
@@ -173,7 +177,8 @@ public class AuthController {
         try {
             authService.markEmailVerified(email);
             emailVerificationService.invalidateToken(token);
-            return ResponseEntity.ok(new AuthDTOs.MessageResponse(true, "Email verified successfully! You can now sign in."));
+            return ResponseEntity
+                    .ok(new AuthDTOs.MessageResponse(true, "Email verified successfully! You can now sign in."));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new AuthDTOs.MessageResponse(false, "Failed to verify email. Please try again."));
@@ -181,7 +186,7 @@ public class AuthController {
     }
 
     @PostMapping("/resend-verification")
-    public ResponseEntity<Void> resendVerification(@RequestBody AuthDTOs.ResendVerificationRequest request) {
+    public ResponseEntity<Void> resendVerification(@Valid @RequestBody AuthDTOs.ResendVerificationRequest request) {
         if (authService.userExistsByEmail(request.email())) {
             emailVerificationService.createVerificationToken(request.email());
         }

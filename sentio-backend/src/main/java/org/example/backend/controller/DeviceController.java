@@ -3,6 +3,7 @@ package org.example.backend.controller;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.backend.dto.DevicePairRequest;
@@ -64,7 +65,7 @@ public class DeviceController {
 
     @Operation(summary = "Exchange pairing code for token", description = "Public endpoint - device calls this to exchange pairing code for permanent token")
     @PostMapping("/pair")
-    public ResponseEntity<?> pairDevice(@RequestBody DevicePairRequest request, HttpServletRequest httpRequest) {
+    public ResponseEntity<?> pairDevice(@Valid @RequestBody DevicePairRequest request, HttpServletRequest httpRequest) {
         // Rate limiting: 10 requests per minute per IP
         String clientIp = getClientIp(httpRequest);
         if (!rateLimitService.allowPairingRequest(clientIp)) {
