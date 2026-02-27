@@ -76,7 +76,13 @@ public class DataInitializer implements ApplicationRunner {
         }
 
         log.info("Loading demo data...");
-        String ownerId = seedKeycloakUser();
+        String ownerId;
+        try {
+            ownerId = seedKeycloakUser();
+        } catch (Exception e) {
+            log.error("Failed to seed Keycloak demo user — Keycloak must be healthy before the backend starts: {}", e.getMessage());
+            return;
+        }
         seedDevices(ownerId);
         seedWeatherData();
         seedAnimalDetections();

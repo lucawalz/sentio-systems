@@ -7,6 +7,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+@org.springframework.test.context.TestPropertySource(properties = "spring.jpa.hibernate.ddl-auto=create")
 public abstract class BaseDataJpaTest {
 
     // Workaround for Docker Desktop v29+ (Docker Engine API 1.44+)

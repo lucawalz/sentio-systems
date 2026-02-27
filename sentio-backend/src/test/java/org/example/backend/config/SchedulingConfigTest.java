@@ -1,7 +1,7 @@
 package org.example.backend.config;
 
-import org.example.backend.repository.DeviceRepository;
 import org.example.backend.service.BrightSkyService;
+import org.example.backend.service.DeviceService;
 import org.example.backend.service.HistoricalWeatherService;
 import org.example.backend.service.WeatherForecastService;
 import org.junit.jupiter.api.DisplayName;
@@ -27,7 +27,7 @@ class SchedulingConfigTest {
     private BrightSkyService brightSkyService;
 
     @Mock
-    private DeviceRepository deviceRepository;
+    private DeviceService deviceService;
 
     @InjectMocks
     private SchedulingConfig schedulingConfig;
@@ -35,7 +35,7 @@ class SchedulingConfigTest {
     @Test
     @DisplayName("onApplicationReady should skip if no devices exist")
     void onApplicationReady_NoDevices() {
-        when(deviceRepository.count()).thenReturn(0L);
+        when(deviceService.existsAnyDevice()).thenReturn(false);
 
         schedulingConfig.onApplicationReady();
 
@@ -46,7 +46,7 @@ class SchedulingConfigTest {
     @Test
     @DisplayName("onApplicationReady should fetch initial data if devices exist")
     void onApplicationReady_WithDevices() {
-        when(deviceRepository.count()).thenReturn(1L);
+        when(deviceService.existsAnyDevice()).thenReturn(true);
 
         schedulingConfig.onApplicationReady();
 
@@ -57,7 +57,7 @@ class SchedulingConfigTest {
     @Test
     @DisplayName("onApplicationReady should handle exceptions gracefully")
     void onApplicationReady_HandlesException() {
-        when(deviceRepository.count()).thenReturn(1L);
+        when(deviceService.existsAnyDevice()).thenReturn(true);
         doThrow(new RuntimeException("API down")).when(weatherForecastService).updateForecastsForAllDeviceLocations();
 
         schedulingConfig.onApplicationReady();
@@ -69,7 +69,7 @@ class SchedulingConfigTest {
     @Test
     @DisplayName("updateDailyWeatherForecasts should skip if no devices")
     void updateDailyWeatherForecasts_NoDevices() {
-        when(deviceRepository.count()).thenReturn(0L);
+        when(deviceService.existsAnyDevice()).thenReturn(false);
 
         schedulingConfig.updateDailyWeatherForecasts();
 
@@ -79,7 +79,7 @@ class SchedulingConfigTest {
     @Test
     @DisplayName("updateDailyWeatherForecasts should update if devices exist")
     void updateDailyWeatherForecasts_WithDevices() {
-        when(deviceRepository.count()).thenReturn(2L);
+        when(deviceService.existsAnyDevice()).thenReturn(true);
 
         schedulingConfig.updateDailyWeatherForecasts();
 
@@ -89,7 +89,7 @@ class SchedulingConfigTest {
     @Test
     @DisplayName("updateDailyHistoricalWeather should execute condition correctly")
     void updateDailyHistoricalWeather() {
-        when(deviceRepository.count()).thenReturn(0L).thenReturn(1L);
+        when(deviceService.existsAnyDevice()).thenReturn(false).thenReturn(true);
 
         schedulingConfig.updateDailyHistoricalWeather(); // skips
         schedulingConfig.updateDailyHistoricalWeather(); // executes
@@ -100,7 +100,7 @@ class SchedulingConfigTest {
     @Test
     @DisplayName("updateWeatherAlerts should execute condition correctly")
     void updateWeatherAlerts() {
-        when(deviceRepository.count()).thenReturn(0L).thenReturn(1L);
+        when(deviceService.existsAnyDevice()).thenReturn(false).thenReturn(true);
 
         schedulingConfig.updateWeatherAlerts(); // skips
         schedulingConfig.updateWeatherAlerts(); // executes
@@ -111,7 +111,7 @@ class SchedulingConfigTest {
     @Test
     @DisplayName("updateAlertsAtPeakHours should execute condition correctly")
     void updateAlertsAtPeakHours() {
-        when(deviceRepository.count()).thenReturn(0L).thenReturn(1L);
+        when(deviceService.existsAnyDevice()).thenReturn(false).thenReturn(true);
 
         schedulingConfig.updateAlertsAtPeakHours(); // skips
         schedulingConfig.updateAlertsAtPeakHours(); // executes

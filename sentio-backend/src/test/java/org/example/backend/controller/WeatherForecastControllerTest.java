@@ -3,7 +3,7 @@ package org.example.backend.controller;
 import org.example.backend.dto.WeatherForecastDTO;
 import org.example.backend.mapper.WeatherForecastMapper;
 import org.example.backend.model.WeatherForecast;
-import org.example.backend.service.WeatherForecastService;
+import org.example.backend.service.IWeatherForecastService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,7 +24,6 @@ import java.util.List;
 
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(controllers = WeatherForecastController.class, excludeAutoConfiguration = {
         SecurityAutoConfiguration.class,
@@ -39,22 +38,13 @@ class WeatherForecastControllerTest {
     @Autowired
     MockMvc mockMvc;
 
-    @Autowired
-    WeatherForecastService weatherForecastService;
-    @Autowired
-    WeatherForecastMapper weatherForecastMapper;
+    @Autowired IWeatherForecastService weatherForecastService;
+    @Autowired WeatherForecastMapper weatherForecastMapper;
 
     @TestConfiguration
     static class TestBeans {
-        @Bean
-        WeatherForecastService weatherForecastService() {
-            return mock(WeatherForecastService.class);
-        }
-
-        @Bean
-        WeatherForecastMapper weatherForecastMapper() {
-            return mock(WeatherForecastMapper.class);
-        }
+        @Bean IWeatherForecastService weatherForecastService() { return mock(IWeatherForecastService.class); }
+        @Bean WeatherForecastMapper weatherForecastMapper() { return mock(WeatherForecastMapper.class); }
     }
 
     @AfterEach

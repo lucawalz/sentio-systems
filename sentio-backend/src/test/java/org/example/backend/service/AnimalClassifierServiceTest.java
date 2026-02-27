@@ -6,6 +6,7 @@ import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import org.example.backend.BaseIntegrationTest;
 import org.example.backend.model.AnimalDetection;
 import org.example.backend.repository.AnimalDetectionRepository;
+import org.example.backend.service.classification.AnimalClassificationClient;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -91,10 +92,11 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
         // URL is dynamically set in setUp()
         registry.add("preprocessing.service.enabled", () -> "true");
         registry.add("queue.enabled", () -> "false");
+        registry.add("spring.jpa.hibernate.ddl-auto", () -> "create");
     }
 
     @Autowired
-    private AnimalClassifierService animalClassifierServiceProxy;
+    private IAnimalClassifierService animalClassifierServiceProxy;
 
     private AnimalClassifierService animalClassifierService;
 
@@ -112,6 +114,9 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
 
     @MockitoBean
     private ClassificationResultProcessor resultProcessor;
+
+    @Autowired
+    private AnimalClassificationClient animalClassificationClient;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -134,16 +139,16 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
         animalClassifierService = org.springframework.test.util.AopTestUtils
                 .getTargetObject(animalClassifierServiceProxy);
 
-        // Dynamically set WireMock URL
+        // Dynamically set WireMock URL on the classification client (where these fields now live)
         org.springframework.test.util.ReflectionTestUtils.setField(
-                animalClassifierService,
+                animalClassificationClient,
                 "preprocessingServiceUrl",
                 wmRuntimeInfo.getHttpBaseUrl() + "/classify");
 
         // Force use of strictly synchronous, basic RestTemplate to avoid HTTP/2 issues
         // with WireMock
         org.springframework.test.util.ReflectionTestUtils.setField(
-                animalClassifierService,
+                animalClassificationClient,
                 "restTemplate",
                 new org.springframework.web.client.RestTemplate());
     }
