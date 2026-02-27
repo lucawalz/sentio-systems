@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 import org.springframework.integration.annotation.ServiceActivator;
 import org.springframework.integration.channel.DirectChannel;
 import org.springframework.integration.core.MessageProducer;
@@ -29,6 +30,7 @@ public class MqttConfig {
     private final RaspiWeatherDataHandler raspiWeatherDataHandler;
     private final AnimalDetectionHandler animalDetectionHandler;
     private final DeviceStatusHandler deviceStatusHandler;
+    private final Environment environment;
 
     @Value("${mqtt.broker}")
     private String mqttBroker;
@@ -75,6 +77,18 @@ public class MqttConfig {
     public MqttPahoClientFactory mqttClientFactory() {
         DefaultMqttPahoClientFactory factory = new DefaultMqttPahoClientFactory();
         MqttConnectOptions options = new MqttConnectOptions();
+
+        boolean productionProfileActive = java.util.Arrays.stream(environment.getActiveProfiles())
+                .map(String::toLowerCase)
+                .anyMatch(profile -> profile.equals("prod") || profile.equals("production"));
+
+        if (productionProfileActive && !tlsEnabled) {
+            throw new IllegalStateException("MQTT TLS must be enabled in production profiles");
+        }
+
+        if (tlsEnabled && mqttBroker.startsWith("tcp://")) {
+            throw new IllegalStateException("MQTT broker URL must use ssl:// or mqtts:// when TLS is enabled");
+        }
 
         // Server URIs
         options.setServerURIs(new String[] { mqttBroker });
