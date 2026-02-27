@@ -3,7 +3,7 @@
 # Sentio Systems - Environment Setup Script
 # This script helps set up your local development environment
 
-set -e  # Exit on error
+set -euo pipefail
 
 echo "Sentio Systems - Environment Setup"
 echo "======================================"

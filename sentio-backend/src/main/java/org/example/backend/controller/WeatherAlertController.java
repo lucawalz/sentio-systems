@@ -13,7 +13,7 @@ import org.example.backend.dto.RadarMetadataDTO;
 import org.example.backend.dto.WeatherAlertDTO;
 import org.example.backend.mapper.WeatherAlertMapper;
 import org.example.backend.model.WeatherAlert;
-import org.example.backend.service.BrightSkyService;
+import org.example.backend.service.IBrightSkyService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -38,7 +38,7 @@ public class WeatherAlertController {
 
         private static final Logger logger = LoggerFactory.getLogger(WeatherAlertController.class);
 
-        private final BrightSkyService brightSkyService;
+        private final IBrightSkyService brightSkyService;
         private final WeatherAlertMapper weatherAlertMapper;
 
         /**
@@ -62,9 +62,6 @@ public class WeatherAlertController {
                 List<WeatherAlert> alerts = brightSkyService.getAlertsForCurrentLocation();
 
                 if (alerts.isEmpty()) {
-                        // Check if empty because no devices or no alerts
-                        // We'll return empty list for no alerts (200), but 404 for no devices
-                        // Since service returns empty for no devices, we need to differentiate
                         logger.debug("No alerts or no device locations available");
                 }
 

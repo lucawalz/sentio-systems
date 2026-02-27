@@ -6,6 +6,10 @@ import lombok.NoArgsConstructor;
 
 public class AuthDTOs {
 
+    private AuthDTOs() {
+        // Utility class
+    }
+
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
@@ -43,5 +47,25 @@ public class AuthDTOs {
         private String username;
         private String email;
         private java.util.List<String> roles;
+    }
+
+    // Password Reset & Email Verification DTOs
+
+    public record RegisterResponse(boolean success, String message) {
+    }
+
+    public record ForgotPasswordRequest(String email) {
+    }
+
+    public record TokenValidationResponse(boolean valid, String email, String error) {
+    }
+
+    public record ResetPasswordRequest(String token, String password, String confirmPassword) {
+    }
+
+    public record MessageResponse(boolean success, String message) {
+    }
+
+    public record ResendVerificationRequest(String email) {
     }
 }

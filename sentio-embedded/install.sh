@@ -3,6 +3,11 @@
 # Sentio Embedded Unified Installer
 # Manages both Animal Detector and Weather Station
 # Installs to: ./ (root), .venv/, and manages config.yaml
+#
+# Usage:
+#   sudo ./install.sh           # Full installation
+#   sudo ./install.sh --dev     # Developer mode with more options
+#   sudo ./install.sh --repair  # Re-pair device only (skip dependencies)
 
 set -e
 
@@ -58,6 +63,16 @@ print_warning() { print_warn "$1"; }
 print_header()  { print_box_header "$1"; }
 
 # ═══════════════════════════════════════════════════════════════════
+# Root/Sudo Check
+# ═══════════════════════════════════════════════════════════════════
+
+if [ "$EUID" -ne 0 ]; then
+    echo -e "${RED}[XX]${NC} This script must be run with sudo"
+    echo "     Usage: sudo ./install.sh"
+    exit 1
+fi
+
+# ═══════════════════════════════════════════════════════════════════
 # User Detection (handles sudo correctly)
 # ═══════════════════════════════════════════════════════════════════
 
@@ -69,85 +84,280 @@ else
     REAL_HOME="$HOME"
 fi
 
+# State files for resumable installation
+STATE_DIR="$REAL_HOME/.sentio"
+HAILO_STATE_FILE="$STATE_DIR/hailo_install_stage"
+COMPONENT_STATE_FILE="$STATE_DIR/install_components"
+mkdir -p "$STATE_DIR"
+chown "$REAL_USER:$REAL_USER" "$STATE_DIR"
+
 # ═══════════════════════════════════════════════════════════════════
-# Title Screen and Mode Selection
+# Usage / Help
 # ═══════════════════════════════════════════════════════════════════
 
-print_box_header "Sentio - Installation Wizard"
+show_usage() {
+    echo ""
+    echo -e "${BOLD}Usage:${NC} sudo ./install.sh [OPTIONS]"
+    echo ""
+    echo -e "${BOLD}Components:${NC}"
+    echo "  (default)         Install both Animal Detector and Weather Station"
+    echo "  --animal, -a      Install Animal Detector only"
+    echo "  --weather, -w     Install Weather Station only"
+    echo ""
+    echo -e "${BOLD}Actions:${NC}"
+    echo "  --repair          Re-pair device (skip dependencies, just get new token)"
+    echo "  --reset           Reset install state and start fresh"
+    echo "  --status          Show current installation status"
+    echo ""
+    echo -e "${BOLD}Options:${NC}"
+    echo "  --dev, -d         Developer mode (more configuration options)"
+    echo "  --help, -h        Show this help message"
+    echo ""
+    echo -e "${BOLD}Examples:${NC}"
+    echo "  sudo ./install.sh              # Install both components"
+    echo "  sudo ./install.sh --animal     # Install Animal Detector only"
+    echo "  sudo ./install.sh --repair     # Re-pair device with new code"
+    echo "  sudo ./install.sh --reset      # Reset and reinstall"
+    echo ""
+    exit 0
+}
 
-# Hardware Detection
-IS_RASPBERRY_PI=false
-PI_MODEL="Unknown"
-if [ -f /proc/device-tree/model ]; then
-    PI_MODEL=$(tr -d '\0' < /proc/device-tree/model 2>/dev/null || echo "Unknown")
-    if [[ $PI_MODEL == *"Raspberry Pi"* ]]; then
-        IS_RASPBERRY_PI=true
+# ═══════════════════════════════════════════════════════════════════
+# Parse Arguments
+# ═══════════════════════════════════════════════════════════════════
+
+INSTALL_MODE="user"
+REPAIR_MODE=false
+RESET_MODE=false
+STATUS_MODE=false
+INSTALL_ANIMAL=false
+INSTALL_WEATHER=false
+COMPONENT_SPECIFIED=false
+TOTAL_STEPS=5
+
+for arg in "$@"; do
+    case $arg in
+        --help|-h)
+            show_usage
+            ;;
+        --dev|-d)
+            INSTALL_MODE="dev"
+            TOTAL_STEPS=7
+            ;;
+        --animal|-a)
+            INSTALL_ANIMAL=true
+            COMPONENT_SPECIFIED=true
+            ;;
+        --weather|-w)
+            INSTALL_WEATHER=true
+            COMPONENT_SPECIFIED=true
+            ;;
+        --repair|--re-pair)
+            REPAIR_MODE=true
+            ;;
+        --reset)
+            RESET_MODE=true
+            ;;
+        --status)
+            STATUS_MODE=true
+            ;;
+    esac
+done
+
+# ═══════════════════════════════════════════════════════════════════
+# Status Mode: Show current installation status
+# ═══════════════════════════════════════════════════════════════════
+
+if [ "$STATUS_MODE" = true ]; then
+    print_box_header "Sentio - Installation Status"
+    
+    if [ -f "$HAILO_STATE_FILE" ]; then
+        STAGE=$(cat "$HAILO_STATE_FILE")
+        print_ok "Hailo install stage: $STAGE/4"
+    else
+        print_info "Hailo: Not started"
     fi
-fi
-
-if [ "$IS_RASPBERRY_PI" = true ]; then
-    print_ok "Detected: $PI_MODEL"
-else
-    print_warn "Not running on Raspberry Pi: $PI_MODEL"
-fi
-
-# Check Python
-if ! command -v python3 &>/dev/null; then
-    print_err "Python 3 is required but not installed."
-    exit 1
-fi
-print_ok "Python 3 found: $(python3 --version 2>&1 | cut -d' ' -f2)"
-
-# Check for --dev flag
-if [ "$1" = "--dev" ] || [ "$1" = "-d" ]; then
-    INSTALL_MODE="dev"
-    TOTAL_STEPS=7
-    print_info "Developer Mode (--dev)"
-else
-    INSTALL_MODE="user"
-    TOTAL_STEPS=5
-    print_info "Standard Install (use --dev for advanced options)"
+    
+    if [ -f "$COMPONENT_STATE_FILE" ]; then
+        source "$COMPONENT_STATE_FILE"
+        if [ "$INSTALL_ANIMAL" = true ] && [ "$INSTALL_WEATHER" = true ]; then
+            print_ok "Components: Animal Detector + Weather Station"
+        elif [ "$INSTALL_ANIMAL" = true ]; then
+            print_ok "Components: Animal Detector"
+        else
+            print_ok "Components: Weather Station"
+        fi
+    else
+        print_info "Components: Not selected"
+    fi
+    
+    if [ -f "$STATE_DIR/secrets" ]; then
+        print_ok "Device: Paired"
+    else
+        print_info "Device: Not paired"
+    fi
+    
+    if [ -d ".venv" ]; then
+        print_ok "Virtual environment: Created"
+    else
+        print_info "Virtual environment: Not created"
+    fi
+    
+    echo ""
+    exit 0
 fi
 
 # ═══════════════════════════════════════════════════════════════════
-# Step 1: Component Selection (both modes)
+# Reset Mode: Clear all install state
 # ═══════════════════════════════════════════════════════════════════
 
-if [ "$INSTALL_MODE" == "dev" ]; then
-    print_step 1 $TOTAL_STEPS "Component Selection"
-else
-    print_step 1 $TOTAL_STEPS "System Check"
-    print_ok "Hardware: $PI_MODEL"
-    print_ok "User: $REAL_USER"
+if [ "$RESET_MODE" = true ]; then
+    print_box_header "Sentio - Reset Installation"
+    print_warn "This will clear all installation state."
+    echo ""
+    read -p "Are you sure? (y/N): " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        rm -f "$HAILO_STATE_FILE" "$COMPONENT_STATE_FILE"
+        print_ok "Install state cleared"
+        print_info "Run 'sudo ./install.sh' to start fresh installation"
+    else
+        print_info "Reset cancelled"
+    fi
+    exit 0
+fi
+
+# ═══════════════════════════════════════════════════════════════════
+# Repair Mode: Just re-pair device, skip everything else
+# ═══════════════════════════════════════════════════════════════════
+
+if [ "$REPAIR_MODE" = true ]; then
+    print_box_header "Sentio - Device Re-Pairing"
+    print_info "This will generate a new device token."
+    print_info "You'll need a fresh pairing code from the dashboard."
+    echo ""
+    
+    # Jump directly to device pairing section
+    SKIP_TO_PAIRING=true
+fi
+
+# ═══════════════════════════════════════════════════════════════════
+# Check if resuming installation
+# ═══════════════════════════════════════════════════════════════════
+
+HAILO_STAGE="0"
+if [ -f "$HAILO_STATE_FILE" ]; then
+    HAILO_STAGE=$(cat "$HAILO_STATE_FILE")
+fi
+
+# Load saved component selection if resuming (unless CLI flags were specified)
+RESUMING=false
+
+if [ "$HAILO_STAGE" -gt 0 ] && [ -f "$COMPONENT_STATE_FILE" ] && [ "$REPAIR_MODE" = false ]; then
+    RESUMING=true
+    # Only load saved selection if no CLI flags were specified
+    if [ "$COMPONENT_SPECIFIED" = false ]; then
+        source "$COMPONENT_STATE_FILE"
+    fi
+    print_box_header "Sentio - Resuming Installation"
+    print_ok "Continuing from stage $HAILO_STAGE"
+    if [ "$INSTALL_ANIMAL" = true ] && [ "$INSTALL_WEATHER" = true ]; then
+        print_ok "Components: Animal Detector + Weather Station"
+    elif [ "$INSTALL_ANIMAL" = true ]; then
+        print_ok "Components: Animal Detector"
+    else
+        print_ok "Components: Weather Station"
+    fi
     echo ""
 fi
 
-echo "Select component(s) to install:"
-echo "  1) Animal Detector only"
-echo "  2) Weather Station only"
-echo "  3) Both (recommended)"
-echo ""
-read -p "Enter choice [3]: " INSTALL_CHOICE
-INSTALL_CHOICE=${INSTALL_CHOICE:-3}
+# ═══════════════════════════════════════════════════════════════════
+# Title Screen and Mode Selection (only on fresh install)
+# ═══════════════════════════════════════════════════════════════════
 
-INSTALL_ANIMAL=false
-INSTALL_WEATHER=false
+if [ "$RESUMING" = false ] && [ "$REPAIR_MODE" = false ]; then
+    print_box_header "Sentio - Installation Wizard"
 
-if [ "$INSTALL_CHOICE" == "1" ]; then
-    INSTALL_ANIMAL=true
-    print_ok "Installing: Animal Detector"
-elif [ "$INSTALL_CHOICE" == "2" ]; then
-    INSTALL_WEATHER=true
-    print_ok "Installing: Weather Station"
-else
-    INSTALL_ANIMAL=true
-    INSTALL_WEATHER=true
-    print_ok "Installing: Animal Detector + Weather Station"
+    # Hardware Detection
+    IS_RASPBERRY_PI=false
+    PI_MODEL="Unknown"
+    if [ -f /proc/device-tree/model ]; then
+        PI_MODEL=$(tr -d '\0' < /proc/device-tree/model 2>/dev/null || echo "Unknown")
+        if [[ $PI_MODEL == *"Raspberry Pi"* ]]; then
+            IS_RASPBERRY_PI=true
+        fi
+    fi
+
+    if [ "$IS_RASPBERRY_PI" = true ]; then
+        print_ok "Detected: $PI_MODEL"
+    else
+        print_warn "Not running on Raspberry Pi: $PI_MODEL"
+    fi
+
+    # Check Python
+    if ! command -v python3 &>/dev/null; then
+        print_err "Python 3 is required but not installed."
+        exit 1
+    fi
+    print_ok "Python 3 found: $(python3 --version 2>&1 | cut -d' ' -f2)"
+
+    if [ "$INSTALL_MODE" == "dev" ]; then
+        print_info "Developer Mode (--dev)"
+    else
+        print_info "Standard Install (use --dev for advanced options)"
+    fi
+
+    # ═══════════════════════════════════════════════════════════════════
+    # Step 1: Component Selection (only on fresh install)
+    # ═══════════════════════════════════════════════════════════════════
+
+    if [ "$INSTALL_MODE" == "dev" ]; then
+        print_step 1 $TOTAL_STEPS "Component Selection"
+    else
+        print_step 1 $TOTAL_STEPS "System Check"
+        print_ok "Hardware: $PI_MODEL"
+        print_ok "User: $REAL_USER"
+        echo ""
+    fi
+
+    # Use CLI flags if specified, otherwise default to both
+    if [ "$COMPONENT_SPECIFIED" = true ]; then
+        # CLI flags were used
+        if [ "$INSTALL_ANIMAL" = true ] && [ "$INSTALL_WEATHER" = true ]; then
+            print_ok "Installing: Animal Detector + Weather Station"
+        elif [ "$INSTALL_ANIMAL" = true ]; then
+            print_ok "Installing: Animal Detector (--animal)"
+        else
+            print_ok "Installing: Weather Station (--weather)"
+        fi
+    else
+        # No CLI flags - default to both
+        INSTALL_ANIMAL=true
+        INSTALL_WEATHER=true
+        print_ok "Installing: Animal Detector + Weather Station (default)"
+        print_info "Use --animal or --weather for single component"
+    fi
+    
+    # Save component selection for resume
+    cat > "$COMPONENT_STATE_FILE" << EOF
+INSTALL_ANIMAL=$INSTALL_ANIMAL
+INSTALL_WEATHER=$INSTALL_WEATHER
+EOF
+    chown "$REAL_USER:$REAL_USER" "$COMPONENT_STATE_FILE"
+fi
+
+# Set IS_RASPBERRY_PI if not already set (for resume case)
+if [ -z "$IS_RASPBERRY_PI" ]; then
+    IS_RASPBERRY_PI=false
+    if [ -f /proc/device-tree/model ]; then
+        PI_MODEL=$(tr -d '\0' < /proc/device-tree/model 2>/dev/null || echo "Unknown")
+        [[ $PI_MODEL == *"Raspberry Pi"* ]] && IS_RASPBERRY_PI=true
+    fi
 fi
 
 # Dev mode: Action selection
 ACTION_MODE="1"
-if [ "$INSTALL_MODE" == "dev" ]; then
+if [ "$INSTALL_MODE" == "dev" ] && [ "$RESUMING" = false ] && [ "$REPAIR_MODE" = false ]; then
     print_step 2 $TOTAL_STEPS "Installation Mode"
     echo "Select action:"
     echo "  1) Full Install (dependencies + configuration)"
@@ -162,8 +372,13 @@ if [ "$INSTALL_MODE" == "dev" ]; then
 fi
 
 # ═══════════════════════════════════════════════════════════════════
-# Dependencies & Setup
+# Dependencies & Setup (Skip if in repair mode)
 # ═══════════════════════════════════════════════════════════════════
+
+if [ "$SKIP_TO_PAIRING" = true ]; then
+    # Repair mode - skip to device pairing
+    ACTION_MODE="2"  # Skip dependencies
+fi
 
 if [ "$ACTION_MODE" == "1" ]; then
     
@@ -179,62 +394,163 @@ if [ "$ACTION_MODE" == "1" ]; then
     if [ "$INSTALL_ANIMAL" = true ]; then
         HAILO_APPS_PATH="$REAL_HOME/hailo-apps"
         
-        # Step 1: Install Hailo runtime (hailo-all) - must be done before hailo-apps
-        if dpkg -l | grep -q "hailo-all"; then
-            print_success "Hailo runtime (hailo-all) is installed"
-        else
-            print_warning "Hailo runtime not found. Installing dkms and hailo-all..."
-            print_info "This may take a few minutes..."
-            apt update -qq || true
-            apt install -y dkms hailo-all || {
-                print_error "Could not install hailo-all."
-                print_info "Make sure you've run: sudo apt update && sudo apt full-upgrade"
-                print_info "Visit: https://hailo.ai/developer-zone/ for requirements"
-                read -p "Continue anyway? (y/N): " -n 1 -r
-                echo
-                if [[ ! $REPLY =~ ^[Yy]$ ]]; then exit 1; fi
-            }
-            print_success "Hailo runtime installed"
-            print_warning "IMPORTANT: A reboot is recommended after installing hailo-all."
-            read -p "Reboot now? (y/N): " -n 1 -r
+        # ════════════════════════════════════════════════════════════
+        # Official Hailo + RPi 5 Installation Flow
+        # Follows exact manual process with state tracking across reboots
+        # ════════════════════════════════════════════════════════════
+        
+        # Create state directory
+        mkdir -p "$REAL_HOME/.sentio"
+        
+        # Determine current installation stage
+        HAILO_STAGE="0"
+        if [ -f "$HAILO_STATE_FILE" ]; then
+            HAILO_STAGE=$(cat "$HAILO_STATE_FILE")
+        fi
+        
+        print_info "Hailo installation stage: $HAILO_STAGE"
+        
+        # ──────────────────────────────────────────────────────────────
+        # STAGE 0: System update + eeprom update → Reboot required
+        # ──────────────────────────────────────────────────────────────
+        if [ "$HAILO_STAGE" -lt 1 ]; then
+            print_info "Stage 0: System update and firmware update..."
+            
+            apt update -qq
+            apt full-upgrade -y
+            
+            print_info "Updating Raspberry Pi EEPROM firmware..."
+            rpi-eeprom-update -a || true
+            
+            # Save state and request reboot
+            echo "1" > "$HAILO_STATE_FILE"
+            chown "$REAL_USER:$REAL_USER" "$HAILO_STATE_FILE"
+            
+            print_warning "System updated. REBOOT REQUIRED before continuing."
+            print_info "After reboot, run this script again to continue."
             echo
-            if [[ $REPLY =~ ^[Yy]$ ]]; then
-                print_info "Rebooting... Run this script again after reboot."
-                sudo reboot
-                exit 0
+            read -p "Reboot now? (Y/n): " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+                reboot
             fi
+            exit 0
         fi
         
-        # Verify Hailo hardware is detected
-        if command -v hailortcli &> /dev/null; then
-            if hailortcli fw-control identify &> /dev/null; then
-                print_success "Hailo hardware detected and working"
-            else
-                print_warning "Hailo hardware not detected. Make sure AI HAT+ is connected."
-                print_info "Run: hailortcli fw-control identify"
+        # ──────────────────────────────────────────────────────────────
+        # STAGE 1: Install DKMS and Hailo driver → Reboot required
+        # ──────────────────────────────────────────────────────────────
+        if [ "$HAILO_STAGE" -lt 2 ]; then
+            print_info "Stage 1: Installing Hailo drivers..."
+            
+            # Install dkms first (as per manual process)
+            apt install -y dkms || {
+                print_error "Failed to install dkms"
+                exit 1
+            }
+            
+            # Install hailo-all
+            apt install -y hailo-all || {
+                print_error "Failed to install hailo-all"
+                print_info "Check internet connection and try again."
+                exit 1
+            }
+            print_success "Hailo driver (hailo-all) installed"
+            
+            # Save state and request reboot
+            echo "2" > "$HAILO_STATE_FILE"
+            
+            print_warning "Hailo driver installed. REBOOT REQUIRED to load driver."
+            print_info "After reboot, run this script again to continue."
+            echo
+            read -p "Reboot now? (Y/n): " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+                reboot
             fi
+            exit 0
         fi
         
-        # Step 2: Clone and install hailo-apps (Python applications layer)
-        print_info "Checking for Hailo Apps..."
-        if [ -d "$HAILO_APPS_PATH" ]; then
-            print_success "Hailo Apps found at $HAILO_APPS_PATH"
-        else
-            print_warning "Hailo Apps not found. Cloning repository..."
-            sudo -u "$REAL_USER" git clone https://github.com/hailo-ai/hailo-apps.git "$HAILO_APPS_PATH"
-            if [ $? -eq 0 ]; then
-                print_success "Hailo Apps cloned successfully"
-                print_info "Running Hailo Apps installer..."
-                cd "$HAILO_APPS_PATH"
-                ./install.sh
-                cd - > /dev/null
-                print_success "Hailo Apps installed successfully"
-            else
-                print_error "Failed to clone hailo-apps. Check your internet connection."
+        # ──────────────────────────────────────────────────────────────
+        # STAGE 2: Verify Hailo driver
+        # ──────────────────────────────────────────────────────────────
+        if [ "$HAILO_STAGE" -lt 3 ]; then
+            print_info "Stage 2: Verifying Hailo driver..."
+            
+            # Verify driver is loaded
+            if ! hailortcli fw-control identify &> /dev/null; then
+                print_error "Hailo device not responding."
+                print_info "Troubleshooting:"
+                print_info "  1. Is the AI HAT+ properly seated?"
+                print_info "  2. Check power supply (5V 5A recommended)"
+                print_info "  3. Try: sudo modprobe hailo_pci"
+                echo
                 read -p "Continue anyway? (y/N): " -n 1 -r
                 echo
                 if [[ ! $REPLY =~ ^[Yy]$ ]]; then exit 1; fi
+            else
+                print_success "Hailo device verified:"
+                hailortcli fw-control identify 2>/dev/null | head -6
             fi
+            
+            # Proceed directly to hailo-apps install (PCIe stays at default Gen 2)
+            echo "3" > "$HAILO_STATE_FILE"
+        fi
+        
+        # ──────────────────────────────────────────────────────────────
+        # STAGE 3: Install hailo-apps (final stage)
+        # ──────────────────────────────────────────────────────────────
+        if [ "$HAILO_STAGE" -lt 4 ]; then
+            print_info "Stage 3: Installing Hailo Apps..."
+            
+            # Final verification
+            if hailortcli fw-control identify &> /dev/null; then
+                print_success "Hailo device ready"
+            else
+                print_warning "Hailo device not responding - continuing anyway"
+            fi
+            
+            # Clone or update hailo-apps
+            if [ -d "$HAILO_APPS_PATH" ]; then
+                print_info "Hailo Apps found at $HAILO_APPS_PATH - updating..."
+                cd "$HAILO_APPS_PATH"
+                sudo -u "$REAL_USER" git pull || true
+                cd - > /dev/null
+            else
+                print_info "Cloning hailo-apps repository..."
+                sudo -u "$REAL_USER" git clone https://github.com/hailo-ai/hailo-apps.git "$HAILO_APPS_PATH" || {
+                    print_error "Failed to clone hailo-apps"
+                    exit 1
+                }
+            fi
+            
+            # Ensure correct ownership
+            chown -R "$REAL_USER:$REAL_USER" "$HAILO_APPS_PATH"
+            
+            # Run official installer
+            print_info "Running official Hailo Apps installer..."
+            print_info "This may take several minutes..."
+            cd "$HAILO_APPS_PATH"
+            ./install.sh || {
+                print_error "Hailo Apps installation failed."
+                print_info "Try running manually: cd $HAILO_APPS_PATH && sudo ./install.sh"
+                exit 1
+            }
+            cd - > /dev/null
+            
+            # Fix ownership after install
+            chown -R "$REAL_USER:$REAL_USER" "$HAILO_APPS_PATH"
+            
+            # Mark installation complete
+            echo "4" > "$HAILO_STATE_FILE"
+            print_success "Hailo Apps installation complete"
+        fi
+        
+        # Installation complete - verify everything
+        if [ -f "$HAILO_APPS_PATH/setup_env.sh" ]; then
+            print_success "Hailo fully installed and configured"
+        else
+            print_warning "Hailo Apps setup_env.sh not found - installation may be incomplete"
         fi
     fi
 
@@ -244,7 +560,8 @@ if [ "$ACTION_MODE" == "1" ]; then
         PKGS="python3-pip python3-venv python3-dev mosquitto mosquitto-clients uuid-runtime"
         
         if [ "$INSTALL_ANIMAL" = true ]; then
-            PKGS="$PKGS libopencv-dev v4l-utils"
+            # Animal Detection needs OpenCV, video tools, and GStreamer RTMP plugins for cloud streaming
+            PKGS="$PKGS libopencv-dev v4l-utils gstreamer1.0-plugins-ugly gstreamer1.0-plugins-bad gstreamer1.0-libav"
         fi
         if [ "$INSTALL_WEATHER" = true ]; then
              # Weather needs I2C tools and openblas for numpy
@@ -381,29 +698,57 @@ else
     print_step 3 $TOTAL_STEPS "Device Credentials"
 fi
 
-echo "Register a device in the Sentio dashboard first:"
-if [ "$INSTALL_MODE" == "dev" ]; then
-    echo "  Production: https://sentio.syslabs.dev/devices"
-    echo "  Local:      http://localhost:3000/devices"
-else
-    echo "  https://sentio.syslabs.dev/devices"
+# For repair mode, read existing device ID from secrets
+# Note: Using STATE_DIR here since SECRETS_DIR isn't defined yet (they're the same path)
+EXISTING_DEVICE_ID=""
+if [ -f "$STATE_DIR/secrets" ]; then
+    EXISTING_DEVICE_ID=$(grep "^DEVICE_ID=" "$STATE_DIR/secrets" 2>/dev/null | cut -d= -f2)
 fi
-echo ""
 
-read -p "Device ID (from dashboard): " DEVICE_ID
-while [ -z "$DEVICE_ID" ]; do
-    print_err "Device ID is required"
-    read -p "Device ID: " DEVICE_ID
-done
+if [ "$SKIP_TO_PAIRING" = true ] && [ -n "$EXISTING_DEVICE_ID" ]; then
+    # Repair mode with existing device
+    print_info "Current Device ID: $EXISTING_DEVICE_ID"
+    DEVICE_ID="$EXISTING_DEVICE_ID"
+    echo ""
+    echo "Generate a new pairing code from the dashboard:"
+    echo "  https://sentio.syslabs.dev/devices"
+    echo ""
+else
+    # Normal mode - ask for device ID
+    echo "Register a device in the Sentio dashboard first:"
+    if [ "$INSTALL_MODE" == "dev" ]; then
+        echo "  Production: https://sentio.syslabs.dev/devices"
+        echo "  Local:      http://localhost:3000/devices"
+    else
+        echo "  https://sentio.syslabs.dev/devices"
+    fi
+    echo ""
 
-read -p "Pairing Code (e.g., 8HG2-2B24, valid 15 min): " PAIRING_CODE
+    read -p "Device ID (from dashboard): " DEVICE_ID
+    while [ -z "$DEVICE_ID" ]; do
+        print_err "Device ID is required"
+        read -p "Device ID: " DEVICE_ID
+    done
+fi
+
+read -p "Pairing Code (e.g., GJSA-LAZ3, valid 15 min): " PAIRING_CODE
 while [ -z "$PAIRING_CODE" ]; do
     print_err "Pairing Code is required"
     read -p "Pairing Code: " PAIRING_CODE
 done
 
-read -p "Device location [Garden]: " LOCATION
-LOCATION=${LOCATION:-"Garden"}
+# Only ask for location on fresh install
+if [ "$SKIP_TO_PAIRING" != true ]; then
+    read -p "Device location [Garden]: " LOCATION
+    LOCATION=${LOCATION:-"Garden"}
+else
+    # Use existing location from config if available
+    if [ -f "config.yaml" ]; then
+        LOCATION=$(grep "location:" config.yaml 2>/dev/null | head -1 | sed 's/.*location: *"\?\([^"]*\)"\?/\1/')
+    fi
+    LOCATION=${LOCATION:-"Garden"}
+    print_info "Using location: $LOCATION"
+fi
 
 # Deployment mode: User defaults to production, Dev gets choice
 if [ "$INSTALL_MODE" == "dev" ]; then
@@ -426,7 +771,7 @@ if [ "$DEPLOY_MODE" == "1" ]; then
     MQTT_PORT="443"
     MQTT_TRANSPORT="websockets"
     MQTT_TLS="true"
-    BACKEND_URL="https://backend.syslabs.dev"
+    BACKEND_URL="https://sentio.syslabs.dev"
 else
     # Development mode - plain TCP to local broker
     print_info "Development Mode: Local MQTT Broker"
@@ -437,6 +782,8 @@ else
     MQTT_TLS="false"
     read -p "Backend URL [http://${MQTT_HOST}:8083]: " BACKEND_URL
     BACKEND_URL=${BACKEND_URL:-"http://${MQTT_HOST}:8083"}
+    # RTMP server URL for local MediaMTX (same host as MQTT broker)
+    RTMP_SERVER_URL="rtmp://${MQTT_HOST}"
     print_ok "Configured for development: mqtt://${MQTT_HOST}:${MQTT_PORT}"
 fi
 
@@ -480,6 +827,41 @@ EOF
 chmod 600 "$SECRETS_FILE"
 chown "$REAL_USER:$REAL_USER" "$SECRETS_DIR" "$SECRETS_FILE"
 print_success "Device token stored securely in $SECRETS_FILE"
+
+# ═══════════════════════════════════════════════════════════════════
+# Repair Mode: Update config.yaml in place and exit
+# ═══════════════════════════════════════════════════════════════════
+
+if [ "$SKIP_TO_PAIRING" = true ]; then
+    print_info "Updating config.yaml with new device credentials..."
+    
+    if [ -f "config.yaml" ]; then
+        # Make config writable temporarily
+        chmod u+w config.yaml
+        
+        # Update device.id in place using sed
+        # Match pattern: "  id: " followed by anything in quotes
+        sed -i "s/^  id: .*/  id: \"${DEVICE_ID}\"/" config.yaml
+        
+        # Restore readonly permissions
+        chmod 444 config.yaml
+        
+        print_success "Config updated with new device ID"
+    else
+        print_warn "config.yaml not found - you may need to run full install"
+    fi
+    
+    echo ""
+    print_box_header "Sentio - Re-Pairing Complete"
+    print_success "Device re-paired successfully!"
+    print_info "New token stored in $SECRETS_FILE"
+    print_info "Config updated with device credentials"
+    echo ""
+    print_info "Restart services to use new credentials:"
+    print_info "  ./stop.sh && ./start.sh"
+    echo ""
+    exit 0
+fi
 
 # Auth credentials for MQTT
 MQTT_USERNAME="$DEVICE_ID"
@@ -595,10 +977,9 @@ mqtt:
   secrets_file: "${SECRETS_FILE}"
   qos: 1
   keepalive: 60
-  # Unified Topics
-  animal_topic: "animal_detection/events"
+  # Unified Topics (new naming scheme)
+  animal_topic: "animals/data"
   weather_topic: "weather/data"
-  weather_status_topic: "weather/status"
 
 EOF
 
@@ -606,9 +987,10 @@ if [ "$INSTALL_ANIMAL" = true ]; then
     cat >> config.yaml << EOF
 
 # Animal Detector Configuration
+# Resolution: 960x540 optimized for Pi 5 software encoding (no hardware H264)
 camera:
-  width: 1280
-  height: 720
+  width: 960
+  height: 540
   framerate: 30
 detection:
   confidence_threshold: ${ANIMAL_CONFIDENCE}
@@ -616,12 +998,11 @@ detection:
   target_animals:
 ${ANIMALS_LIST}
 
-# Web Streaming Configuration
+# Cloud RTMP Streaming Configuration
 streaming:
   enabled: ${STREAM_ENABLED:-false}
   headless: ${STREAM_HEADLESS:-true}
-  port: ${STREAM_PORT:-8080}
-  quality: ${STREAM_QUALITY:-80}
+  media_server_url: "${RTMP_SERVER_URL:-rtmps://stream.syslabs.dev:443}"
 EOF
 fi
 
@@ -835,11 +1216,36 @@ start_weather() { start_service "Weather Station" "weather_detection/main.py" "w
 # Main
 # ═══════════════════════════════════════════════════════════════════
 
-# Check for --dev flag
+# Parse arguments
+START_ANIMAL=false
+START_WEATHER=false
 DEV_MODE=false
-if [ "$1" = "--dev" ] || [ "$1" = "-d" ]; then
-    DEV_MODE=true
-fi
+FOREGROUND=false
+
+show_usage() {
+    echo ""
+    echo "Usage: ./start.sh [OPTIONS]"
+    echo ""
+    echo "Options:"
+    echo "  (default)         Start all installed services"
+    echo "  --animal, -a      Start Animal Detector only"
+    echo "  --weather, -w     Start Weather Station only"
+    echo "  --foreground, -f  Run in foreground (for debugging)"
+    echo "  --dev, -d         Developer mode (full menu)"
+    echo "  --help, -h        Show this help"
+    echo ""
+    exit 0
+}
+
+for arg in "$@"; do
+    case $arg in
+        --help|-h) show_usage ;;
+        --animal|-a) START_ANIMAL=true ;;
+        --weather|-w) START_WEATHER=true ;;
+        --dev|-d) DEV_MODE=true ;;
+        --foreground|-f) FOREGROUND=true ;;
+    esac
+done
 
 print_header "Sentio - Start"
 
@@ -870,37 +1276,37 @@ if [ "$DEV_MODE" = true ]; then
     exit 0
 fi
 
-# User mode: smart detection
-if [ "$HAS_ANIMAL" = true ] && [ "$HAS_WEATHER" = false ]; then
-    print_info "Detected: Animal Detector only"
+# Determine background mode
+BG_MODE=true
+if [ "$FOREGROUND" = true ]; then BG_MODE=false; fi
+
+# If CLI flags specified, use them
+if [ "$START_ANIMAL" = true ] || [ "$START_WEATHER" = true ]; then
     wait_for_gps
-    start_animal true
+    if [ "$START_ANIMAL" = true ] && [ "$HAS_ANIMAL" = true ]; then
+        start_animal $BG_MODE
+    elif [ "$START_ANIMAL" = true ]; then
+        print_warn "Animal Detector not installed"
+    fi
+    if [ "$START_WEATHER" = true ] && [ "$HAS_WEATHER" = true ]; then
+        start_weather $BG_MODE
+    elif [ "$START_WEATHER" = true ]; then
+        print_warn "Weather Station not installed"
+    fi
+    echo ""
+    print_ok "Done"
     exit 0
 fi
 
-if [ "$HAS_WEATHER" = true ] && [ "$HAS_ANIMAL" = false ]; then
-    print_info "Detected: Weather Station only"
-    wait_for_gps
-    start_weather true
-    exit 0
-fi
-
-# Both installed - prompt user
-echo "  1) Start Animal Detector"
-echo "  2) Start Weather Station"
-echo "  3) Start Both (recommended)"
-echo ""
-read -p "Enter choice [3]: " CHOICE
-CHOICE=${CHOICE:-3}
-
+# No CLI flags - auto-detect and start all installed services
 wait_for_gps
 
-case $CHOICE in
-    1) start_animal true ;;
-    2) start_weather true ;;
-    3) start_animal true; start_weather true ;;
-    *) echo "[XX] Invalid choice"; exit 1 ;;
-esac
+if [ "$HAS_ANIMAL" = true ]; then
+    start_animal $BG_MODE
+fi
+if [ "$HAS_WEATHER" = true ]; then
+    start_weather $BG_MODE
+fi
 
 echo ""
 print_ok "Services started. Use ./stop.sh to stop."
@@ -960,6 +1366,32 @@ stop_service() {
 
 print_header "Sentio - Stop"
 
+# Parse arguments
+STOP_ANIMAL=false
+STOP_WEATHER=false
+STOP_ALL=false
+
+show_usage() {
+    echo ""
+    echo "Usage: ./stop.sh [OPTIONS]"
+    echo ""
+    echo "Options:"
+    echo "  (default)         Stop all running services"
+    echo "  --animal, -a      Stop Animal Detector only"
+    echo "  --weather, -w     Stop Weather Station only"
+    echo "  --help, -h        Show this help"
+    echo ""
+    exit 0
+}
+
+for arg in "$@"; do
+    case $arg in
+        --help|-h) show_usage ;;
+        --animal|-a) STOP_ANIMAL=true ;;
+        --weather|-w) STOP_WEATHER=true ;;
+    esac
+done
+
 # Detect what's running
 ANIMAL_RUNNING=false
 WEATHER_RUNNING=false
@@ -971,31 +1403,26 @@ if [ "$ANIMAL_RUNNING" = false ] && [ "$WEATHER_RUNNING" = false ]; then
     exit 0
 fi
 
-# If only one running, stop it directly
-if [ "$ANIMAL_RUNNING" = true ] && [ "$WEATHER_RUNNING" = false ]; then
+# If CLI flags specified, use them
+if [ "$STOP_ANIMAL" = true ] || [ "$STOP_WEATHER" = true ]; then
+    if [ "$STOP_ANIMAL" = true ]; then
+        stop_service "animal_detector.pid" "Animal Detector"
+    fi
+    if [ "$STOP_WEATHER" = true ]; then
+        stop_service "weather_station.pid" "Weather Station"
+    fi
+    echo ""
+    print_ok "Done"
+    exit 0
+fi
+
+# No CLI flags - stop all running services
+if [ "$ANIMAL_RUNNING" = true ]; then
     stop_service "animal_detector.pid" "Animal Detector"
-    exit 0
 fi
-
-if [ "$WEATHER_RUNNING" = true ] && [ "$ANIMAL_RUNNING" = false ]; then
+if [ "$WEATHER_RUNNING" = true ]; then
     stop_service "weather_station.pid" "Weather Station"
-    exit 0
 fi
-
-# Both running - prompt
-echo "  1) Stop All"
-echo "  2) Stop Animal Detector only"
-echo "  3) Stop Weather Station only"
-echo ""
-read -p "Enter choice [1]: " CHOICE
-CHOICE=${CHOICE:-1}
-
-case $CHOICE in
-    1) stop_service "animal_detector.pid" "Animal Detector"
-       stop_service "weather_station.pid" "Weather Station" ;;
-    2) stop_service "animal_detector.pid" "Animal Detector" ;;
-    3) stop_service "weather_station.pid" "Weather Station" ;;
-esac
 
 echo ""
 print_ok "Done"

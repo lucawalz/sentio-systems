@@ -14,9 +14,9 @@ import org.example.backend.model.RaspiWeatherData;
 import org.example.backend.model.WeatherAlert;
 import org.example.backend.model.WeatherForecast;
 import org.example.backend.service.AnimalDetectionQueryService;
-import org.example.backend.service.BrightSkyService;
+import org.example.backend.service.IBrightSkyService;
+import org.example.backend.service.IWeatherForecastService;
 import org.example.backend.service.RaspiWeatherDataService;
-import org.example.backend.service.WeatherForecastService;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -36,8 +36,8 @@ import java.util.Map;
 @Tag(name = "Device Data", description = "Device-scoped weather, forecast, and alert data")
 public class DeviceDataController {
 
-    private final WeatherForecastService forecastService;
-    private final BrightSkyService alertService;
+    private final IWeatherForecastService forecastService;
+    private final IBrightSkyService alertService;
     private final RaspiWeatherDataService sensorService;
     private final AnimalDetectionQueryService sightingsService;
 

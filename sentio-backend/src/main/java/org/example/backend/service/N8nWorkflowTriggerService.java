@@ -24,6 +24,9 @@ public class N8nWorkflowTriggerService {
     @Value("${n8n.webhook.base-url:https://n8n.syslabs.dev/webhook}")
     private String n8nWebhookBaseUrl;
 
+    @Value("${n8n.workflow.suffix:}")
+    private String workflowSuffix;
+
     /**
      * Triggers the weather summary workflow for a specific user.
      *
@@ -31,7 +34,7 @@ public class N8nWorkflowTriggerService {
      * @return true if triggered successfully, false otherwise
      */
     public boolean triggerWeatherSummary(String userId) {
-        return triggerWebhook("sentio-weather-summary-openrouter", userId);
+        return triggerWebhook("sentio-weather-summary" + workflowSuffix, userId);
     }
 
     /**
@@ -41,7 +44,7 @@ public class N8nWorkflowTriggerService {
      * @return true if triggered successfully, false otherwise
      */
     public boolean triggerSightingsSummary(String userId) {
-        return triggerWebhook("sentio-sightings-summary-openrouter", userId);
+        return triggerWebhook("sentio-sightings-summary" + workflowSuffix, userId);
     }
 
     /**
@@ -52,8 +55,8 @@ public class N8nWorkflowTriggerService {
      * @return The agent's response or null if failed
      */
     public String triggerAiAgent(String userId, String query) {
-        String webhookUrl = n8nWebhookBaseUrl + "/sentio-ai-agent-openrouter";
-        log.info("Triggering AI Agent (OpenRouter) for user: {} with query: {}", userId, query);
+        String webhookUrl = n8nWebhookBaseUrl + "/sentio-ai-agent-groq" + workflowSuffix;
+        log.info("Triggering AI Agent (Groq) for user: {} with query: {}", userId, query);
 
         try {
             HttpHeaders headers = new HttpHeaders();
@@ -98,6 +101,7 @@ public class N8nWorkflowTriggerService {
     private boolean triggerWebhook(String webhookPath, String userId) {
         String webhookUrl = n8nWebhookBaseUrl + "/" + webhookPath;
         log.info("Triggering n8n webhook: {} for user: {}", webhookPath, userId);
+        log.info("Exactly constructed webhookUrl: '{}'", webhookUrl);
 
         try {
             HttpHeaders headers = new HttpHeaders();

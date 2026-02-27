@@ -29,12 +29,6 @@ from PIL import Image
 import numpy as np
 import io
 
-# Environment configuration
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv('birder_ai.env')
-
 # Configure logging
 logging.basicConfig(
     level=getattr(logging, os.getenv('LOG_LEVEL', 'INFO').upper()),
@@ -76,7 +70,6 @@ class ModelManager:
         self._class_to_idx = None
         self._idx_to_class = None
 
-        # Create cache directory if it doesn't exist
         Path(self.birder_cache_dir).mkdir(parents=True, exist_ok=True)
 
     def load_birder_model(self) -> bool:
@@ -159,7 +152,6 @@ class BirdClassificationService:
             # Determine if this looks like a bird based on top confidence
             bird_detected = max_conf > self.min_bird_confidence
 
-            # Get top N predictions
             top_indices = np.argsort(output)[::-1][:self.max_predictions]
             predictions = [
                 ClassificationPrediction(
@@ -301,37 +293,138 @@ async def classify_bird(file: UploadFile = File(...)):
 
 @app.get("/health")
 async def health_check():
-    """
-    Health check endpoint
-
-    Returns:
-        System health status and model loading information
-    """
+    """Health check endpoint"""
     model_status = classification_service.model_manager.get_model_status()
 
     return {
         "status": "healthy",
+        "model_loaded": model_status.get("birder_model_loaded", False),
+        "redis_host": os.getenv("REDIS_HOST", "redis"),
         "models": model_status,
         "thresholds": {
             "classification_threshold": classification_service.classification_threshold,
             "min_bird_confidence": classification_service.min_bird_confidence,
             "max_predictions": classification_service.max_predictions
-        },
-        "system_info": {
-            "python_version": sys.version,
-            "platform": sys.platform,
         }
     }
 
 
+redis_pool = None
+
+async def get_redis_pool():
+    """Get or create Redis connection pool for ARQ."""
+    global redis_pool
+    if redis_pool is None:
+        try:
+            from arq import create_pool
+            from arq.connections import RedisSettings
+            redis_pool = await create_pool(
+                RedisSettings(
+                    host=os.getenv("REDIS_HOST", "redis"),
+                    port=int(os.getenv("REDIS_PORT", "6379"))
+                )
+            )
+            logger.info("Redis pool created for queue operations")
+        except Exception as e:
+            logger.error(f"Failed to create Redis pool: {e}")
+            raise
+    return redis_pool
+
+
+@app.post("/queue/submit")
+async def queue_submit(file: UploadFile = File(...)):
+    """Submit image for async classification via Redis queue."""
+    try:
+        contents = await file.read()
+        pool = await get_redis_pool()
+        
+        job = await pool.enqueue_job(
+            "classify_bird",
+            contents,
+            file.filename or "upload.jpg",
+            _queue_name="birder:queue"
+        )
+        
+        logger.info(f"Queued job {job.job_id} for bird classification: {file.filename}")
+        
+        return {
+            "job_id": job.job_id,
+            "status": "queued",
+            "message": "Job queued for bird classification"
+        }
+    except Exception as e:
+        logger.error(f"Failed to queue job: {e}")
+        raise HTTPException(status_code=500, detail=f"Queue error: {str(e)}")
+
+
+@app.get("/queue/result/{job_id}")
+async def queue_result(job_id: str):
+    """Get result for a queued job by job_id."""
+    try:
+        import redis.asyncio as aioredis
+        import pickle
+        
+        r = aioredis.Redis(
+            host=os.getenv("REDIS_HOST", "redis"),
+            port=int(os.getenv("REDIS_PORT", "6379"))
+        )
+        
+        result_key = f"arq:result:{job_id}"
+        result_data = await r.get(result_key)
+        await r.close()
+        
+        if result_data is None:
+            return {"job_id": job_id, "status": "pending", "message": "Job still processing or not found"}
+        
+        # Deserialize result (ARQ uses pickle by default)
+        try:
+            unpacked = pickle.loads(result_data)
+            
+            if isinstance(unpacked, dict):
+                if 'success' in unpacked:  # Our worker format
+                    return {"job_id": job_id, "status": "complete", "result": unpacked}
+                if 's' in unpacked:  # ARQ format
+                    success = unpacked.get('s', True)
+                    result = unpacked.get('r')
+                    if not success:
+                        return {"job_id": job_id, "status": "failed", "error": str(unpacked.get('e'))}
+                    return {"job_id": job_id, "status": "complete", "result": result}
+            return {"job_id": job_id, "status": "complete", "result": unpacked}
+        except Exception as e:
+            logger.error(f"Failed to deserialize result: {e}")
+            return {"job_id": job_id, "status": "complete", "result": "Could not deserialize"}
+    except Exception as e:
+        logger.error(f"Failed to get job result: {e}")
+        raise HTTPException(status_code=500, detail=f"Result error: {str(e)}")
+
+
+@app.get("/queue/stats")
+async def queue_stats():
+    """Get Redis queue statistics."""
+    try:
+        import redis.asyncio as aioredis
+        r = aioredis.Redis(
+            host=os.getenv("REDIS_HOST", "redis"),
+            port=int(os.getenv("REDIS_PORT", "6379"))
+        )
+        queue_len = await r.llen("arq:queue")
+        info = await r.info("clients")
+        await r.close()
+        
+        return {
+            "queue_name": "arq:queue",
+            "pending_jobs": queue_len,
+            "redis_clients": info.get("connected_clients", 0),
+            "model_loaded": classification_service.model_manager.get_model_status()["birder_model_loaded"]
+        }
+    except Exception as e:
+        logger.warning(f"Could not get queue stats: {e}")
+        return {"error": str(e)}
+
+
 @app.get("/")
 async def root():
-    """
-    API information endpoint
-
-    Returns:
-        Basic API information and available endpoints
-    """
+    """API information endpoint"""
     model_status = classification_service.model_manager.get_model_status()
 
     return {
@@ -339,46 +432,32 @@ async def root():
         "version": os.getenv('API_VERSION', '3.0.0'),
         "description": "AI-powered bird species identification using Birder model",
         "endpoints": [
-            {"path": "/detect", "method": "POST", "description": "Upload image for bird species classification"},
+            {"path": "/detect", "method": "POST", "description": "Sync: Upload image for classification"},
+            {"path": "/queue/submit", "method": "POST", "description": "Async: Queue image for classification"},
+            {"path": "/queue/result/{job_id}", "method": "GET", "description": "Async: Get queued job result"},
+            {"path": "/queue/stats", "method": "GET", "description": "Get Redis queue statistics"},
             {"path": "/health", "method": "GET", "description": "Health check and system status"},
-            {"path": "/", "method": "GET", "description": "API information"}
         ],
         "model": {
             "birder": {
                 "status": "loaded" if model_status["birder_model_loaded"] else "will_load_on_first_request",
                 "model_name": classification_service.model_manager.birder_model_name,
-                "description": "Species classification model"
             }
-        },
-        "features": [
-            "Species-specific bird classification",
-            "Confidence scoring",
-            "Multiple prediction alternatives",
-            "Configurable thresholds"
-        ],
-        "system_info": {
-            "python_version": sys.version,
-            "platform": sys.platform,
         }
     }
 
 
 def main():
     """Main entry point for the application"""
-    host = os.getenv('API_HOST', '0.0.0.0')
-    port = int(os.getenv('API_PORT', '8000'))
-    reload_enabled = os.getenv('API_RELOAD', 'true').lower() == 'true'
+    host = os.getenv('HOST', '0.0.0.0')
+    port = int(os.getenv('PORT', '8000'))
+    reload_enabled = os.getenv('RELOAD', 'false').lower() == 'true'
 
     logger.info("Starting Bird Classification Server...")
-    logger.info("Available endpoints:")
-    logger.info("  POST /detect - Upload image for bird species classification")
-    logger.info("  GET /health - Health check and system status")
-    logger.info("  GET / - API information and documentation")
     logger.info(f"Server will start on {host}:{port}")
-    logger.info("This API focuses on species classification only (no YOLO pre-detection)")
 
     uvicorn.run(
-        "birder_ai:app",  # Update if you rename the file
+        "birder_ai:app",
         host=host,
         port=port,
         reload=reload_enabled

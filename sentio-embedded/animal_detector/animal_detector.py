@@ -38,7 +38,8 @@ from hailo_apps.python.core.common.defines import (
 # Import MQTT modules
 from mqtt_publisher import MQTTPublisher
 from frame_capture import FrameCapture
-from http_stream import HTTPStreamServer
+from rtmp_stream import RTMPStreamConfig, get_rtmp_config_from_yaml
+from rtmp_manager import RTMPStreamManager
 
 # Import from shared module
 sys.path.insert(0, str(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -47,62 +48,82 @@ from shared import GPSSensor
 
 class StreamingDetectionApp(GStreamerDetectionApp):
     """
-    Custom detection app that adds MJPEG web streaming capability.
+    Custom detection app with fault-tolerant RTMP cloud streaming.
     
-    Extends the base pipeline by inserting a 'tee' element after hailooverlay,
-    with one branch going to display and another to an appsink that feeds
-    an HTTP MJPEG server for browser streaming.
+    Uses a separate RTMPStreamManager that can reconnect independently
+    without affecting the main detection pipeline. Frames are sent to
+    an appsink and forwarded to the RTMP manager.
     """
     
-    def __init__(self, app_callback, user_data, streaming_config=None, http_server=None):
+    def __init__(self, app_callback, user_data, streaming_config=None, rtmp_config: RTMPStreamConfig = None):
         self.streaming_config = streaming_config or {}
         self.stream_enabled = self.streaming_config.get("enabled", False)
         self.stream_headless = self.streaming_config.get("headless", True)
-        self.stream_port = self.streaming_config.get("port", 8080)
-        self.stream_quality = self.streaming_config.get("quality", 80)
-        self.http_server = http_server
-        super().__init__(app_callback, user_data)
+        self.rtmp_config = rtmp_config
+        self.rtmp_manager = None
         
-        # Connect to appsink after pipeline is created
-        if self.stream_enabled and self.http_server:
-            self._connect_appsink()
+        # Validate RTMP config if streaming enabled
+        if self.stream_enabled and self.rtmp_config and not self.rtmp_config.is_configured():
+            logger.warning("RTMP streaming enabled but device credentials not configured")
+            self.stream_enabled = False
+        
+        # Create RTMP manager if streaming enabled
+        if self.stream_enabled and self.rtmp_config:
+            self.rtmp_manager = RTMPStreamManager(
+                rtmp_config=self.rtmp_config,
+                width=960,
+                height=540,
+                framerate=30
+            )
+        
+        super().__init__(app_callback, user_data)
     
-    def _connect_appsink(self):
-        """Connect appsink signals to HTTP server"""
+    def run(self):
+        """Override run to start/stop RTMP manager."""
+        if self.rtmp_manager:
+            self.rtmp_manager.start()
+            logger.info("RTMP stream manager started (fault-tolerant mode)")
+        
         try:
-            appsink = self.pipeline.get_by_name("stream_sink")
-            if appsink:
-                appsink.connect("new-sample", self._on_new_sample)
-                logger.info("Connected appsink to HTTP stream server")
-            else:
-                logger.warning("Could not find stream_sink in pipeline")
-        except Exception as e:
-            logger.error(f"Failed to connect appsink: {e}")
+            super().run()
+        finally:
+            if self.rtmp_manager:
+                self.rtmp_manager.stop()
+                stats = self.rtmp_manager.get_stats()
+                logger.info(f"RTMP stats: sent={stats['frames_sent']}, dropped={stats['frames_dropped']}")
     
-    def _on_new_sample(self, sink):
-        """Callback when new frame is available from appsink"""
-        sample = sink.emit("pull-sample")
-        if sample:
-            buffer = sample.get_buffer()
-            if buffer:
-                success, map_info = buffer.map(Gst.MapFlags.READ)
-                if success:
-                    try:
-                        # Pass JPEG data to HTTP server
-                        if self.http_server:
-                            self.http_server.update_frame(bytes(map_info.data))
-                    finally:
-                        buffer.unmap(map_info)
+    def _on_new_stream_sample(self, sink):
+        """Callback for appsink - forwards frames to RTMP manager."""
+        sample = sink.emit('pull-sample')
+        if sample is None:
+            return Gst.FlowReturn.OK
+        
+        buf = sample.get_buffer()
+        if buf is None:
+            return Gst.FlowReturn.OK
+        
+        # Extract frame data
+        result, map_info = buf.map(Gst.MapFlags.READ)
+        if result:
+            try:
+                if self.rtmp_manager:
+                    self.rtmp_manager.push_frame(bytes(map_info.data), buf.pts)
+            finally:
+                buf.unmap(map_info)
+        
         return Gst.FlowReturn.OK
     
     def get_pipeline_string(self):
         """
-        Override to add streaming branch via tee element.
+        Override to add streaming branch via appsink (fault-tolerant).
         
         Pipeline structure:
         SOURCE → INFERENCE → TRACKER → USER_CALLBACK → hailooverlay → tee
-            ├─ branch1 → fpsdisplaysink (display)
-            └─ branch2 → jpegenc → appsink (HTTP stream)
+            ├─ branch1 → display (or fakesink in headless)
+            └─ branch2 → videoconvert → appsink (feeds RTMPStreamManager)
+        
+        The appsink feeds frames to RTMPStreamManager which handles
+        RTMP connection/reconnection independently.
         """
         source_pipeline = SOURCE_PIPELINE(
             video_source=self.video_source,
@@ -133,26 +154,29 @@ class StreamingDetectionApp(GStreamerDetectionApp):
                 f"videoconvert n-threads=3 ! "
             )
             
-            # Streaming branch - MJPEG via HTTP (appsink feeds Flask server)
+            # Appsink branch for fault-tolerant RTMP streaming
+            # Frames go to appsink → RTMPStreamManager (separate pipeline)
+            # Resolution: 960x540 optimized for Pi 5 software encoding
             stream_branch = (
-                f"queue leaky=downstream max-size-buffers=2 max-size-bytes=0 max-size-time=0 ! "
-                f"videoscale ! video/x-raw,width=640,height=480 ! "
-                f"videoconvert ! "
-                f"jpegenc quality={self.stream_quality} ! "
-                f"appsink name=stream_sink emit-signals=true max-buffers=2 drop=true "
+                f"queue leaky=downstream max-size-buffers=3 max-size-bytes=0 max-size-time=0 ! "
+                f"videoscale ! video/x-raw,width=960,height=540 ! "
+                f"videoconvert ! video/x-raw,format=I420 ! "
+                f"appsink name=rtmp_sink emit-signals=true max-buffers=2 drop=true sync=false "
             )
             
             if self.stream_headless:
-                # Headless mode: streaming only, no display output (better performance)
+                # Headless mode: streaming only, use fakesink for display
                 pipeline_string = (
                     f"{source_pipeline} ! "
                     f"{detection_pipeline_wrapper} ! "
                     f"{tracker_pipeline} ! "
                     f"{user_callback_pipeline} ! "
                     f"{overlay_pipeline} "
-                    f"{stream_branch}"
+                    f"tee name=stream_tee "
+                    f"stream_tee. ! queue ! fakesink "
+                    f"stream_tee. ! {stream_branch}"
                 )
-                logger.info(f"HTTP streaming enabled (headless mode) on port {self.stream_port}")
+                logger.info("RTMP cloud streaming enabled (headless, fault-tolerant)")
             else:
                 # Display + streaming mode via tee
                 tee_pipeline = overlay_pipeline + "tee name=stream_tee "
@@ -175,7 +199,7 @@ class StreamingDetectionApp(GStreamerDetectionApp):
                     f"{display_branch} "
                     f"{stream_branch_tee}"
                 )
-                logger.info(f"HTTP streaming enabled on port {self.stream_port}")
+                logger.info("RTMP cloud streaming enabled with display (fault-tolerant)")
         else:
             # Standard pipeline without streaming
             display_pipeline = DISPLAY_PIPELINE(
@@ -191,6 +215,19 @@ class StreamingDetectionApp(GStreamerDetectionApp):
         
         logger.debug(f"Pipeline string: {pipeline_string}")
         return pipeline_string
+    
+    def create_pipeline(self):
+        """Override to connect appsink callback after pipeline creation."""
+        super().create_pipeline()
+        
+        # Connect appsink callback if streaming enabled
+        if self.stream_enabled and self.pipeline:
+            rtmp_sink = self.pipeline.get_by_name('rtmp_sink')
+            if rtmp_sink:
+                rtmp_sink.connect('new-sample', self._on_new_stream_sample)
+                logger.info("Connected appsink callback for RTMP streaming")
+            else:
+                logger.warning("Could not find rtmp_sink appsink in pipeline")
 
 # Configure logging
 logging.basicConfig(
@@ -454,31 +491,32 @@ def main():
 
         # Get streaming config (optional)
         streaming_config = config.get("streaming", {})
-        http_server = None
         
         # Use StreamingDetectionApp if streaming is configured
         if streaming_config.get("enabled", False):
-            # Create and start HTTP streaming server
-            http_server = HTTPStreamServer(config)
-            http_server.start()
+            # Create RTMP configuration from config
+            rtmp_config = get_rtmp_config_from_yaml(config)
             
             app = StreamingDetectionApp(
                 animal_detector_callback, 
                 user_data, 
                 streaming_config=streaming_config,
-                http_server=http_server
+                rtmp_config=rtmp_config
             )
-            logger.info(f"Starting Hailo Animal Detector with MQTT and Web Streaming")
-            logger.info(f"Stream available at: http://0.0.0.0:{streaming_config.get('port', 8080)}/video_feed")
+            
+            # Connect MQTT publisher to stream manager for on-demand streaming
+            if app.rtmp_manager:
+                user_data.mqtt_publisher.set_stream_manager(app.rtmp_manager)
+                logger.info("Connected MQTT publisher to stream manager for on-demand streaming")
+            
+            logger.info(f"Starting Hailo Animal Detector with MQTT and RTMP Cloud Streaming")
+            if rtmp_config.is_configured():
+                logger.info(f"RTMP endpoint: {rtmp_config.media_server_url}/live/{rtmp_config.device_id}")
         else:
             app = GStreamerDetectionApp(animal_detector_callback, user_data)
             logger.info("Starting Hailo Animal Detector with MQTT publishing")
         
         app.run()
-        
-        # Stop HTTP server if running
-        if http_server:
-            http_server.stop()
 
         sys.argv = original_argv
 

@@ -109,6 +109,20 @@ public class DeviceMqttAuthController {
             return ResponseEntity.ok().build();
         }
 
+        // Security check for device-specific topics: device/{deviceId}/...
+        // Devices can only access their own topics
+        if (topic.startsWith("device/")) {
+            String[] parts = topic.split("/");
+            if (parts.length >= 2) {
+                String topicDeviceId = parts[1];
+                if (!topicDeviceId.equals(username)) {
+                    log.warn("MQTT ACL denied: device={} tried to access topic for device={}",
+                            username, topicDeviceId);
+                    return ResponseEntity.status(403).build();
+                }
+            }
+        }
+
         // Determine required service for this topic
         String requiredService = getRequiredServiceForTopic(topic);
 
@@ -156,15 +170,22 @@ public class DeviceMqttAuthController {
         // services
         // The DeviceStatusHandler will add the service to activeServices when it
         // receives these
-        if (topic.endsWith("/status")) {
-            return ""; // Empty string = always allowed
+        // Unified device status topic: device/{deviceId}/status
+        if (topic.startsWith("device/") && topic.endsWith("/status")) {
+            return ""; // Always allowed (any service can publish)
         }
 
-        // Data/event topics require the corresponding service
-        if (topic.startsWith("weather/")) {
+        // Stream command topics: device/{deviceId}/command
+        // Allow devices to subscribe to receive commands from backend
+        if (topic.startsWith("device/") && topic.endsWith("/command")) {
+            return ""; // Always allowed for command subscriptions
+        }
+
+        // Data topics require the corresponding service
+        if (topic.equals("weather/data")) {
             return "weather_station";
         }
-        if (topic.startsWith("animal_detection/")) {
+        if (topic.equals("animals/data")) {
             return "animal_detector";
         }
 

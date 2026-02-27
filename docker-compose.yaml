@@ -4,13 +4,15 @@ services:
     image: alpine:latest
     container_name: sentio-init-realm
     command: >
-      sh -c "apk add --no-cache gettext sed && echo 'Generating Keycloak realm configuration...' && sed -e 's|KEYCLOAK_CLIENT_SECRET_PLACEHOLDER|'\"$${KEYCLOAK_ADMIN_CLIENT_SECRET}\"'|g' -e 's|N8N_CLIENT_SECRET_PLACEHOLDER|'\"$${N8N_CLIENT_SECRET}\"'|g' /init-scripts/sentio-realm.json.template > /realm_data/sentio-realm.json && echo 'Realm configuration generated successfully.'"
+      sh -c "apk add --no-cache gettext sed && echo 'Generating Keycloak realm configuration...' && sed -e 's|KEYCLOAK_CLIENT_SECRET_PLACEHOLDER|'\"$${KEYCLOAK_ADMIN_CLIENT_SECRET}\"'|g' -e 's|N8N_CLIENT_SECRET_PLACEHOLDER|'\"$${N8N_CLIENT_SECRET}\"'|g' -e 's|RESEND_API_KEY_PLACEHOLDER|'\"$${RESEND_API_KEY}\"'|g' -e 's|RESEND_FROM_EMAIL_PLACEHOLDER|'\"$${RESEND_FROM_EMAIL}\"'|g' /init-scripts/sentio-realm.json.template > /realm_data/sentio-realm.json && echo 'Realm configuration generated successfully.'"
     volumes:
       - ./init-scripts:/init-scripts:ro
       - realm_data:/realm_data
     environment:
       KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET}
       N8N_CLIENT_SECRET: ${N8N_CLIENT_SECRET}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-noreply@syslabs.dev}
     networks:
       - sentio-network
 
@@ -19,7 +21,7 @@ services:
     image: postgres:17-alpine
     container_name: sentio-postgres
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_USER: ${POSTGRES_USER:-sentio}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
@@ -29,10 +31,25 @@ services:
     networks:
       - sentio-network
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}" ]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sentio}"]
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+
+  # Redis for distributed session/viewer tracking
+  redis:
+    image: redis:7-alpine
+    container_name: sentio-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    networks:
+      - sentio-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     restart: unless-stopped
 
   # Keycloak Identity Provider
@@ -61,6 +78,12 @@ services:
         condition: service_completed_successfully
     networks:
       - sentio-network
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 && printf 'GET /realms/sentio HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && grep -q '\"realm\"' <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
     restart: unless-stopped
 
   # MQTT Broker with Auth Plugin
@@ -79,7 +102,11 @@ services:
       backend:
         condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "mosquitto_sub -t '$$SYS/#' -C 1 -i healthcheck -W 3 || exit 0"]
+      test:
+        [
+          "CMD-SHELL",
+          "mosquitto_sub -t '$$SYS/#' -C 1 -i healthcheck -W 3 || exit 0",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -95,8 +122,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
       keycloak:
-        condition: service_started
+        condition: service_healthy
     environment:
       # Database Configuration
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/sentio
@@ -110,6 +139,7 @@ services:
 
       # Server Configuration
       SERVER_PORT: 8080
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-demo}
 
       # Keycloak Configuration
       KEYCLOAK_ISSUER_URI: http://localhost:8080/realms/sentio
@@ -125,7 +155,7 @@ services:
       MQTT_ENABLED: ${MQTT_ENABLED:-true}
       MQTT_BROKER: tcp://mosquitto:1883
       MQTT_CLIENT_ID: sentioBackend
-      MQTT_TOPICS: ${MQTT_TOPICS:-weather/data,weather/status,animal_detection/events,animal_detection/status}
+      MQTT_TOPICS: ${MQTT_TOPICS:-weather/data,animals/data,device/+/status}
       MQTT_USERNAME: ${MQTT_USERNAME:-}
       MQTT_PASSWORD: ${MQTT_PASSWORD:-}
 
@@ -147,6 +177,18 @@ services:
 
       # n8n Workflow Integration
       N8N_WEBHOOK_BASE_URL: ${N8N_WEBHOOK_BASE_URL:-https://n8n.syslabs.dev/webhook}
+
+      # Redis Configuration
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+
+      # Queue Configuration (Redis-based AI classification with EDA)
+      QUEUE_ENABLED: ${QUEUE_ENABLED:-true}
+
+      # Resend Email Configuration
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-noreply@syslabs.dev}
+      CONTACT_EMAIL_TO: ${CONTACT_EMAIL_TO:-team@syslabs.dev}
     ports:
       - "${BACKEND_PORT:-8083}:8080"
     networks:
@@ -159,7 +201,7 @@ services:
   # Frontend Service (React + Vite + Nginx)
   frontend:
     build:
-      context: ./sentio-frontend-new
+      context: ./sentio-web
       dockerfile: Dockerfile
       args:
         VITE_API_BASE_URL: ""
@@ -182,11 +224,13 @@ services:
       - birder
       - speciesnet
     environment:
-      PREPROCESSING_PORT: ${PREPROCESSING_PORT:-8082}
-      BIRDER_SERVICE_URL: ${BIRDER_SERVICE_URL:-http://birder:8000}
-      SPECIESNET_SERVICE_URL: ${SPECIESNET_SERVICE_URL:-http://speciesnet:8000}
-      BIRD_CLASSIFIER_URL: http://birder:8000/detect
-      SPECIES_CLASSIFIER_URL: http://speciesnet:8000/detect
+      PORT: ${PREPROCESSING_PORT:-8082}
+      LOG_LEVEL: ${AI_LOG_LEVEL:-INFO}
+      BIRD_CLASSIFIER_URL: ${BIRD_CLASSIFIER_URL:-http://birder:8000/detect}
+      SPECIES_CLASSIFIER_URL: ${SPECIES_CLASSIFIER_URL:-http://speciesnet:8081/detect}
+      SAVE_IMAGES: ${SAVE_IMAGES:-false}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
     ports:
       - "${PREPROCESSING_PORT:-8082}:8082"
     networks:
@@ -202,7 +246,15 @@ services:
       dockerfile: Dockerfile
     container_name: sentio-birder
     environment:
-      BIRDER_PORT: ${BIRDER_PORT:-8000}
+      PORT: ${BIRDER_PORT:-8000}
+      LOG_LEVEL: ${AI_LOG_LEVEL:-INFO}
+      BIRDER_MODEL_NAME: ${BIRDER_MODEL_NAME:-convnext_v2_tiny_intermediate-eu-common}
+      CLASSIFICATION_THRESHOLD: ${CLASSIFICATION_THRESHOLD:-0.01}
+      MIN_BIRD_CONFIDENCE: ${MIN_CONFIDENCE:-0.001}
+      MAX_PREDICTIONS: ${MAX_PREDICTIONS:-5}
+      PRELOAD_MODELS: ${PRELOAD_MODELS:-true}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
     ports:
       - "${BIRDER_PORT:-8000}:8000"
     networks:
@@ -218,11 +270,40 @@ services:
       dockerfile: Dockerfile
     container_name: sentio-speciesnet
     environment:
-      SPECIESNET_PORT: ${SPECIESNET_PORT:-8081}
+      PORT: ${SPECIESNET_PORT:-8081}
+      LOG_LEVEL: ${AI_LOG_LEVEL:-INFO}
+      SPECIESNET_COUNTRY: ${SPECIESNET_COUNTRY:-DEU}
+      CLASSIFICATION_THRESHOLD: ${CLASSIFICATION_THRESHOLD:-0.01}
+      MIN_ANIMAL_CONFIDENCE: ${MIN_CONFIDENCE:-0.001}
+      MAX_PREDICTIONS: ${MAX_PREDICTIONS:-5}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
     ports:
       - "${SPECIESNET_PORT:-8081}:8081"
     networks:
       - sentio-network
+    restart: unless-stopped
+
+  # MediaMTX - Video Streaming Server
+  # Receives RTMP from devices, serves HLS to browsers
+  mediamtx:
+    image: bluenviron/mediamtx:1.11.3-ffmpeg
+    container_name: sentio-mediamtx
+    ports:
+      - "${MEDIAMTX_RTMP_PORT:-1935}:1935" # RTMP input from devices
+      - "${MEDIAMTX_HLS_PORT:-8888}:8888" # HLS output to browsers
+    volumes:
+      - ./mediamtx.yml:/mediamtx.yml:ro
+    networks:
+      - sentio-network
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f mediamtx || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     restart: unless-stopped
 
 networks:

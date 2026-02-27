@@ -32,20 +32,26 @@ public class DeviceStatusHandler {
                 return;
             }
 
-            String deviceId = root.path("device_id").asText();
-            String ipAddress = root.path("ip").asText();
-            String service = root.has("service") ? root.path("service").asText() : null;
-
-            // Extract GPS coordinates if present
-            Double latitude = root.has("latitude") ? root.path("latitude").asDouble() : null;
-            Double longitude = root.has("longitude") ? root.path("longitude").asDouble() : null;
-
-            if (deviceId == null || ipAddress == null) {
-                log.warn("Missing device_id or ip in payload: {}", payload);
+            // Check for null JSON nodes before accessing text
+            if (root.get("device_id").isNull() || root.get("ip").isNull()) {
+                log.warn("device_id or ip is null in payload: {}", payload);
                 return;
             }
 
-            log.debug("Received status for device {}: {} (Service: {})", deviceId, ipAddress, service);
+            String deviceId = root.get("device_id").asText();
+            String ipAddress = root.get("ip").asText();
+
+            // Validate non-empty strings
+            if (deviceId.isEmpty() || ipAddress.isEmpty()) {
+                log.warn("device_id or ip is empty in payload: {}", payload);
+                return;
+            }
+
+            // Extract GPS coordinates if present
+            Double latitude = root.has("latitude") && !root.get("latitude").isNull() ? root.get("latitude").asDouble() : null;
+            Double longitude = root.has("longitude") && !root.get("longitude").isNull() ? root.get("longitude").asDouble() : null;
+
+            log.debug("Received status for device {}: {}", deviceId, ipAddress);
 
             Optional<Device> deviceOpt = deviceRepository.findById(deviceId);
             if (deviceOpt.isPresent()) {
@@ -58,10 +64,24 @@ public class DeviceStatusHandler {
                     log.info("Device {} IP changed to {}", deviceId, ipAddress);
                 }
 
-                if (service != null && !device.getActiveServices().contains(service)) {
-                    device.getActiveServices().add(service);
+                // Support both new "services" array and legacy single "service" field
+                if (root.has("services") && root.get("services").isArray()) {
+                    // New format: services array - replace all active services
+                    device.getActiveServices().clear();
+                    for (JsonNode serviceNode : root.get("services")) {
+                        String serviceName = serviceNode.asText();
+                        device.getActiveServices().add(serviceName);
+                    }
                     needsUpdate = true;
-                    log.info("New service '{}' detected on device {}", service, deviceId);
+                    log.info("Device {} services updated: {}", deviceId, device.getActiveServices());
+                } else if (root.has("service")) {
+                    // Legacy format: single service - add if not present
+                    String service = root.path("service").asText();
+                    if (!device.getActiveServices().contains(service)) {
+                        device.getActiveServices().add(service);
+                        needsUpdate = true;
+                        log.info("New service '{}' detected on device {}", service, deviceId);
+                    }
                 }
 
                 if (needsUpdate || device.getLastSeen() == null ||
@@ -69,7 +89,7 @@ public class DeviceStatusHandler {
 
                     device.setLastSeen(LocalDateTime.now());
                     deviceRepository.save(device);
-                    log.info("Updated status for device {} (Service: {})", deviceId, service);
+                    log.info("Updated status for device {} (Services: {})", deviceId, device.getActiveServices());
                 } else {
                     log.debug("Ignoring status update for {} - throttled", deviceId);
                 }
@@ -84,7 +104,7 @@ public class DeviceStatusHandler {
                     if (!isNewLocation) {
                         double latDiff = Math.abs(device.getLatitude() - latitude);
                         double lonDiff = Math.abs(device.getLongitude() - longitude);
-                        isNewLocation = latDiff > LOCATION_CHANGE_THRESHOLD || lonDiff > LOCATION_CHANGE_THRESHOLD;
+                        isNewLocation = latDiff >= LOCATION_CHANGE_THRESHOLD || lonDiff >= LOCATION_CHANGE_THRESHOLD;
                     }
 
                     if (isNewLocation) {

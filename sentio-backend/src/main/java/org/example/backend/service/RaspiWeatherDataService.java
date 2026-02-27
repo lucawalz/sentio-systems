@@ -136,7 +136,6 @@ public class RaspiWeatherDataService {
         return new WeatherStats(totalReadings, latest, avgTemp, avgHumidity, avgPressure);
     }
 
-    // ===== Device-scoped methods =====
 
     /**
      * Retrieves the most recent weather data for a specific device.

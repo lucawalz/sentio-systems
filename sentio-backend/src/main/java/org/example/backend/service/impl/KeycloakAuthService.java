@@ -58,6 +58,8 @@ public class KeycloakAuthService implements AuthService {
         user.setFirstName(request.getFirstName());
         user.setLastName(request.getLastName());
         user.setEnabled(true);
+        user.setEmailVerified(false);
+        // No required actions - we handle verification ourselves
 
         UsersResource usersResource = keycloak.realm(realm).users();
 
@@ -82,8 +84,6 @@ public class KeycloakAuthService implements AuthService {
 
         user.setCredentials(Collections.singletonList(credential));
 
-        user.setCredentials(Collections.singletonList(credential));
-
         Response response = usersResource.create(user);
 
         if (response.getStatus() == 409) {
@@ -96,7 +96,8 @@ public class KeycloakAuthService implements AuthService {
             log.error("Failed to register user. Status: {}", response.getStatus());
             throw new RuntimeException("Failed to register user");
         }
-        log.info("User registered successfully");
+
+        log.info("User registered successfully, pending email verification");
     }
 
     @Override
@@ -264,7 +265,7 @@ public class KeycloakAuthService implements AuthService {
         if (authentication.getPrincipal() instanceof org.springframework.security.oauth2.jwt.Jwt) {
             org.springframework.security.oauth2.jwt.Jwt jwt = (org.springframework.security.oauth2.jwt.Jwt) authentication
                     .getPrincipal();
-            String id = jwt.getSubject(); // The 'sub' claim contains the Keycloak user UUID
+            String id = jwt.getSubject();
             String username = jwt.getClaimAsString("preferred_username");
             String email = jwt.getClaimAsString("email");
 
@@ -279,5 +280,64 @@ public class KeycloakAuthService implements AuthService {
 
         throw new RuntimeException(
                 "Unsupported authentication authentication type: " + authentication.getClass().getName());
+    }
+
+    @Override
+    public boolean userExistsByEmail(String email) {
+        try {
+            UsersResource usersResource = keycloak.realm(realm).users();
+            var users = usersResource.searchByEmail(email, true);
+            return !users.isEmpty();
+        } catch (Exception e) {
+            log.error("Error checking if user exists by email: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    @Override
+    public void updatePassword(String email, String newPassword) {
+        log.info("Updating password for user with email: {}", email);
+
+        UsersResource usersResource = keycloak.realm(realm).users();
+        var users = usersResource.searchByEmail(email, true);
+
+        if (users.isEmpty()) {
+            throw new RuntimeException("User not found with email: " + email);
+        }
+
+        String userId = users.get(0).getId();
+
+        // Create new credential
+        CredentialRepresentation credential = new CredentialRepresentation();
+        credential.setType(CredentialRepresentation.PASSWORD);
+        credential.setValue(newPassword);
+        credential.setTemporary(false);
+
+        // Update the user's password
+        usersResource.get(userId).resetPassword(credential);
+
+        log.info("Password updated successfully for user: {}", email);
+    }
+
+    @Override
+    public void markEmailVerified(String email) {
+        log.info("Marking email as verified for: {}", email);
+
+        UsersResource usersResource = keycloak.realm(realm).users();
+        var users = usersResource.searchByEmail(email, true);
+
+        if (users.isEmpty()) {
+            throw new RuntimeException("User not found with email: " + email);
+        }
+
+        UserRepresentation user = users.get(0);
+        user.setEmailVerified(true);
+        // Remove VERIFY_EMAIL required action if present
+        if (user.getRequiredActions() != null) {
+            user.getRequiredActions().remove("VERIFY_EMAIL");
+        }
+
+        usersResource.get(user.getId()).update(user);
+        log.info("Email verified successfully for: {}", email);
     }
 }

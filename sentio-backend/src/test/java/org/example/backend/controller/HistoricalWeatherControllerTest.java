@@ -3,7 +3,7 @@ package org.example.backend.controller;
 import org.example.backend.dto.HistoricalWeatherDTO;
 import org.example.backend.mapper.HistoricalWeatherMapper;
 import org.example.backend.model.HistoricalWeather;
-import org.example.backend.service.HistoricalWeatherService;
+import org.example.backend.service.IHistoricalWeatherService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.security.oauth2.resource.servlet.OAuth2ResourceServerAutoConfiguration;
@@ -26,21 +26,20 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import org.junit.jupiter.api.AfterEach;
 
-
-
-@WebMvcTest(
-        controllers = HistoricalWeatherController.class,
-        excludeAutoConfiguration = {
+@WebMvcTest(controllers = HistoricalWeatherController.class, excludeAutoConfiguration = {
                 SecurityAutoConfiguration.class,
                 OAuth2ResourceServerAutoConfiguration.class
-        }
-)
+})
 @Import(HistoricalWeatherControllerTest.TestBeans.class)
+@org.springframework.test.context.TestPropertySource(properties = {
+                "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration"
+})
 class HistoricalWeatherControllerTest {
 
-    @Autowired MockMvc mockMvc;
+        @Autowired
+        MockMvc mockMvc;
 
-    @Autowired HistoricalWeatherService historicalWeatherService;
+        @Autowired IHistoricalWeatherService historicalWeatherService;
     @Autowired HistoricalWeatherMapper historicalWeatherMapper;
     @AfterEach
     void resetMocks() {
@@ -49,236 +48,238 @@ class HistoricalWeatherControllerTest {
 
     @TestConfiguration
     static class TestBeans {
-        @Bean HistoricalWeatherService historicalWeatherService() { return mock(HistoricalWeatherService.class); }
+                @Bean IHistoricalWeatherService historicalWeatherService() { return mock(IHistoricalWeatherService.class); }
         @Bean HistoricalWeatherMapper historicalWeatherMapper() { return mock(HistoricalWeatherMapper.class); }
     }
 
-    @Test
-    void getHistoricalWeatherForCurrentLocation_returns200_andList() throws Exception {
-        List<HistoricalWeather> entities = List.of(new HistoricalWeather(), new HistoricalWeather());
-        List<HistoricalWeatherDTO> dtos = List.of(new HistoricalWeatherDTO(), new HistoricalWeatherDTO());
+        @Test
+        void getHistoricalWeatherForCurrentLocation_returns200_andList() throws Exception {
+                List<HistoricalWeather> entities = List.of(new HistoricalWeather(), new HistoricalWeather());
+                List<HistoricalWeatherDTO> dtos = List.of(new HistoricalWeatherDTO(), new HistoricalWeatherDTO());
 
-        when(historicalWeatherService.getHistoricalWeatherForCurrentLocation()).thenReturn(entities);
-        when(historicalWeatherMapper.toDTOList(entities)).thenReturn(dtos);
+                when(historicalWeatherService.getHistoricalWeatherForCurrentLocation()).thenReturn(entities);
+                when(historicalWeatherMapper.toDTOList(entities)).thenReturn(dtos);
 
-        mockMvc.perform(get("/api/historical/current-location"))
-                .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$.length()").value(2));
+                mockMvc.perform(get("/api/historical/current-location"))
+                                .andExpect(status().isOk())
+                                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(jsonPath("$").isArray())
+                                .andExpect(jsonPath("$.length()").value(2));
 
-        verify(historicalWeatherService).getHistoricalWeatherForCurrentLocation();
-        verify(historicalWeatherMapper).toDTOList(entities);
-        verifyNoMoreInteractions(historicalWeatherService, historicalWeatherMapper);
-    }
+                verify(historicalWeatherService).getHistoricalWeatherForCurrentLocation();
+                verify(historicalWeatherMapper).toDTOList(entities);
+                verifyNoMoreInteractions(historicalWeatherService, historicalWeatherMapper);
+        }
 
-    @Test
-    void getHistoricalWeatherForDateRange_returns200_andList() throws Exception {
-        LocalDate start = LocalDate.of(2025, 12, 1);
-        LocalDate end = LocalDate.of(2025, 12, 10);
+        @Test
+        void getHistoricalWeatherForDateRange_returns200_andList() throws Exception {
+                LocalDate start = LocalDate.of(2025, 12, 1);
+                LocalDate end = LocalDate.of(2025, 12, 10);
 
-        List<HistoricalWeather> entities = List.of(new HistoricalWeather());
-        List<HistoricalWeatherDTO> dtos = List.of(new HistoricalWeatherDTO());
+                List<HistoricalWeather> entities = List.of(new HistoricalWeather());
+                List<HistoricalWeatherDTO> dtos = List.of(new HistoricalWeatherDTO());
 
-        when(historicalWeatherService.getHistoricalWeatherForDateRange(start, end)).thenReturn(entities);
-        when(historicalWeatherMapper.toDTOList(entities)).thenReturn(dtos);
+                when(historicalWeatherService.getHistoricalWeatherForDateRange(start, end)).thenReturn(entities);
+                when(historicalWeatherMapper.toDTOList(entities)).thenReturn(dtos);
 
-        mockMvc.perform(get("/api/historical/date-range")
-                        .param("startDate", "2025-12-01")
-                        .param("endDate", "2025-12-10"))
-                .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.length()").value(1));
+                mockMvc.perform(get("/api/historical/date-range")
+                                .param("startDate", "2025-12-01")
+                                .param("endDate", "2025-12-10"))
+                                .andExpect(status().isOk())
+                                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(jsonPath("$.length()").value(1));
 
-        verify(historicalWeatherService).getHistoricalWeatherForDateRange(start, end);
-        verify(historicalWeatherMapper).toDTOList(entities);
-        verifyNoMoreInteractions(historicalWeatherService, historicalWeatherMapper);
-    }
+                verify(historicalWeatherService).getHistoricalWeatherForDateRange(start, end);
+                verify(historicalWeatherMapper).toDTOList(entities);
+                verifyNoMoreInteractions(historicalWeatherService, historicalWeatherMapper);
+        }
 
-    @Test
-    void getHistoricalWeatherForDate_returns200_whenFound() throws Exception {
-        LocalDate date = LocalDate.of(2025, 12, 18);
+        @Test
+        void getHistoricalWeatherForDate_returns200_whenFound() throws Exception {
+                LocalDate date = LocalDate.of(2025, 12, 18);
 
-        HistoricalWeather entity = new HistoricalWeather();
-        HistoricalWeatherDTO dto = new HistoricalWeatherDTO();
+                HistoricalWeather entity = new HistoricalWeather();
+                HistoricalWeatherDTO dto = new HistoricalWeatherDTO();
 
-        when(historicalWeatherService.getHistoricalWeatherForDate(date)).thenReturn(entity);
-        when(historicalWeatherMapper.toDTO(entity)).thenReturn(dto);
+                when(historicalWeatherService.getHistoricalWeatherForDate(date)).thenReturn(entity);
+                when(historicalWeatherMapper.toDTO(entity)).thenReturn(dto);
 
-        mockMvc.perform(get("/api/historical/date/{date}", "2025-12-18"))
-                .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON));
+                mockMvc.perform(get("/api/historical/date/{date}", "2025-12-18"))
+                                .andExpect(status().isOk())
+                                .andExpect(content().contentType(MediaType.APPLICATION_JSON));
 
-        verify(historicalWeatherService).getHistoricalWeatherForDate(date);
-        verify(historicalWeatherMapper).toDTO(entity);
-        verifyNoMoreInteractions(historicalWeatherService, historicalWeatherMapper);
-    }
+                verify(historicalWeatherService).getHistoricalWeatherForDate(date);
+                verify(historicalWeatherMapper).toDTO(entity);
+                verifyNoMoreInteractions(historicalWeatherService, historicalWeatherMapper);
+        }
 
-    @Test
-    void getHistoricalWeatherForDate_returns404_whenMissing() throws Exception {
-        LocalDate date = LocalDate.of(2025, 12, 18);
+        @Test
+        void getHistoricalWeatherForDate_returns404_whenMissing() throws Exception {
+                LocalDate date = LocalDate.of(2025, 12, 18);
 
-        when(historicalWeatherService.getHistoricalWeatherForDate(date)).thenReturn(null);
+                when(historicalWeatherService.getHistoricalWeatherForDate(date)).thenReturn(null);
 
-        mockMvc.perform(get("/api/historical/date/{date}", "2025-12-18"))
-                .andExpect(status().isNotFound());
+                mockMvc.perform(get("/api/historical/date/{date}", "2025-12-18"))
+                                .andExpect(status().isNotFound());
 
-        verify(historicalWeatherService, times(1)).getHistoricalWeatherForDate(date);
-        verifyNoInteractions(historicalWeatherMapper);
-        verifyNoMoreInteractions(historicalWeatherService);
-    }
+                verify(historicalWeatherService, times(1)).getHistoricalWeatherForDate(date);
+                verifyNoInteractions(historicalWeatherMapper);
+                verifyNoMoreInteractions(historicalWeatherService);
+        }
 
-    @Test
-    void updateHistoricalWeatherForCurrentLocation_returns200_onSuccess() throws Exception {
-        doNothing().when(historicalWeatherService).updateHistoricalWeatherForCurrentLocation();
+        @Test
+        void updateHistoricalWeatherForCurrentLocation_returns200_onSuccess() throws Exception {
+                doNothing().when(historicalWeatherService).updateHistoricalWeatherForAllDeviceLocations();
 
-        mockMvc.perform(post("/api/historical/update"))
-                .andExpect(status().isOk())
-                .andExpect(content().string("Historical weather data updated successfully"));
+                mockMvc.perform(post("/api/historical/update"))
+                                .andExpect(status().isOk())
+                                .andExpect(content().string(
+                                                "Historical weather data updated successfully for all devices"));
 
-        verify(historicalWeatherService).updateHistoricalWeatherForCurrentLocation();
-        verifyNoInteractions(historicalWeatherMapper);
-        verifyNoMoreInteractions(historicalWeatherService);
-    }
+                verify(historicalWeatherService).updateHistoricalWeatherForAllDeviceLocations();
+                verifyNoInteractions(historicalWeatherMapper);
+                verifyNoMoreInteractions(historicalWeatherService);
+        }
 
-    @Test
-    void updateHistoricalWeatherForCurrentLocation_returns500_onFailure() throws Exception {
-        doThrow(new RuntimeException("boom"))
-                .when(historicalWeatherService).updateHistoricalWeatherForCurrentLocation();
+        @Test
+        void updateHistoricalWeatherForCurrentLocation_returns500_onFailure() throws Exception {
+                doThrow(new RuntimeException("boom"))
+                                .when(historicalWeatherService).updateHistoricalWeatherForAllDeviceLocations();
 
-        mockMvc.perform(post("/api/historical/update"))
-                .andExpect(status().isInternalServerError())
-                .andExpect(content().string("Failed to update historical weather data"));
+                mockMvc.perform(post("/api/historical/update"))
+                                .andExpect(status().isInternalServerError())
+                                .andExpect(content().string("Failed to update historical weather data"));
 
-        verify(historicalWeatherService).updateHistoricalWeatherForCurrentLocation();
-        verifyNoInteractions(historicalWeatherMapper);
-        verifyNoMoreInteractions(historicalWeatherService);
-    }
+                verify(historicalWeatherService).updateHistoricalWeatherForAllDeviceLocations();
+                verifyNoInteractions(historicalWeatherMapper);
+                verifyNoMoreInteractions(historicalWeatherService);
+        }
 
-    @Test
-    void getAvailableCitiesWithHistoricalWeather_returns200_andArray() throws Exception {
-        when(historicalWeatherService.getAvailableCitiesWithHistoricalWeather())
-                .thenReturn(List.of("Berlin", "Munich"));
+        @Test
+        void getAvailableCitiesWithHistoricalWeather_returns200_andArray() throws Exception {
+                when(historicalWeatherService.getAvailableCitiesWithHistoricalWeather())
+                                .thenReturn(List.of("Berlin", "Munich"));
 
-        mockMvc.perform(get("/api/historical/cities"))
-                .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$[0]").value("Berlin"))
-                .andExpect(jsonPath("$[1]").value("Munich"));
+                mockMvc.perform(get("/api/historical/cities"))
+                                .andExpect(status().isOk())
+                                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(jsonPath("$[0]").value("Berlin"))
+                                .andExpect(jsonPath("$[1]").value("Munich"));
 
-        verify(historicalWeatherService).getAvailableCitiesWithHistoricalWeather();
-        verifyNoInteractions(historicalWeatherMapper);
-        verifyNoMoreInteractions(historicalWeatherService);
-    }
+                verify(historicalWeatherService).getAvailableCitiesWithHistoricalWeather();
+                verifyNoInteractions(historicalWeatherMapper);
+                verifyNoMoreInteractions(historicalWeatherService);
+        }
 
-    @Test
-    void getLastUpdateInfo_returnsOk_hasRecentData_true_whenUpdatedRecently() throws Exception {
-        // Controller fragt LocalDate.now().minusDays(3)
-        // Wir matchen "irgendein LocalDate" und geben ein Objekt zurück, das "updatedAt = now - 1 day" hat,
-        // damit hasRecentData sicher true ist.
-        HistoricalWeather latest = mock(HistoricalWeather.class);
-        when(latest.getUpdatedAt()).thenReturn(LocalDateTime.now().minusDays(1));
-        when(latest.getCreatedAt()).thenReturn(LocalDateTime.now().minusDays(10));
-        when(latest.getWeatherDate()).thenReturn(LocalDate.now().minusDays(3));
+        @Test
+        void getLastUpdateInfo_returnsOk_hasRecentData_true_whenUpdatedRecently() throws Exception {
+                // Controller fragt LocalDate.now().minusDays(3)
+                // Wir matchen "irgendein LocalDate" und geben ein Objekt zurück, das "updatedAt
+                // = now - 1 day" hat,
+                // damit hasRecentData sicher true ist.
+                HistoricalWeather latest = mock(HistoricalWeather.class);
+                when(latest.getUpdatedAt()).thenReturn(LocalDateTime.now().minusDays(1));
+                when(latest.getCreatedAt()).thenReturn(LocalDateTime.now().minusDays(10));
+                when(latest.getWeatherDate()).thenReturn(LocalDate.now().minusDays(3));
 
-        when(historicalWeatherService.getHistoricalWeatherForDate(any(LocalDate.class))).thenReturn(latest);
+                when(historicalWeatherService.getHistoricalWeatherForDate(any(LocalDate.class))).thenReturn(latest);
 
-        mockMvc.perform(get("/api/historical/last-update"))
-                .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.lastUpdated").exists())
-                .andExpect(jsonPath("$.createdAt").exists())
-                .andExpect(jsonPath("$.weatherDate").exists())
-                .andExpect(jsonPath("$.hasRecentData").value(true));
+                mockMvc.perform(get("/api/historical/last-update"))
+                                .andExpect(status().isOk())
+                                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(jsonPath("$.lastUpdated").exists())
+                                .andExpect(jsonPath("$.createdAt").exists())
+                                .andExpect(jsonPath("$.weatherDate").exists())
+                                .andExpect(jsonPath("$.hasRecentData").value(true));
 
-        verify(historicalWeatherService).getHistoricalWeatherForDate(any(LocalDate.class));
-        verifyNoInteractions(historicalWeatherMapper);
-        verifyNoMoreInteractions(historicalWeatherService);
-    }
+                verify(historicalWeatherService).getHistoricalWeatherForDate(any(LocalDate.class));
+                verifyNoInteractions(historicalWeatherMapper);
+                verifyNoMoreInteractions(historicalWeatherService);
+        }
 
-    @Test
-    void getLastUpdateInfo_returnsOk_hasRecentData_false_whenNoData() throws Exception {
-        when(historicalWeatherService.getHistoricalWeatherForDate(any(LocalDate.class))).thenReturn(null);
+        @Test
+        void getLastUpdateInfo_returnsOk_hasRecentData_false_whenNoData() throws Exception {
+                when(historicalWeatherService.getHistoricalWeatherForDate(any(LocalDate.class))).thenReturn(null);
 
-        mockMvc.perform(get("/api/historical/last-update"))
-                .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.lastUpdated").doesNotExist()) // bei Map kann null drin sein -> je nach Jackson-Config
-                .andExpect(jsonPath("$.hasRecentData").value(false));
+                mockMvc.perform(get("/api/historical/last-update"))
+                                .andExpect(status().isOk())
+                                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(jsonPath("$.lastUpdated").doesNotExist()) // bei Map kann null drin sein ->
+                                                                                     // je nach Jackson-Config
+                                .andExpect(jsonPath("$.hasRecentData").value(false));
 
-        verify(historicalWeatherService).getHistoricalWeatherForDate(any(LocalDate.class));
-        verifyNoInteractions(historicalWeatherMapper);
-        verifyNoMoreInteractions(historicalWeatherService);
-    }
+                verify(historicalWeatherService).getHistoricalWeatherForDate(any(LocalDate.class));
+                verifyNoInteractions(historicalWeatherMapper);
+                verifyNoMoreInteractions(historicalWeatherService);
+        }
 
-    @Test
-    void getLastUpdateInfo_returnsOk_withErrorPayload_whenServiceThrows() throws Exception {
-        when(historicalWeatherService.getHistoricalWeatherForDate(any(LocalDate.class)))
-                .thenThrow(new RuntimeException("db down"));
+        @Test
+        void getLastUpdateInfo_returnsOk_withErrorPayload_whenServiceThrows() throws Exception {
+                when(historicalWeatherService.getHistoricalWeatherForDate(any(LocalDate.class)))
+                                .thenThrow(new RuntimeException("db down"));
 
-        mockMvc.perform(get("/api/historical/last-update"))
-                .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.error").value("Unable to fetch last update info"))
-                .andExpect(jsonPath("$.lastUpdated").doesNotExist());
+                mockMvc.perform(get("/api/historical/last-update"))
+                                .andExpect(status().isOk())
+                                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(jsonPath("$.error").value("Unable to fetch last update info"))
+                                .andExpect(jsonPath("$.lastUpdated").doesNotExist());
 
-        verify(historicalWeatherService).getHistoricalWeatherForDate(any(LocalDate.class));
-        verifyNoInteractions(historicalWeatherMapper);
-        verifyNoMoreInteractions(historicalWeatherService);
-    }
+                verify(historicalWeatherService).getHistoricalWeatherForDate(any(LocalDate.class));
+                verifyNoInteractions(historicalWeatherMapper);
+                verifyNoMoreInteractions(historicalWeatherService);
+        }
 
-    @Test
-    void cleanupOldHistoricalWeather_returns200_onSuccess() throws Exception {
-        doNothing().when(historicalWeatherService).cleanupOldHistoricalWeather();
+        @Test
+        void cleanupOldHistoricalWeather_returns200_onSuccess() throws Exception {
+                doNothing().when(historicalWeatherService).cleanupOldHistoricalWeather();
 
-        mockMvc.perform(delete("/api/historical/cleanup"))
-                .andExpect(status().isOk())
-                .andExpect(content().string("Old historical weather cleaned up successfully"));
+                mockMvc.perform(delete("/api/historical/cleanup"))
+                                .andExpect(status().isOk())
+                                .andExpect(content().string("Old historical weather cleaned up successfully"));
 
-        verify(historicalWeatherService).cleanupOldHistoricalWeather();
-        verifyNoInteractions(historicalWeatherMapper);
-        verifyNoMoreInteractions(historicalWeatherService);
-    }
+                verify(historicalWeatherService).cleanupOldHistoricalWeather();
+                verifyNoInteractions(historicalWeatherMapper);
+                verifyNoMoreInteractions(historicalWeatherService);
+        }
 
-    @Test
-    void cleanupOldHistoricalWeather_returns500_onFailure() throws Exception {
-        doThrow(new RuntimeException("boom"))
-                .when(historicalWeatherService).cleanupOldHistoricalWeather();
+        @Test
+        void cleanupOldHistoricalWeather_returns500_onFailure() throws Exception {
+                doThrow(new RuntimeException("boom"))
+                                .when(historicalWeatherService).cleanupOldHistoricalWeather();
 
-        mockMvc.perform(delete("/api/historical/cleanup"))
-                .andExpect(status().isInternalServerError())
-                .andExpect(content().string("Failed to cleanup old historical weather"));
+                mockMvc.perform(delete("/api/historical/cleanup"))
+                                .andExpect(status().isInternalServerError())
+                                .andExpect(content().string("Failed to cleanup old historical weather"));
 
-        verify(historicalWeatherService).cleanupOldHistoricalWeather();
-        verifyNoInteractions(historicalWeatherMapper);
-        verifyNoMoreInteractions(historicalWeatherService);
-    }
+                verify(historicalWeatherService).cleanupOldHistoricalWeather();
+                verifyNoInteractions(historicalWeatherMapper);
+                verifyNoMoreInteractions(historicalWeatherService);
+        }
 
-    @Test
-    void getHistoricalComparison_returns200_andCallsServiceForEachKey() throws Exception {
-        // 5 keys: threeDaysAgo, oneWeekAgo, oneMonthAgo, threeMonthsAgo, oneYearAgo
-        HistoricalWeather hw1 = new HistoricalWeather();
-        HistoricalWeatherDTO dto1 = new HistoricalWeatherDTO();
+        @Test
+        void getHistoricalComparison_returns200_andCallsServiceForEachKey() throws Exception {
+                // 5 keys: threeDaysAgo, twoWeeksAgo, oneMonthAgo, threeMonthsAgo, oneYearAgo
+                HistoricalWeather hw1 = new HistoricalWeather();
+                HistoricalWeatherDTO dto1 = new HistoricalWeatherDTO();
 
-        when(historicalWeatherService.getHistoricalWeatherForDate(any(LocalDate.class)))
-                .thenReturn(hw1, null, hw1, null, hw1); // gemischt null/nicht-null
-        when(historicalWeatherMapper.toDTO(hw1)).thenReturn(dto1);
+                // Always return hw1 since HashMap iteration order is non-deterministic
+                when(historicalWeatherService.getHistoricalWeatherForDate(any(LocalDate.class), isNull()))
+                                .thenReturn(hw1);
+                when(historicalWeatherMapper.toDTO(hw1)).thenReturn(dto1);
 
-        mockMvc.perform(get("/api/historical/comparison"))
-                .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                mockMvc.perform(get("/api/historical/comparison"))
+                                .andExpect(status().isOk())
+                                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
 
-                // keys die DTO enthalten sollen:
-                .andExpect(jsonPath("$.threeDaysAgo").isMap())
-                .andExpect(jsonPath("$.oneMonthAgo").isMap())
-                .andExpect(jsonPath("$.oneYearAgo").isMap())
+                                // All 5 keys should contain DTOs:
+                                .andExpect(jsonPath("$.threeDaysAgo").isMap())
+                                .andExpect(jsonPath("$.twoWeeksAgo").isMap())
+                                .andExpect(jsonPath("$.oneMonthAgo").isMap())
+                                .andExpect(jsonPath("$.threeMonthsAgo").isMap())
+                                .andExpect(jsonPath("$.oneYearAgo").isMap());
 
-                // keys die bei dir null sind:
-                .andExpect(jsonPath("$.oneWeekAgo").value(nullValue()))
-                .andExpect(jsonPath("$.threeMonthsAgo").value(nullValue()));
-
-        verify(historicalWeatherService, times(5)).getHistoricalWeatherForDate(any(LocalDate.class));
-        verify(historicalWeatherMapper, times(3)).toDTO(hw1); // weil 3x hw1 zurückgegeben
-        verifyNoMoreInteractions(historicalWeatherService, historicalWeatherMapper);
-    }
+                verify(historicalWeatherService, times(5)).getHistoricalWeatherForDate(any(LocalDate.class), isNull());
+                verify(historicalWeatherMapper, times(5)).toDTO(hw1);
+                verifyNoMoreInteractions(historicalWeatherService, historicalWeatherMapper);
+        }
 }
