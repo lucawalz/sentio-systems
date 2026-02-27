@@ -6,7 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.backend.model.AnimalDetection;
 import org.example.backend.service.AnimalDetectionCommandService;
-import org.example.backend.service.AnimalClassifierService;
+import org.example.backend.service.IAnimalClassifierService;
 import org.example.backend.service.ImageStorageService;
 import org.springframework.stereotype.Component;
 
@@ -29,7 +29,7 @@ public class AnimalDetectionHandler {
     private final AnimalDetectionCommandService commandService;
     private final ImageStorageService imageStorageService;
     private final ObjectMapper objectMapper;
-    private final AnimalClassifierService animalClassifierService;
+    private final IAnimalClassifierService animalClassifierService;
 
     public void processAnimalDetection(String payload) {
         log.debug("Starting processing of animal detection payload");
