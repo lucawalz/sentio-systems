@@ -243,8 +243,8 @@ sequenceDiagram
 ```
 
 **Notes:**
-- Asynchronous via @Async in `AnimalClassifierService.classifyAndUpdate()`
-- Preprocessing service is called first for image preperation
+- Asynchronous via `@Async` in `AnimalClassifierService.classifyAndUpdate()`
+- Preprocessing service is called first for image preparation
 - Failures log errors but don't block; detection is saved initially
 - Classification behaviour is delegated internally via processor strategy (factory + processors)
 
@@ -252,7 +252,7 @@ sequenceDiagram
 
 ### 4. Weather Forecast Retrieval and Caching
 **Description:**
-Weather forecasts are retrieved synchronously from the BrightSky API and cached.
+Weather forecasts are retrieved synchronously from the Open-Meteo API and cached.
 
 ```mermaid
 sequenceDiagram
@@ -280,6 +280,7 @@ sequenceDiagram
 - Caches in `WeatherForecastRepository` to reduce API calls
 - Uses device location from `DeviceLocationService`
 - Controller-to-service contract is interface-based after refactoring
+- Weather alerts are handled separately via `IBrightSkyService`/`BrightSkyService`
 
 ## @Async Processing
 
@@ -287,8 +288,8 @@ sequenceDiagram
 
 ### Method Annotation
 - The `classifyAndUpdate` method is marked with `@Async`
-- Through this, it gets executed in a seperate thread manager by Spring's task executor
-- Allows the caller to cintinue processing while the method runs
+- Through this, it gets executed in a separate thread managed by Spring's task executor
+- Allows the caller to continue processing while the method runs
 
 ### Purpose
 - The method handles animal species classification by calling external preprocessing and AI services with HTTP requests
@@ -297,12 +298,12 @@ sequenceDiagram
 ### Execution Flow
 - Calling `classifyAndUpdate` returns immediate control to the caller
 - The method runs in the background
-- Performs image validation, send image to the preprocessing service, processes the response and updates the database
+- Performs image validation, sends the image to the preprocessing service, processes the response, and updates the database
 - Main thread isn't blocked
 
 ### Error Handling
-- Exceptions withing the async method are logged
-- Don't propagate back to the caller
+- Exceptions within the async method are logged
+- They do not propagate back to the caller
 - Method returns `void`
 
 ---
@@ -312,8 +313,8 @@ sequenceDiagram
 ### Backend
 
 #### Exception Logging and Non-Blocking Processing
-- Critical operations like MQTT message handling in `RaspiWeatherDataHandler` and AI Classification in `AnimalClassifierService` unse try/catch blocks
-- Errors get logged with details but don't stop the programs execution
+- Critical operations like MQTT message handling in `RaspiWeatherDataHandler` and AI classification in `AnimalClassifierService` use try/catch blocks
+- Errors are logged with details but do not stop program execution
 - Invalid messages are discarded
 - Async tasks continue without propagating exceptions back to callers
 
@@ -328,10 +329,10 @@ sequenceDiagram
 - MQTT payloads are validated and rejected when malformed
 
 #### Resilience Patterns
-**Circuit Breakers**: 
-- Are applied to external AI service calls using Resilience4j
-- If failures exceed thresholds, requests fall back to skipping AI classification
-- Logs warnings and marks detections as unprocessed
+**Circuit Breakers**:
+- Are applied to external integrations using Resilience4j (for example weather APIs)
+- If failures exceed thresholds, requests fall back to safe behaviour (for example cached or empty responses)
+- Warnings are logged and cascading failures are limited
 
 **Async Error Isolation**:
 - `@Async` methods run in background threads
@@ -369,7 +370,7 @@ Axios interceptors manage API responses:
 
 #### No Explicit Try-Catch in Components
 - Relies on framework-level error boundaries (aren't visible in the code)
-- Service-lazer handling for user-facing errors
+- Service-layer handling for user-facing errors
 
 ### Overall Strategies / Error Handling Summary
 
