@@ -370,19 +370,14 @@ export SECURITY_CORS_ALLOWED_ORIGINS=https://app.sentio.dev,https://sentio.dev
 
 ### 8.2 Missing Rate Limits
 
-**Not Implemented:**
-- General API rate limiting (no Bucket4j integration)
-- Authentication endpoints (login, register, password reset)
-- Data ingestion endpoints (weather, animal detections)
+**Current State:**
+- General API rate limiting implemented via Bucket4j + Redis-backed interceptor.
+- Authentication and public endpoint throttling configured via `rate-limit.*` properties.
+- Device pairing endpoint has dedicated additional rate limiting.
 
-**Recommendation:** Implement Bucket4j with Redis backend for persistent rate limiting:
-```xml
-<dependency>
-    <groupId>com.github.vladimir-bukhtoyarov</groupId>
-    <artifactId>bucket4j-core</artifactId>
-    <version>8.1.0</version>
-</dependency>
-```
+**Remaining Gaps:**
+- Fine-tuning per-endpoint limits based on production traffic baselines.
+- Explicit rate-limit observability dashboard/alerts.
 
 **Proposed Limits:**
 - Authentication: 5 requests/minute per IP
@@ -518,7 +513,7 @@ export SECURITY_CORS_ALLOWED_ORIGINS=https://app.sentio.dev,https://sentio.dev
 | A06:2021 – Vulnerable Components | Well implemented | Dependencies updated, Trivy scan passed |
 | A07:2021 – Identification & Auth Failures | Well implemented | Strong password policy, MFA available (Keycloak) |
 | A08:2021 – Software & Data Integrity | Partially implemented | No SRI, no signature verification for external data |
-| A09:2021 – Logging & Monitoring Failures | Partially implemented | Basic logging present, no centralized monitoring |
+| A09:2021 – Logging & Monitoring Failures | Partially implemented | Structured logging implemented, centralized monitoring pending |
 | A10:2021 – Server-Side Request Forgery | Well implemented | No user-controlled URLs in backend requests |
 
 ### 13.2 GDPR Considerations
@@ -578,6 +573,17 @@ export SECURITY_CORS_ALLOWED_ORIGINS=https://app.sentio.dev,https://sentio.dev
 1. Create GitHub issue with security label
 2. Assign to responsible developer
 3. Patch within 7 days (P2) or 30 days (P3)
+
+---
+
+## 15. Security Testing Checklist Status
+
+- [x] SecurityConfig reviewed (CORS, CSRF, headers)
+- [x] Input validation applied on externally facing request bodies
+- [x] MQTT TLS/auth configuration documented and implemented
+- [x] Trivy scans integrated in CI with HIGH/CRITICAL gating
+- [x] Secret configuration externalized via environment variables
+- [x] Security and threat-model documentation created and updated
 4. Update this document with findings
 
 ### 14.3 Communication Plan
