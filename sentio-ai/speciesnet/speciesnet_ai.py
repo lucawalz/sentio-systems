@@ -266,8 +266,6 @@ async def classify_species(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Classification error: {str(e)}")
 
 
-# ============ Redis Queue Integration ============
-
 redis_pool = None
 
 async def get_redis_pool():

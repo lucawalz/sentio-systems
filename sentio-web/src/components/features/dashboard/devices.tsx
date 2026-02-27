@@ -106,8 +106,7 @@ export default function DevicesPage() {
 
     const isOnline = (device: Device) => {
         if (!device.lastSeen) return false
-        // Backend sends LocalDateTime which implies UTC but lacks offset
-        // We append 'Z' to ensure browser treats it as UTC
+        // Backend sends LocalDateTime without UTC offset
         const lastSeenTime = device.lastSeen.endsWith('Z')
             ? device.lastSeen
             : `${device.lastSeen}Z`

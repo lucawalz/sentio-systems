@@ -50,6 +50,62 @@ The application follows a layered architecture pattern:
 - **Mapper Layer**: Conversion between entities and DTOs
 - **MQTT Layer**: IoT device communication
 
+## SOLID Refactoring
+
+### Goal
+
+The goal of this refactoring was to decouple controlles and services by introducing service interfaces. By applying the Dependency Inversion Principle, the backend became easier to test and extend while preserving existing API behaviour.
+
+### What Changed
+
+Service Interfaces (e.g., `IWeatherForecastService`, `IHistoricalWeatherService`, ...) were introduced. Controllers now depend on these interfaces instead of concrete service implementations. In addition, the animal classification flow now uses a processor strategy with a factory for type-specific handling.
+
+### SOLID Mapping
+
+- **Single Responsibility:** Classification responsibilities are split into dedicated processors.
+- **Open/Closed:** New animal types can be added via new processors without changing core orchestration.
+- **Liskov Substitution:** Concrete service implementations remain behavior-compatible with their interfaces and can be substituted in controllers and tests.
+- **Interface Segregation:** Focused service interfaces expose only relevant capabilities per domain.
+- **Dependency Inversion:** Controllers depend on service interfaces, not concrete implementations.
+
+### Testing Impact
+
+Controller tests now use interface-based mocks in `@WebMvcTest`. Furthermore, behaviour-focused assertions were kept for backward compatibility.
+
+### Backward Compatibility
+
+API endpoints, payloads and public behaviour remained stable.
+
+### Related Files
+
+- Service interfaces:
+  - [IAnimalClassifierService](src/main/java/org/example/backend/service/IAnimalClassifierService.java)
+  - [IWeatherForecastService](src/main/java/org/example/backend/service/IWeatherForecastService.java)
+  - [IHistoricalWeatherService](src/main/java/org/example/backend/service/IHistoricalWeatherService.java)
+  - [IBrightSkyService](src/main/java/org/example/backend/service/IBrightSkyService.java)
+
+- Interface-based controller dependencies:
+  - [WeatherForecastController](src/main/java/org/example/backend/controller/WeatherForecastController.java)
+  - [HistoricalWeatherController](src/main/java/org/example/backend/controller/HistoricalWeatherController.java)
+  - [WeatherAlertController](src/main/java/org/example/backend/controller/WeatherAlertController.java)
+  - [DeviceDataController](src/main/java/org/example/backend/controller/DeviceDataController.java)
+
+- Classification strategy + factory:
+  - [AnimalClassifierService](src/main/java/org/example/backend/service/AnimalClassifierService.java)
+  - [ClassificationProcessor](src/main/java/org/example/backend/service/classification/ClassificationProcessor.java)
+  - [BirdClassificationProcessor](src/main/java/org/example/backend/service/classification/BirdClassificationProcessor.java)
+  - [GenericClassificationProcessor](src/main/java/org/example/backend/service/classification/GenericClassificationProcessor.java)
+  - [ClassificationProcessorFactory](src/main/java/org/example/backend/service/classification/ClassificationProcessorFactory.java)
+
+- Updated controller tests:
+  - [WeatherForecastControllerTest](src/test/java/org/example/backend/controller/WeatherForecastControllerTest.java)
+  - [HistoricalWeatherControllerTest](src/test/java/org/example/backend/controller/HistoricalWeatherControllerTest.java)
+  - [WeatherAlertControllerTest](src/test/java/org/example/backend/controller/WeatherAlertControllerTest.java)
+
+- ADR documentation:
+  - [ADR Index](../docs/adr/%23%20Architecture%20Decision%20Records.md)
+  - [ADR-0013](../docs/adr/%23%20ADR-0013.md)
+
 ## Prerequisites
 
 - Java JDK 21 or higher

@@ -4,7 +4,7 @@
 ###############################################
 # Global settings
 
-logLevel: debug
+logLevel: info
 logDestinations: [stdout]
 
 # Connection resilience - tolerate brief network interruptions

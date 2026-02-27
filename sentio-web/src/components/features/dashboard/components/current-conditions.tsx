@@ -50,7 +50,6 @@ export function CurrentConditions({ sensorData, forecastData, loading, lastUpdat
     const humidity = sensorData?.humidity ?? forecastData?.humidity
     const pressure = sensorData?.pressure ?? forecastData?.pressure
 
-    // These only come from API
     const feelsLike = forecastData?.apparentTemperature
     const windSpeed = forecastData?.windSpeed
     const windGusts = forecastData?.windGusts

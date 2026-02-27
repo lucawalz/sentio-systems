@@ -8,6 +8,10 @@ import org.example.backend.validation.PasswordMatch;
 
 public class AuthDTOs {
 
+    private AuthDTOs() {
+        // Utility class
+    }
+
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
