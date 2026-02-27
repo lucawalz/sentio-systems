@@ -1,3 +1,5 @@
+![N8N Banner](../docs/banners/n8n-banner.png)
+
 # n8n-workflows
 
 ## Overview
