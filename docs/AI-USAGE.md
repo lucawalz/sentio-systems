@@ -11,12 +11,13 @@ This document provides transparency on the use of AI-assisted tools during the d
 | **Antigravity (Google)** | **Development**: Converting and implementing design concept into the project, styling, code generation |
 | **ChatGPT (OpenAI)** | **Development**: Building unit tests, styling (Tailwind), debugging |
 | **Grok Code Fast 1 (xAI)** | **Development**: Documentation, code structuring |
+| **GPT-Codex** | **Development**: Documentation, code generation |
 
 ## Usage by Component
 
 | Component | AI-Assisted Areas |
 |-----------|-------------------|
-| **sentio-backend** | Boilerplate code generation, project setup, API scaffolding, database schema design |
+| **sentio-backend** | Boilerplate code generation, project setup, API scaffolding, database schema design, functional code generation |
 | **sentio-web** | Boilerplate generation, layout drafting, directory structure planning, UI component implementation |
 | **sentio-embedded** | **Performance Optimization**: Efficient bounding box visualization without frame loss<br>**Integration**: Complex branching logic and camera stream handling<br>**Testing**: Generation of validation scripts |
 | **Infrastructure** | Understanding and implementing CI/CD pipelines, Docker/K8s configurations |
