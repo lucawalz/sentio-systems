@@ -7,6 +7,36 @@ The system integrates multiple external services (MQTT brokers, weather APIs, an
 
 ---
 
+## Refactoring Impact on Communication Contracts
+
+Recent backend refactoring introduced interface-based service contracts and stricter separation of concerns. Communication behaviour is unchanged at API level, but internal coupling is reduced.
+
+### Interface-Based Service Contracts
+
+Controllers now depend on service interfaces (for example `IWeatherForecastService`, `IHistoricalWeatherService`, `IAnimalClassifierService`, `IBrightSkyService`) instead of concrete classes.
+
+**Impact on communication:**
+- Request/response contracts at REST and MQTT boundaries remain stable
+- Internal component communication is more replaceable and testable
+- Service implementations can be swapped without changing controller-layer contracts
+
+### Classification Flow Strategy
+
+Animal classification uses a processor strategy (factory + processors) for type-specific behaviour.
+
+**Impact on communication:**
+- Classification orchestration remains a single backend entry flow
+- Animal-type specific handling is delegated to dedicated processors
+- External preprocessing/AI calls remain encapsulated behind service boundaries
+
+### SOLID Alignment (Communication-Relevant)
+
+- **Dependency Inversion:** controllers communicate with interfaces, not implementations
+- **Interface Segregation:** focused interfaces reduce unnecessary cross-component dependencies
+- **Single Responsibility:** communication parsing, orchestration, and persistence are separated into dedicated components
+
+---
+
 ## Communication Patterns
 
 ### Synchronous Communication
@@ -27,6 +57,8 @@ Synchronous Communication is used when an immediate response is required before 
 - Blocking request/response
 - Easier error propagation
 - Simpler control flow
+- Enforced authentication/authorization on protected endpoints
+- Request payload validation before service-level processing
 
 ### Asynchronous Communication
 
@@ -46,6 +78,31 @@ Asynchronous communication allows the sender to continue processing without wait
 - Non-blocking
 - Higher resilience
 - Consistency
+- Fault isolation for background classification and ingestion workflows
+
+---
+
+## Security Controls in Communication Paths
+
+Security controls are applied on top of communication patterns to protect data flows and service boundaries.
+
+### REST Communication Security
+
+- Role-based access control (RBAC) is enforced at protected API boundaries
+- Bean validation (`@Valid` and DTO constraints) is used for inbound request validation
+- CORS policy is centrally configured and restricted
+- Security-relevant events are logged with structured logging practices
+
+### MQTT Communication Security
+
+- MQTT transport is expected to use TLS in production environments
+- Broker authentication settings are supported and should be enabled in deployment configuration
+- Message handlers validate payloads and discard malformed data early
+
+### CI/CD and Compliance Guardrails
+
+- Security scanning is integrated into CI/CD quality gates
+- Documentation and threat-model/audit artifacts are part of compliance evidence
 
 ---
 
@@ -170,7 +227,7 @@ sequenceDiagram
     participant MQTT as MQTT Broker
     participant Handler as AnimalDetectionHandler
     participant CmdSvc as AnimalDetectionCommandService
-    participant ClsSvc as AnimalClassifierService
+    participant ClsSvc as IAnimalClassifierService / AnimalClassifierService
     participant PreProc as Preprocessing Service
     participant AI as External AI Service (Birder/SpeciesNet)
 
@@ -189,6 +246,7 @@ sequenceDiagram
 - Asynchronous via @Async in `AnimalClassifierService.classifyAndUpdate()`
 - Preprocessing service is called first for image preperation
 - Failures log errors but don't block; detection is saved initially
+- Classification behaviour is delegated internally via processor strategy (factory + processors)
 
 ---
 
@@ -200,7 +258,7 @@ Weather forecasts are retrieved synchronously from the BrightSky API and cached.
 sequenceDiagram
     participant Client
     participant Ctrl as WeatherForecastController
-    participant WFS as WeatherForecastService
+    participant WFS as IWeatherForecastService / WeatherForecastService
     participant Repo as WeatherForecastRepository
     participant OM as Open-Meteo API
 
@@ -221,6 +279,7 @@ sequenceDiagram
 - Synchronous REST communication
 - Caches in `WeatherForecastRepository` to reduce API calls
 - Uses device location from `DeviceLocationService`
+- Controller-to-service contract is interface-based after refactoring
 
 ## @Async Processing
 
@@ -262,6 +321,11 @@ sequenceDiagram
 - Input validation (for example required fields in weather data) prevents malformed payloads
 - Warnings get logged
 - Graceful exit
+
+#### Security Enforcement at Boundaries
+- Protected REST endpoints require valid authentication/authorization
+- Inbound REST payloads are validated before business logic execution
+- MQTT payloads are validated and rejected when malformed
 
 #### Resilience Patterns
 **Circuit Breakers**: 
@@ -327,4 +391,4 @@ Failures in non-critical paths don't block core functionalities like data ingest
 
 ## Summary
 
-The backend uses a mix of synchronous and asynchronous communication tailored to each use case. MQTT enables decoupled event-driven ingestion, while REST is used for request-driven operations and external integrations. Robust error handling and clear communication boundaries ensure system resilience and maintainability.
+The backend uses a mix of synchronous and asynchronous communication tailored to each use case. MQTT enables decoupled event-driven ingestion, while REST is used for request-driven operations and external integrations. After refactoring, component interactions are interface-based and more testable without changing external contracts. Security controls (RBAC, validation, CORS hardening, secure MQTT configuration, and CI security gates) are integrated into communication boundaries to support resilience, maintainability, and compliance.
