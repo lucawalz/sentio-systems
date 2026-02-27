@@ -12,7 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.example.backend.dto.WeatherForecastDTO;
 import org.example.backend.mapper.WeatherForecastMapper;
 import org.example.backend.model.WeatherForecast;
-import org.example.backend.service.WeatherForecastService;
+import org.example.backend.service.IWeatherForecastService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -40,7 +40,7 @@ public class WeatherForecastController {
 
         private static final Logger logger = LoggerFactory.getLogger(WeatherForecastController.class);
 
-        private final WeatherForecastService weatherForecastService;
+        private final IWeatherForecastService weatherForecastService;
         private final WeatherForecastMapper weatherForecastMapper;
 
         /**

@@ -442,7 +442,7 @@ class HistoricalWeatherServiceIT extends BaseIntegrationTest {
         @DisplayName("should fetch weather for user device location")
         void shouldFetchForUserDevice() {
             LocationData location = createLocationData("device-8", 52.52f, 13.41f);
-            when(deviceLocationService.getFirstUserDeviceLocation())
+            when(deviceLocationService.getPrimaryUserDeviceLocation())
                     .thenReturn(Optional.of(location));
 
             String response = createOpenMeteoResponse(
@@ -460,7 +460,7 @@ class HistoricalWeatherServiceIT extends BaseIntegrationTest {
         @Test
         @DisplayName("should return empty list when no device registered")
         void shouldReturnEmptyWhenNoDevice() {
-            when(deviceLocationService.getFirstUserDeviceLocation())
+            when(deviceLocationService.getPrimaryUserDeviceLocation())
                     .thenReturn(Optional.empty());
 
             List<HistoricalWeather> results = historicalWeatherService
@@ -479,7 +479,7 @@ class HistoricalWeatherServiceIT extends BaseIntegrationTest {
         @DisplayName("should update weather for device location")
         void shouldUpdateForDeviceLocation() {
             LocationData location = createLocationData("device-9", 52.52f, 13.41f);
-            when(deviceLocationService.getFirstUserDeviceLocation())
+            when(deviceLocationService.getPrimaryUserDeviceLocation())
                     .thenReturn(Optional.of(location));
 
             String response = createOpenMeteoResponse(
@@ -497,7 +497,7 @@ class HistoricalWeatherServiceIT extends BaseIntegrationTest {
         @DisplayName("should prevent concurrent updates")
         void shouldPreventConcurrentUpdates() throws InterruptedException {
             LocationData location = createLocationData("device-10", 52.52f, 13.41f);
-            when(deviceLocationService.getFirstUserDeviceLocation())
+            when(deviceLocationService.getPrimaryUserDeviceLocation())
                     .thenReturn(Optional.of(location));
 
             String response = createOpenMeteoResponse(
@@ -521,7 +521,7 @@ class HistoricalWeatherServiceIT extends BaseIntegrationTest {
         @Test
         @DisplayName("should handle no device gracefully")
         void shouldHandleNoDevice() {
-            when(deviceLocationService.getFirstUserDeviceLocation())
+            when(deviceLocationService.getPrimaryUserDeviceLocation())
                     .thenReturn(Optional.empty());
 
             historicalWeatherService.updateHistoricalWeatherForCurrentLocation();

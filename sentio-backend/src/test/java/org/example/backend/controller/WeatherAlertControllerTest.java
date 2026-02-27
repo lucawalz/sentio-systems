@@ -3,7 +3,7 @@ package org.example.backend.controller;
 import org.example.backend.dto.WeatherAlertDTO;
 import org.example.backend.mapper.WeatherAlertMapper;
 import org.example.backend.model.WeatherAlert;
-import org.example.backend.service.BrightSkyService;
+import org.example.backend.service.IBrightSkyService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,23 +35,14 @@ class WeatherAlertControllerTest {
         @Autowired
         MockMvc mockMvc;
 
-        @Autowired
-        BrightSkyService brightSkyService;
-        @Autowired
-        WeatherAlertMapper weatherAlertMapper;
+        @Autowired IBrightSkyService brightSkyService;
+    @Autowired WeatherAlertMapper weatherAlertMapper;
 
-        @TestConfiguration
-        static class TestBeans {
-                @Bean
-                BrightSkyService brightSkyService() {
-                        return mock(BrightSkyService.class);
-                }
-
-                @Bean
-                WeatherAlertMapper weatherAlertMapper() {
-                        return mock(WeatherAlertMapper.class);
-                }
-        }
+    @TestConfiguration
+    static class TestBeans {
+                @Bean IBrightSkyService brightSkyService() { return mock(IBrightSkyService.class); }
+        @Bean WeatherAlertMapper weatherAlertMapper() { return mock(WeatherAlertMapper.class); }
+    }
 
         @AfterEach
         void resetMocks() {

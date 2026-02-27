@@ -320,6 +320,14 @@ public class DeviceService {
     }
 
     /**
+     * Check if any devices are registered in the system (global check, no user context required).
+     * Used by scheduled tasks to decide whether to run weather updates.
+     */
+    public boolean existsAnyDevice() {
+        return deviceRepository.count() > 0;
+    }
+
+    /**
      * Get a device by ID if the current user owns it.
      */
     public Optional<Device> getMyDevice(String deviceId) {
