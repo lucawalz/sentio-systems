@@ -329,9 +329,7 @@ export SECURITY_CORS_ALLOWED_ORIGINS=https://app.sentio.dev,https://sentio.dev
 ### 7.2 Implemented Improvements (REQ-021)
 
 **TLS/SSL Support Added:**
-- Configuration properties for CA cert, client cert, hostname verification
-- `MqttConfig.java` updated with SSL properties
-- Runtime warning when TLS is disabled
+ - Production profile guard: backend startup fails if MQTT TLS is disabled in `prod`/`production` profile
 
 **Mosquitto Configuration Hardened:**
 - TLS listener templates (8883 for MQTT, 9443 for WSS)
@@ -342,6 +340,8 @@ export SECURITY_CORS_ALLOWED_ORIGINS=https://app.sentio.dev,https://sentio.dev
 - `docs/mqtt-security.md` created with setup guide
 - Certificate generation scripts (self-signed + Let's Encrypt)
 - Security checklist for production deployment
+| `POST /api/workflow/cleanup` | `ROLE_ADMIN` | Maintenance endpoint |
+| `DELETE /api/animals/**` | `ROLE_ADMIN` | Destructive endpoint protection |
 
 ### 7.3 Production Requirements
 
