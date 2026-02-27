@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.backend.dto.DevicePairRequest;
 import org.example.backend.dto.DevicePairResponse;
+import org.example.backend.dto.DeviceRegistrationRequest;
 import org.example.backend.dto.DeviceRegistrationResponse;
 import org.example.backend.model.Device;
 import org.example.backend.service.DeviceLocationService;
@@ -15,6 +16,7 @@ import org.example.backend.service.DeviceService;
 import org.example.backend.service.RateLimitService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -24,6 +26,7 @@ import java.util.Map;
 @RequestMapping("/api/devices")
 @RequiredArgsConstructor
 @Slf4j
+@Validated
 @Tag(name = "Device Management", description = "API for managing IoT devices")
 public class DeviceController {
 
@@ -37,14 +40,14 @@ public class DeviceController {
     @Operation(summary = "Register a new device", description = "Create a new device with 15-min expiring pairing code")
     @PostMapping("/register")
     public ResponseEntity<DeviceRegistrationResponse> registerDevice(
-            @RequestBody Map<String, String> request) {
-        String name = request.getOrDefault("name", "My Device");
+            @Valid @RequestBody DeviceRegistrationRequest request) {
+        String name = request.getName();
         log.info("Request to register new device with name: {}", name);
 
         DeviceRegistrationResponse response = deviceService.registerDeviceWithCredentials(name);
 
         // If isPrimary flag is set, also set this as the primary device
-        if (Boolean.parseBoolean(request.get("isPrimary"))) {
+        if (Boolean.parseBoolean(request.getIsPrimary())) {
             deviceService.setPrimaryDevice(response.getDeviceId());
         }
 

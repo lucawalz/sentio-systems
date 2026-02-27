@@ -1,6 +1,11 @@
 package org.example.backend.dto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -23,15 +28,21 @@ public class AnimalDetectionDTO {
     private Long id;
 
     @Schema(description = "Detected or classified animal species", example = "Robin")
+    @NotBlank(message = "Species is required")
+    @Size(max = 255, message = "Species must be at most 255 characters")
     private String species;
 
     @Schema(description = "Category of the detected animal", example = "bird", allowableValues = {"bird", "mammal", "reptile", "amphibian", "insect", "other"})
+    @NotBlank(message = "Animal type is required")
     private String animalType;
 
     @Schema(description = "Confidence score of the detection/classification", example = "0.95", minimum = "0.0", maximum = "1.0")
+    @DecimalMin(value = "0.0", message = "Confidence must be between 0 and 1")
+    @DecimalMax(value = "1.0", message = "Confidence must be between 0 and 1")
     private float confidence;
 
     @Schema(description = "List of alternate species classifications from AI processing")
+    @Valid
     private List<AlternateSpeciesDTO> alternateSpecies;
 
     @Schema(description = "Original species detected before AI processing", example = "Unknown Bird")
@@ -94,9 +105,13 @@ public class AnimalDetectionDTO {
     public static class AlternateSpeciesDTO {
 
         @Schema(description = "Alternate species name", example = "Blue Jay")
+        @NotBlank(message = "Alternate species is required")
+        @Size(max = 255, message = "Alternate species must be at most 255 characters")
         private String species;
 
         @Schema(description = "Confidence score for this alternate classification", example = "0.82", minimum = "0.0", maximum = "1.0")
+        @DecimalMin(value = "0.0", message = "Alternate confidence must be between 0 and 1")
+        @DecimalMax(value = "1.0", message = "Alternate confidence must be between 0 and 1")
         private float confidence;
     }
 }
