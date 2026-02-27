@@ -94,11 +94,12 @@ export function ActivityFeed({ detections, alerts, loading }: ActivityFeedProps)
         switch (event.type) {
             case 'detection':
                 return 'bg-emerald-500/10 text-emerald-500'
-            case 'alert':
+            case 'alert': {
                 const severity = event.data.severity
                 if (severity === 'extreme' || severity === 'severe') return 'bg-red-500/10 text-red-500'
                 if (severity === 'moderate') return 'bg-orange-500/10 text-orange-500'
                 return 'bg-yellow-500/10 text-yellow-500'
+            }
             case 'device':
                 return event.data.status === 'online'
                     ? 'bg-green-500/10 text-green-500'

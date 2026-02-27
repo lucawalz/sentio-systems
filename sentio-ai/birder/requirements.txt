@@ -13,3 +13,8 @@ python-multipart
 arq>=0.25
 redis>=4.0
 msgpack
+
+# Testing
+pytest
+httpx
+pytest-asyncio

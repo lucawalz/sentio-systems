@@ -110,8 +110,7 @@ export default function WeatherPage() {
     // Helper to check if device is online (seen within last 5 minutes)
     const isDeviceOnline = (d: Device) => {
         if (!d.lastSeen) return false;
-        // Backend sends LocalDateTime which implies UTC but lacks offset
-        // We append 'Z' to ensure browser treats it as UTC
+        // Backend sends LocalDateTime without UTC offset
         const lastSeenTime = d.lastSeen.endsWith('Z') ? d.lastSeen : `${d.lastSeen}Z`;
         const lastSeen = new Date(lastSeenTime).getTime();
         const now = Date.now();

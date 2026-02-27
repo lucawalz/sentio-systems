@@ -49,17 +49,24 @@ public class DeviceStatusHandler {
                 return;
             }
 
-            String deviceId = root.path("device_id").asText();
-            String ipAddress = root.path("ip").asText();
-
-            // Extract GPS coordinates if present
-            Double latitude = root.has("latitude") ? root.path("latitude").asDouble() : null;
-            Double longitude = root.has("longitude") ? root.path("longitude").asDouble() : null;
-
-            if (deviceId == null || ipAddress == null) {
-                log.warn("Missing device_id or ip in payload: {}", payload);
+            // Check for null JSON nodes before accessing text
+            if (root.get("device_id").isNull() || root.get("ip").isNull()) {
+                log.warn("device_id or ip is null in payload: {}", payload);
                 return;
             }
+
+            String deviceId = root.get("device_id").asText();
+            String ipAddress = root.get("ip").asText();
+
+            // Validate non-empty strings
+            if (deviceId.isEmpty() || ipAddress.isEmpty()) {
+                log.warn("device_id or ip is empty in payload: {}", payload);
+                return;
+            }
+
+            // Extract GPS coordinates if present
+            Double latitude = root.has("latitude") && !root.get("latitude").isNull() ? root.get("latitude").asDouble() : null;
+            Double longitude = root.has("longitude") && !root.get("longitude").isNull() ? root.get("longitude").asDouble() : null;
 
             log.debug("Received status for device {}: {}", deviceId, ipAddress);
 
@@ -114,7 +121,7 @@ public class DeviceStatusHandler {
                     if (!isNewLocation) {
                         double latDiff = Math.abs(device.getLatitude() - latitude);
                         double lonDiff = Math.abs(device.getLongitude() - longitude);
-                        isNewLocation = latDiff > LOCATION_CHANGE_THRESHOLD || lonDiff > LOCATION_CHANGE_THRESHOLD;
+                        isNewLocation = latDiff >= LOCATION_CHANGE_THRESHOLD || lonDiff >= LOCATION_CHANGE_THRESHOLD;
                     }
 
                     if (isNewLocation) {

@@ -29,8 +29,6 @@ from PIL import Image
 import numpy as np
 import io
 
-# Environment variables are passed via docker-compose
-
 # Configure logging
 logging.basicConfig(
     level=getattr(logging, os.getenv('LOG_LEVEL', 'INFO').upper()),
@@ -72,7 +70,6 @@ class ModelManager:
         self._class_to_idx = None
         self._idx_to_class = None
 
-        # Create cache directory if it doesn't exist
         Path(self.birder_cache_dir).mkdir(parents=True, exist_ok=True)
 
     def load_birder_model(self) -> bool:
@@ -155,7 +152,6 @@ class BirdClassificationService:
             # Determine if this looks like a bird based on top confidence
             bird_detected = max_conf > self.min_bird_confidence
 
-            # Get top N predictions
             top_indices = np.argsort(output)[::-1][:self.max_predictions]
             predictions = [
                 ClassificationPrediction(
@@ -312,8 +308,6 @@ async def health_check():
         }
     }
 
-
-# ============ Redis Queue Integration ============
 
 redis_pool = None
 

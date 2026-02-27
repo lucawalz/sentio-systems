@@ -21,8 +21,8 @@ import java.util.Optional;
 @Repository
 public interface WeatherAlertRepository extends JpaRepository<WeatherAlert, Long> {
 
-        /** Find alert by unique BrightSky alert ID */
-        Optional<WeatherAlert> findByAlertId(String alertId);
+        /** Find alert by unique BrightSky alert ID and device ID */
+        Optional<WeatherAlert> findByAlertIdAndDeviceId(String alertId, String deviceId);
 
         /** Find all active alerts (not expired) */
         @Query("SELECT w FROM WeatherAlert w WHERE w.expires IS NULL OR w.expires > :now ORDER BY w.effective DESC")
@@ -84,8 +84,8 @@ public interface WeatherAlertRepository extends JpaRepository<WeatherAlert, Long
         @Query("SELECT w FROM WeatherAlert w WHERE w.effective >= :since ORDER BY w.effective DESC")
         List<WeatherAlert> findRecentAlerts(@Param("since") LocalDateTime since);
 
-        /** Check if alert exists by alertId */
-        boolean existsByAlertId(String alertId);
+        /** Check if alert exists by alertId and deviceId */
+        boolean existsByAlertIdAndDeviceId(String alertId, String deviceId);
 
         /** Get distinct cities with active alerts */
         @Query("SELECT DISTINCT w.city FROM WeatherAlert w WHERE " +

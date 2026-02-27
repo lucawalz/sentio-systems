@@ -121,8 +121,6 @@ public class AuthController {
         return ResponseEntity.noContent().build();
     }
 
-    // ==================== PASSWORD RESET ====================
-
     @PostMapping("/forgot-password")
     public ResponseEntity<Void> forgotPassword(@RequestBody AuthDTOs.ForgotPasswordRequest request) {
         if (authService.userExistsByEmail(request.email())) {
@@ -168,8 +166,6 @@ public class AuthController {
                     .body(new AuthDTOs.MessageResponse(false, "Failed to update password. Please try again."));
         }
     }
-
-    // ==================== EMAIL VERIFICATION ====================
 
     @GetMapping("/verify-email")
     public ResponseEntity<AuthDTOs.MessageResponse> verifyEmail(@RequestParam String token) {
