@@ -224,7 +224,7 @@ class BrightSkyServiceIT extends BaseIntegrationTest {
         @DisplayName("should fetch alerts using device location")
         void shouldFetchAlertsUsingDeviceLocation() {
             LocationData location = createLocationData("device-1", 52.52f, 13.41f, "Berlin");
-            when(deviceLocationService.getFirstUserDeviceLocation()).thenReturn(Optional.of(location));
+            when(deviceLocationService.getPrimaryUserDeviceLocation()).thenReturn(Optional.of(location));
 
             stubFor(get(urlPathEqualTo("/alerts"))
                     .withQueryParam("lat", matching("52\\.5.*"))
@@ -245,7 +245,7 @@ class BrightSkyServiceIT extends BaseIntegrationTest {
         @Test
         @DisplayName("should return empty list when no device is registered")
         void shouldReturnEmptyListWhenNoDevice() {
-            when(deviceLocationService.getFirstUserDeviceLocation()).thenReturn(Optional.empty());
+            when(deviceLocationService.getPrimaryUserDeviceLocation()).thenReturn(Optional.empty());
 
             List<WeatherAlert> alerts = brightSkyService.getAlertsForCurrentLocation();
 
@@ -911,7 +911,7 @@ class BrightSkyServiceIT extends BaseIntegrationTest {
         @DisplayName("updateAlertsForCurrentLocation should fetch and persist alerts")
         void shouldUpdateAlertsForCurrentLocation() {
             LocationData location = createLocationData("device-1", 52.52f, 13.41f, "Berlin");
-            when(deviceLocationService.getFirstUserDeviceLocation()).thenReturn(Optional.of(location));
+            when(deviceLocationService.getPrimaryUserDeviceLocation()).thenReturn(Optional.of(location));
 
             stubFor(get(urlPathEqualTo("/alerts"))
                     .withQueryParam("tz", equalTo("Europe/Berlin"))
@@ -928,7 +928,7 @@ class BrightSkyServiceIT extends BaseIntegrationTest {
         @Test
         @DisplayName("updateAlertsForCurrentLocation should handle no device gracefully")
         void shouldHandleNoDeviceGracefully() {
-            when(deviceLocationService.getFirstUserDeviceLocation()).thenReturn(Optional.empty());
+            when(deviceLocationService.getPrimaryUserDeviceLocation()).thenReturn(Optional.empty());
 
             brightSkyService.updateAlertsForCurrentLocation();
 
@@ -1038,7 +1038,7 @@ class BrightSkyServiceIT extends BaseIntegrationTest {
         @DisplayName("getRadarEndpointUrlForCurrentLocation should use device location")
         void shouldGenerateRadarUrlForDeviceLocation() {
             LocationData location = createLocationData("device-1", 52.52f, 13.41f, "Berlin");
-            when(deviceLocationService.getFirstUserDeviceLocation()).thenReturn(Optional.of(location));
+            when(deviceLocationService.getPrimaryUserDeviceLocation()).thenReturn(Optional.of(location));
 
             String url = brightSkyService.getRadarEndpointUrlForCurrentLocation(null, null);
 
@@ -1050,7 +1050,7 @@ class BrightSkyServiceIT extends BaseIntegrationTest {
         @Test
         @DisplayName("getRadarEndpointUrlForCurrentLocation should return null when no device")
         void shouldReturnNullWhenNoDevice() {
-            when(deviceLocationService.getFirstUserDeviceLocation()).thenReturn(Optional.empty());
+            when(deviceLocationService.getPrimaryUserDeviceLocation()).thenReturn(Optional.empty());
 
             String url = brightSkyService.getRadarEndpointUrlForCurrentLocation(null, null);
 

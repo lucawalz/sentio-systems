@@ -25,3 +25,4 @@ We use the [MADR](https://adr.github.io/madr/) format.
 * [ADR-0010: RESTful API Design Pattern](0010-restful-api-design-pattern.md)
 * [ADR-0011: Hailo AI Accelerator for Edge Inference](0011-hailo-ai-accelerator-for-edge-inference.md)
 * [ADR-0012: Layered Architecture Pattern](0012-layered-architecture-pattern.md)
+* [ADR-0013: Introduce Service Interfaces and Classification Processor Factory](# ADR-0013.md)

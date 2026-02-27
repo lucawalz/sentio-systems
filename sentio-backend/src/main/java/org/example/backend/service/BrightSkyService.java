@@ -1,7 +1,5 @@
 package org.example.backend.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,15 +10,17 @@ import org.example.backend.model.WeatherAlert;
 import org.example.backend.model.WeatherRadarMetadata;
 import org.example.backend.repository.WeatherAlertRepository;
 import org.example.backend.repository.WeatherRadarMetadataRepository;
-import org.springframework.beans.factory.annotation.Value;
+import org.example.backend.service.brightsky.BrightSkyAlertMapper;
+import org.example.backend.service.brightsky.BrightSkyApiClient;
+import org.example.backend.service.brightsky.BrightSkyRadarMetadataCalculator;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.Locale;
 import java.util.Optional;
 
@@ -43,18 +43,17 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class BrightSkyService {
+public class BrightSkyService implements IBrightSkyService {
 
     private final WeatherAlertRepository weatherAlertRepository;
     private final WeatherRadarMetadataRepository weatherRadarMetadataRepository;
     private final DeviceLocationService deviceLocationService;
     private final DeviceService deviceService;
-    private final RestTemplate restTemplate;
-    private final ObjectMapper objectMapper;
+    private final BrightSkyApiClient brightSkyApiClient;
+    private final BrightSkyAlertMapper brightSkyAlertMapper;
+    private final BrightSkyRadarMetadataCalculator radarMetadataCalculator;
     private volatile boolean isUpdating = false;
-
-    @Value("${brightsky.api.base-url:https://api.brightsky.dev}")
-    private String baseUrl;
+    private final ConcurrentHashMap<String, ReentrantLock> alertLocks = new ConcurrentHashMap<>();
 
     /**
      * Retrieves weather alerts for the current user's device location.
@@ -66,7 +65,7 @@ public class BrightSkyService {
      */
     public List<WeatherAlert> getAlertsForCurrentLocation() {
         log.debug("Retrieving alerts for current user's device location");
-        Optional<LocationData> deviceLocation = deviceLocationService.getFirstUserDeviceLocation();
+        Optional<LocationData> deviceLocation = deviceLocationService.getPrimaryUserDeviceLocation();
         if (deviceLocation.isPresent()) {
             LocationData loc = deviceLocation.get();
             return getAlertsForLocation(loc.getLatitude(), loc.getLongitude(), loc.getDeviceId());
@@ -86,149 +85,32 @@ public class BrightSkyService {
      * @param longitude Geographic longitude coordinate
      * @return List of processed and persisted weather alerts
      */
-    @Transactional
     @CircuitBreaker(name = "brightSky", fallbackMethod = "getAlertsForLocationFallback")
     public List<WeatherAlert> getAlertsForLocation(Float latitude, Float longitude, String deviceId) {
-        log.info("Processing weather alerts for location: lat: {}, lon: {}, device: {}", latitude, longitude, deviceId);
-
+        String lockKey = deviceId != null ? deviceId : latitude + "," + longitude;
+        ReentrantLock lock = alertLocks.computeIfAbsent(lockKey, k -> new ReentrantLock());
+        if (!lock.tryLock()) {
+            log.debug("Alert update already in progress for device {}, skipping duplicate request", deviceId);
+            return new ArrayList<>();
+        }
         try {
-            // Clean up expired alerts before fetching new data
+            log.info("Processing weather alerts for location: lat: {}, lon: {}, device: {}", latitude, longitude, deviceId);
+
             cleanupExpiredAlerts();
-
-            // BrightSky Alerts API URL
-            String url = String.format(java.util.Locale.US, "%s/alerts?lat=%f&lon=%f&tz=Europe/Berlin",
-                    baseUrl, latitude, longitude);
-
-            log.info("Fetching weather alerts from BrightSky: {}", url);
-            String response = restTemplate.getForObject(url, String.class);
-            JsonNode jsonNode = objectMapper.readTree(response);
-
-            List<WeatherAlert> processedAlerts = new ArrayList<>();
-
-            // Process alerts array
-            JsonNode alertsNode = jsonNode.get("alerts");
-            JsonNode locationNode = jsonNode.get("location");
-
-            if (alertsNode != null && alertsNode.isArray()) {
-                for (JsonNode alertNode : alertsNode) {
-                    WeatherAlert alert = processAlertNode(alertNode, locationNode, deviceId);
-                    if (alert != null) {
-                        processedAlerts.add(alert);
-                    }
-                }
-            }
-
-            // Persist all processed alerts
+            var payload = brightSkyApiClient.fetchAlerts(latitude, longitude);
+            List<WeatherAlert> processedAlerts = brightSkyAlertMapper.mapAlerts(payload, deviceId);
             List<WeatherAlert> savedAlerts = weatherAlertRepository.saveAll(processedAlerts);
 
             log.info("Successfully processed {} weather alerts for location: lat: {}, lon: {}",
                     savedAlerts.size(), latitude, longitude);
-
             return savedAlerts;
 
         } catch (Exception e) {
             log.error("Failed to fetch weather alerts for location: lat: {}, lon: {}", latitude, longitude, e);
-            e.printStackTrace();
             return new ArrayList<>();
+        } finally {
+            lock.unlock();
         }
-    }
-
-    /**
-     * Processes a single alert node from the BrightSky API response.
-     */
-    private WeatherAlert processAlertNode(JsonNode alertNode, JsonNode locationNode, String deviceId) {
-        try {
-            String alertId = alertNode.get("alert_id").asText();
-
-            // Check if alert already exists for this device
-            Optional<WeatherAlert> existingAlert = weatherAlertRepository.findByAlertIdAndDeviceId(alertId, deviceId);
-            WeatherAlert alert = existingAlert.orElse(new WeatherAlert());
-
-            // Set device ID for user data isolation
-            alert.setDeviceId(deviceId);
-
-            // Set alert identification
-            alert.setAlertId(alertId);
-            alert.setBrightSkyId(alertNode.get("id").asInt());
-            alert.setStatus(getTextValue(alertNode, "status"));
-
-            // Set timing information
-            alert.setEffective(parseDateTime(alertNode, "effective"));
-            alert.setOnset(parseDateTime(alertNode, "onset"));
-            alert.setExpires(parseDateTime(alertNode, "expires"));
-
-            // Set alert metadata
-            alert.setCategory(getTextValue(alertNode, "category"));
-            alert.setResponseType(getTextValue(alertNode, "response_type"));
-            alert.setUrgency(getTextValue(alertNode, "urgency"));
-            alert.setSeverity(getTextValue(alertNode, "severity"));
-            alert.setCertainty(getTextValue(alertNode, "certainty"));
-
-            // Set event information
-            if (alertNode.has("event_code") && !alertNode.get("event_code").isNull()) {
-                alert.setEventCode(alertNode.get("event_code").asInt());
-            }
-            alert.setEventEn(getTextValue(alertNode, "event_en"));
-            alert.setEventDe(getTextValue(alertNode, "event_de"));
-
-            // Set multilingual content
-            alert.setHeadlineEn(getTextValue(alertNode, "headline_en"));
-            alert.setHeadlineDe(getTextValue(alertNode, "headline_de"));
-            alert.setDescriptionEn(getTextValue(alertNode, "description_en"));
-            alert.setDescriptionDe(getTextValue(alertNode, "description_de"));
-            alert.setInstructionEn(getTextValue(alertNode, "instruction_en"));
-            alert.setInstructionDe(getTextValue(alertNode, "instruction_de"));
-
-            // Set location information from location node
-            if (locationNode != null) {
-                if (locationNode.has("warn_cell_id") && !locationNode.get("warn_cell_id").isNull()) {
-                    alert.setWarnCellId(locationNode.get("warn_cell_id").asLong());
-                }
-                alert.setName(getTextValue(locationNode, "name"));
-                alert.setNameShort(getTextValue(locationNode, "name_short"));
-                alert.setDistrict(getTextValue(locationNode, "district"));
-                alert.setState(getTextValue(locationNode, "state"));
-                alert.setStateShort(getTextValue(locationNode, "state_short"));
-
-                // Use name_short as city for consistency with other services
-                alert.setCity(getTextValue(locationNode, "name_short"));
-                alert.setCountry("Germany"); // BrightSky is Germany-specific
-            }
-
-            return alert;
-
-        } catch (Exception e) {
-            log.error("Error processing alert node", e);
-            return null;
-        }
-    }
-
-    /**
-     * Safely extracts text value from JSON node.
-     */
-    private String getTextValue(JsonNode node, String fieldName) {
-        if (node.has(fieldName) && !node.get(fieldName).isNull()) {
-            return node.get(fieldName).asText();
-        }
-        return null;
-    }
-
-    /**
-     * Safely parses datetime from JSON node.
-     */
-    private LocalDateTime parseDateTime(JsonNode node, String fieldName) {
-        String dateTimeStr = getTextValue(node, fieldName);
-        if (dateTimeStr != null) {
-            try {
-                // Parse ISO 8601 datetime with offset
-                return LocalDateTime.parse(dateTimeStr.substring(0, 19),
-                        DateTimeFormatter.ISO_LOCAL_DATE_TIME);
-            } catch (Exception e) {
-                log.warn("Failed to parse datetime: {}", dateTimeStr);
-                return null;
-            }
-        }
-        return null;
     }
 
     /**
@@ -315,7 +197,7 @@ public class BrightSkyService {
 
         try {
             // Update alerts for current user's device location (not server IP)
-            Optional<LocationData> deviceLocation = deviceLocationService.getFirstUserDeviceLocation();
+            Optional<LocationData> deviceLocation = deviceLocationService.getPrimaryUserDeviceLocation();
             if (deviceLocation.isPresent()) {
                 LocationData location = deviceLocation.get();
                 getAlertsForLocation(location.getLatitude(), location.getLongitude(), location.getDeviceId());
@@ -429,8 +311,7 @@ public class BrightSkyService {
         if (format == null)
             format = "compressed";
 
-        String url = String.format(java.util.Locale.US, "%s/radar?lat=%f&lon=%f&distance=%d&format=%s&tz=Europe/Berlin",
-                baseUrl, latitude, longitude, distance, format);
+        String url = brightSkyApiClient.buildRadarUrl(latitude, longitude, distance, format);
 
         log.debug("Generated radar endpoint URL: {}", url);
         return url;
@@ -445,7 +326,7 @@ public class BrightSkyService {
      *         devices
      */
     public String getRadarEndpointUrlForCurrentLocation(Integer distance, String format) {
-        Optional<LocationData> deviceLocation = deviceLocationService.getFirstUserDeviceLocation();
+        Optional<LocationData> deviceLocation = deviceLocationService.getPrimaryUserDeviceLocation();
         if (deviceLocation.isPresent()) {
             LocationData location = deviceLocation.get();
             return getRadarEndpointUrl(location.getLatitude(), location.getLongitude(), distance, format);
@@ -494,99 +375,20 @@ public class BrightSkyService {
                 distance);
 
         try {
-            // Fetch radar data in plain format for easier parsing
-            String radarUrl = String.format(Locale.US,
-                    "%s/radar?lat=%f&lon=%f&distance=%d&format=plain&tz=Europe/Berlin",
-                    baseUrl, latitude, longitude, distance);
+            var payload = brightSkyApiClient.fetchRadar(latitude, longitude, distance, "plain");
+            BrightSkyRadarMetadataCalculator.RadarCalculation calculation = radarMetadataCalculator
+                    .calculate(payload, latitude, longitude, distance, deviceId);
 
-            String response = restTemplate.getForObject(radarUrl, String.class);
-            JsonNode jsonNode = objectMapper.readTree(response);
-
-            JsonNode radarArray = jsonNode.get("radar");
-            if (radarArray == null || !radarArray.isArray() || radarArray.isEmpty()) {
+            if (calculation == null) {
                 log.warn("No radar data returned from BrightSky");
                 return null;
             }
 
-            // Get the most recent radar entry (first in array is most recent)
-            JsonNode latestRadar = radarArray.get(0);
-            JsonNode precipitation = latestRadar.get("precipitation_5");
-
-            if (precipitation == null || !precipitation.isArray()) {
-                log.warn("No precipitation data in radar response");
-                return null;
-            }
-
-            // Calculate statistics from the precipitation grid
-            int totalCells = 0;
-            int cellsWithPrecip = 0;
-            int significantCells = 0;
-            float minPrecip = Float.MAX_VALUE;
-            float maxPrecip = 0;
-            float sumPrecip = 0;
-
-            for (JsonNode row : precipitation) {
-                for (JsonNode cell : row) {
-                    int value = cell.asInt();
-                    float mmPer5min = value / 100.0f; // Convert from 0.01mm units
-
-                    totalCells++;
-                    if (value > 0) {
-                        cellsWithPrecip++;
-                        sumPrecip += mmPer5min;
-                        if (mmPer5min < minPrecip)
-                            minPrecip = mmPer5min;
-                        if (mmPer5min > maxPrecip)
-                            maxPrecip = mmPer5min;
-                        if (mmPer5min >= 1.0f)
-                            significantCells++; // Significant rain threshold
-                    }
-                }
-            }
-
-            // Avoid division by zero
-            if (cellsWithPrecip == 0) {
-                minPrecip = 0;
-            }
-            float avgPrecip = cellsWithPrecip > 0 ? sumPrecip / cellsWithPrecip : 0;
-            float coveragePercent = totalCells > 0 ? (cellsWithPrecip * 100.0f / totalCells) : 0;
-
-            // Parse timestamp
-            String timestampStr = latestRadar.get("timestamp").asText();
-            LocalDateTime timestamp = LocalDateTime.parse(timestampStr.substring(0, 19),
-                    DateTimeFormatter.ISO_LOCAL_DATE_TIME);
-
-            // Create and save metadata entity
-            WeatherRadarMetadata metadata = new WeatherRadarMetadata();
-            metadata.setTimestamp(timestamp);
-            metadata.setSource(latestRadar.has("source") ? latestRadar.get("source").asText() : null);
-            metadata.setLatitude(latitude);
-            metadata.setLongitude(longitude);
-            metadata.setDistance(distance);
-            metadata.setDeviceId(deviceId); // Set device ID for multi-device support
-            metadata.setPrecipitationMin(minPrecip);
-            metadata.setPrecipitationMax(maxPrecip);
-            metadata.setPrecipitationAvg(avgPrecip);
-            metadata.setCoveragePercent(coveragePercent);
-            metadata.setSignificantRainCells(significantCells);
-            metadata.setTotalCells(totalCells);
-
-            // Store geometry and bbox if present
-            if (jsonNode.has("geometry")) {
-                metadata.setGeometryJson(jsonNode.get("geometry").toString());
-            }
-            if (jsonNode.has("bbox")) {
-                JsonNode bbox = jsonNode.get("bbox");
-                metadata.setBboxPixels(String.format("%d,%d,%d,%d",
-                        bbox.get(0).asInt(), bbox.get(1).asInt(),
-                        bbox.get(2).asInt(), bbox.get(3).asInt()));
-            }
-
-            WeatherRadarMetadata savedMetadata = weatherRadarMetadataRepository.save(metadata);
+            WeatherRadarMetadata savedMetadata = weatherRadarMetadataRepository.save(calculation.getMetadata());
             log.info("Saved radar metadata: coverage={}%, max={}mm, significant cells={}",
-                    String.format("%.1f", coveragePercent),
-                    String.format("%.2f", maxPrecip),
-                    significantCells);
+                    String.format("%.1f", savedMetadata.getCoveragePercent()),
+                    String.format("%.2f", savedMetadata.getPrecipitationMax()),
+                    savedMetadata.getSignificantRainCells());
 
             // Build DTO response
             return RadarMetadataDTO.builder()
@@ -603,7 +405,7 @@ public class BrightSkyService {
                     .totalCells(savedMetadata.getTotalCells())
                     .directApiUrl(getRadarEndpointUrl(latitude, longitude, distance, "compressed"))
                     .createdAt(savedMetadata.getCreatedAt())
-                    .hasActivePrecipitation(cellsWithPrecip > 0)
+                    .hasActivePrecipitation(calculation.isHasActivePrecipitation())
                     .build();
 
         } catch (Exception e) {
@@ -663,7 +465,7 @@ public class BrightSkyService {
      */
     @Deprecated
     private RadarMetadataDTO fetchAndStoreRadarMetadataForCurrentLocationLegacy(Integer distance) {
-        Optional<LocationData> deviceLocation = deviceLocationService.getFirstUserDeviceLocation();
+        Optional<LocationData> deviceLocation = deviceLocationService.getPrimaryUserDeviceLocation();
         if (deviceLocation.isPresent()) {
             LocationData location = deviceLocation.get();
             return fetchAndStoreRadarMetadata(location.getLatitude(), location.getLongitude(), distance,

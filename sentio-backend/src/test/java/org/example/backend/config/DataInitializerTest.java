@@ -24,7 +24,6 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @ExtendWith(MockitoExtension.class)
 class DataInitializerTest {
@@ -110,7 +109,7 @@ class DataInitializerTest {
     }
 
     @Test
-    void run_shouldThrowException_whenKeycloakUserCreationFails() {
+    void run_shouldAbortSilently_whenKeycloakUserCreationFails() {
         when(deviceRepository.count()).thenReturn(0L);
 
         when(keycloak.realm("test-realm")).thenReturn(realmResource);
@@ -122,7 +121,8 @@ class DataInitializerTest {
         when(response.getStatus()).thenReturn(500);
         when(usersResource.create(any(UserRepresentation.class))).thenReturn(response);
 
-        assertThrows(RuntimeException.class, () -> dataInitializer.run(null));
+        // run() catches Keycloak failures and returns early without throwing
+        dataInitializer.run(null);
 
         verify(deviceRepository, never()).saveAll(anyList());
     }

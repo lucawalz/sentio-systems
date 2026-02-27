@@ -2,8 +2,8 @@ package org.example.backend.config;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.example.backend.repository.DeviceRepository;
 import org.example.backend.service.BrightSkyService;
+import org.example.backend.service.DeviceService;
 import org.example.backend.service.HistoricalWeatherService;
 import org.example.backend.service.WeatherForecastService;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -21,10 +21,10 @@ public class SchedulingConfig {
     private final WeatherForecastService weatherForecastService;
     private final HistoricalWeatherService historicalWeatherService;
     private final BrightSkyService brightSkyService;
-    private final DeviceRepository deviceRepository;
+    private final DeviceService deviceService;
 
     private boolean hasAnyDevices() {
-        return deviceRepository.count() > 0;
+        return deviceService.existsAnyDevice();
     }
 
     @EventListener(ApplicationReadyEvent.class)

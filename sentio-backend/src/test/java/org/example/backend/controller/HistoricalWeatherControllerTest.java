@@ -3,7 +3,7 @@ package org.example.backend.controller;
 import org.example.backend.dto.HistoricalWeatherDTO;
 import org.example.backend.mapper.HistoricalWeatherMapper;
 import org.example.backend.model.HistoricalWeather;
-import org.example.backend.service.HistoricalWeatherService;
+import org.example.backend.service.IHistoricalWeatherService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.security.oauth2.resource.servlet.OAuth2ResourceServerAutoConfiguration;
@@ -39,28 +39,18 @@ class HistoricalWeatherControllerTest {
         @Autowired
         MockMvc mockMvc;
 
-        @Autowired
-        HistoricalWeatherService historicalWeatherService;
-        @Autowired
-        HistoricalWeatherMapper historicalWeatherMapper;
+        @Autowired IHistoricalWeatherService historicalWeatherService;
+    @Autowired HistoricalWeatherMapper historicalWeatherMapper;
+    @AfterEach
+    void resetMocks() {
+        reset(historicalWeatherService, historicalWeatherMapper);
+    }
 
-        @AfterEach
-        void resetMocks() {
-                reset(historicalWeatherService, historicalWeatherMapper);
-        }
-
-        @TestConfiguration
-        static class TestBeans {
-                @Bean
-                HistoricalWeatherService historicalWeatherService() {
-                        return mock(HistoricalWeatherService.class);
-                }
-
-                @Bean
-                HistoricalWeatherMapper historicalWeatherMapper() {
-                        return mock(HistoricalWeatherMapper.class);
-                }
-        }
+    @TestConfiguration
+    static class TestBeans {
+                @Bean IHistoricalWeatherService historicalWeatherService() { return mock(IHistoricalWeatherService.class); }
+        @Bean HistoricalWeatherMapper historicalWeatherMapper() { return mock(HistoricalWeatherMapper.class); }
+    }
 
         @Test
         void getHistoricalWeatherForCurrentLocation_returns200_andList() throws Exception {

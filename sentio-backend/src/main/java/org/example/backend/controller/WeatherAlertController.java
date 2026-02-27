@@ -13,7 +13,7 @@ import org.example.backend.dto.RadarMetadataDTO;
 import org.example.backend.dto.WeatherAlertDTO;
 import org.example.backend.mapper.WeatherAlertMapper;
 import org.example.backend.model.WeatherAlert;
-import org.example.backend.service.BrightSkyService;
+import org.example.backend.service.IBrightSkyService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -38,7 +38,7 @@ public class WeatherAlertController {
 
         private static final Logger logger = LoggerFactory.getLogger(WeatherAlertController.class);
 
-        private final BrightSkyService brightSkyService;
+        private final IBrightSkyService brightSkyService;
         private final WeatherAlertMapper weatherAlertMapper;
 
         /**
