@@ -34,7 +34,6 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/forecast")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 @Tag(name = "Weather Forecast", description = "API for retrieving and managing weather forecast data from Open-Meteo")
 public class WeatherForecastController {
 

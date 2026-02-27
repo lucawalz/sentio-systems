@@ -1,5 +1,7 @@
 package org.example.backend.controller;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -7,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.backend.service.DeviceService;
 import org.example.backend.service.StreamService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
@@ -20,6 +23,7 @@ import java.util.Map;
 @RequestMapping("/api/stream")
 @RequiredArgsConstructor
 @Slf4j
+@Validated
 @Tag(name = "Stream", description = "Video stream authentication and URL management")
 public class StreamAuthController {
 
@@ -46,12 +50,12 @@ public class StreamAuthController {
      */
     @PostMapping("/auth")
     @Operation(summary = "MediaMTX auth webhook", description = "Validates stream publish/playback access")
-    public ResponseEntity<Void> authenticate(@RequestBody Map<String, Object> request) {
-        String path = (String) request.get("path");
-        String action = (String) request.get("action");
-        String query = (String) request.get("query");
-        String protocol = (String) request.get("protocol");
-        String sourceIp = (String) request.get("ip");
+    public ResponseEntity<Void> authenticate(@Valid @RequestBody AuthWebhookRequest request) {
+        String path = request.getPath();
+        String action = request.getAction();
+        String query = request.getQuery();
+        String protocol = request.getProtocol();
+        String sourceIp = request.getIp();
 
         // Log request without sensitive token data (DEBUG level to avoid clutter)
         log.debug("Stream auth: action={}, path={}, protocol={}, ip={}", action, path, protocol, sourceIp);
@@ -94,8 +98,8 @@ public class StreamAuthController {
      */
     @PostMapping("/ready")
     @Operation(summary = "Stream ready notification", description = "Called by MediaMTX when stream starts")
-    public ResponseEntity<Void> onStreamReady(@RequestBody Map<String, Object> request) {
-        String path = (String) request.get("path");
+    public ResponseEntity<Void> onStreamReady(@Valid @RequestBody PathWebhookRequest request) {
+        String path = request.getPath();
         String deviceId = extractDeviceIdFromPath(path);
 
         if (deviceId != null) {
@@ -110,8 +114,8 @@ public class StreamAuthController {
      */
     @PostMapping("/not-ready")
     @Operation(summary = "Stream ended notification", description = "Called by MediaMTX when stream ends")
-    public ResponseEntity<Void> onStreamNotReady(@RequestBody Map<String, Object> request) {
-        String path = (String) request.get("path");
+    public ResponseEntity<Void> onStreamNotReady(@Valid @RequestBody PathWebhookRequest request) {
+        String path = request.getPath();
         String deviceId = extractDeviceIdFromPath(path);
 
         if (deviceId != null) {
@@ -296,5 +300,26 @@ public class StreamAuthController {
         }
 
         return null;
+    }
+
+    @lombok.Data
+    public static class AuthWebhookRequest {
+        @NotBlank(message = "Path is required")
+        private String path;
+
+        @NotBlank(message = "Action is required")
+        private String action;
+
+        @NotBlank(message = "Query is required")
+        private String query;
+
+        private String protocol;
+        private String ip;
+    }
+
+    @lombok.Data
+    public static class PathWebhookRequest {
+        @NotBlank(message = "Path is required")
+        private String path;
     }
 }

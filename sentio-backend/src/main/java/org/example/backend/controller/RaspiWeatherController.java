@@ -1,5 +1,6 @@
 package org.example.backend.controller;
 
+import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -13,6 +14,7 @@ import org.example.backend.service.RaspiWeatherDataService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -25,7 +27,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/weather")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
+@Validated
 @Tag(name = "Weather Data", description = "API for retrieving and managing real-time weather data from IoT devices")
 public class RaspiWeatherController {
 
@@ -111,7 +113,7 @@ public class RaspiWeatherController {
                     content = @Content)
     })
     @PostMapping
-    public ResponseEntity<RaspiWeatherData> addWeatherData(@RequestBody RaspiWeatherData raspiWeatherData) {
+        public ResponseEntity<RaspiWeatherData> addWeatherData(@Valid @RequestBody RaspiWeatherData raspiWeatherData) {
         logger.info("Adding new weather data reading");
         // Ensure timestamp is set if not provided
         if (raspiWeatherData.getTimestamp() == null) {

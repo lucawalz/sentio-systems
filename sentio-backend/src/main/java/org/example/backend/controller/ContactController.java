@@ -1,6 +1,7 @@
 package org.example.backend.controller;
 
 import jakarta.validation.Valid;
+import lombok.extern.slf4j.Slf4j;
 import org.example.backend.dto.ContactRequest;
 import org.example.backend.service.ContactService;
 import org.springframework.http.ResponseEntity;
@@ -8,7 +9,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/contact")
-@CrossOrigin // check Port !!!! //needed for check if frontend has different port than backend / api
+@Slf4j
 public class ContactController {
 
     private final ContactService service;
@@ -19,12 +20,12 @@ public class ContactController {
 
     @PostMapping
     public ResponseEntity<Void> send(@Valid @RequestBody ContactRequest request) {
-        System.out.println(">>> ContactController reached, mail=" + request.getMail()); //remove if it works out
+        log.info("Processing contact request for {}", request.getMail());
         try {
             service.sendContactMail(request);
             return ResponseEntity.ok().build();
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("Failed to process contact request", e);
             return ResponseEntity.status(500).build();
         }
     }

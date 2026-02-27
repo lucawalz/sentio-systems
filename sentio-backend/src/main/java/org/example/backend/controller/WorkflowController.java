@@ -1,5 +1,8 @@
 package org.example.backend.controller;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -14,6 +17,7 @@ import org.example.backend.service.N8nWorkflowTriggerService;
 import org.example.backend.service.WorkflowService;
 import org.example.backend.util.SecurityUtils;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -23,7 +27,7 @@ import java.util.List;
 @RequestMapping("/api/workflow")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = "*")
+@Validated
 @Tag(name = "Workflow", description = "n8n Workflow results management API")
 public class WorkflowController {
 
@@ -103,7 +107,7 @@ public class WorkflowController {
                         @ApiResponse(responseCode = "200", description = "Successfully created the result", content = @Content(mediaType = "application/json", schema = @Schema(implementation = WorkflowResult.class)))
         })
         @PostMapping
-        public ResponseEntity<WorkflowResult> createWorkflowResult(@RequestBody WorkflowResult result) {
+        public ResponseEntity<WorkflowResult> createWorkflowResult(@Valid @RequestBody WorkflowResult result) {
                 log.info("Creating new workflow result of type: {}", result.getWorkflowType());
                 if (result.getTimestamp() == null) {
                         result.setTimestamp(LocalDateTime.now());
@@ -192,7 +196,7 @@ public class WorkflowController {
                         @ApiResponse(responseCode = "200", description = "Successfully created the result", content = @Content(mediaType = "application/json", schema = @Schema(implementation = WorkflowResult.class)))
         })
         @PostMapping("/me")
-        public ResponseEntity<WorkflowResult> createUserWorkflowResult(@RequestBody WorkflowResult result) {
+        public ResponseEntity<WorkflowResult> createUserWorkflowResult(@Valid @RequestBody WorkflowResult result) {
                 String userId = SecurityUtils.getCurrentUserId();
                 log.info("Creating workflow result of type {} for user: {}", result.getWorkflowType(), userId);
                 if (result.getTimestamp() == null) {
@@ -256,7 +260,7 @@ public class WorkflowController {
                         @ApiResponse(responseCode = "500", description = "Failed to get agent response", content = @Content)
         })
         @PostMapping("/agent/ask")
-        public ResponseEntity<AgentResponse> askAgent(@RequestBody AgentQuery query) {
+        public ResponseEntity<AgentResponse> askAgent(@Valid @RequestBody AgentQuery query) {
                 String userId = SecurityUtils.getCurrentUserId();
                 log.info("User {} asking agent: {}", userId, query.getQuery());
 
@@ -276,6 +280,8 @@ public class WorkflowController {
         @lombok.NoArgsConstructor
         @lombok.AllArgsConstructor
         public static class AgentQuery {
+                @NotBlank(message = "Query must not be blank")
+                @Size(max = 2000, message = "Query must be at most 2000 characters")
                 private String query;
         }
 

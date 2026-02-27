@@ -38,7 +38,6 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/animals")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 @Tag(name = "Animal Detection", description = "API for managing and analyzing animal detection data")
 public class AnimalDetectionController {
 
