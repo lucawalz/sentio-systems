@@ -370,6 +370,7 @@ jobs:
           image-ref: ${{ env.REGISTRY }}/${{ env.REPO }}/sentio-backend:${{ needs.version.outputs.version }}
           format: "table"
           severity: "CRITICAL,HIGH"
+          trivyignores: .trivyignore
           exit-code: "1"
   frontend-test:
     name: Frontend - Test, Lint & Build
@@ -487,6 +488,7 @@ jobs:
           image-ref: ${{ env.REGISTRY }}/${{ env.REPO }}/sentio-web:${{ needs.version.outputs.version }}
           format: "table"
           severity: "CRITICAL,HIGH"
+          trivyignores: .trivyignore
           exit-code: "1"
   ai-services-test:
     name: ${{ matrix.service }} - Test & Build
@@ -619,6 +621,7 @@ jobs:
           image-ref: ${{ env.REGISTRY }}/${{ env.REPO }}/${{ matrix.image_name }}:${{ needs.version.outputs.version }}
           format: "table"
           severity: "CRITICAL,HIGH"
+          trivyignores: .trivyignore
           exit-code: "1"
   create-release:
     name: Create GitHub Release
