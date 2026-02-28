@@ -16,8 +16,8 @@ WORKDIR /app
 
 # Copy requirements first for better caching
 COPY requirements.txt .
-RUN pip install --upgrade pip && \
-    pip install --upgrade --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip wheel>=0.46.2 jaraco.context>=6.1.0 && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY preprocessing_service.py .
