@@ -63,7 +63,7 @@
     "react-hook-form": "^7.69.0",
     "react-leaflet": "^5.0.0",
     "react-markdown": "^10.1.0",
-    "react-router-dom": "^7.11.0",
+    "react-router-dom": "^7.13.1",
     "react-use-measure": "^2.1.7",
     "recharts": "^2.15.4",
     "remark-gfm": "^4.0.1",
