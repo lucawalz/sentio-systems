@@ -11,6 +11,11 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/contact")
 @Slf4j
 public class ContactController {
+    /**
+     * REST controller for handling contact form submissions.
+     * Receives contact requests from the frontend and triggers email notifications.
+     * Validates input and delegates mail sending to ContactService.
+     */
 
     private final ContactService service;
 

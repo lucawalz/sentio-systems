@@ -1,3 +1,20 @@
+/**
+ * MQTT handler for processing device status updates.
+ *
+ * <p>Expected JSON payload structure:
+ * <pre>
+ * {
+ *   "device_id": "string",
+ *   "ip": "string",
+ *   "latitude": float (optional),
+ *   "longitude": float (optional),
+ *   "timestamp": "ISO8601 string" (optional)
+ * }
+ * </pre>
+ * </p>
+ *
+ * Updates device IP and optionally GPS coordinates in the database.
+ */
 package org.example.backend.mqtt;
 
 import com.fasterxml.jackson.databind.JsonNode;

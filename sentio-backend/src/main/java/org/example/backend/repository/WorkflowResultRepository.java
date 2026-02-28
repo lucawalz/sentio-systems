@@ -1,3 +1,9 @@
+
+/**
+ * Repository interface for workflow result data access.
+ * Provides queries for retrieving results by type, time range, and recency.
+ * Supports analytics and reporting for n8n workflow executions.
+ */
 package org.example.backend.repository;
 
 import org.example.backend.model.WorkflowResult;

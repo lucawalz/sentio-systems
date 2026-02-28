@@ -1,3 +1,9 @@
+
+/**
+ * Repository interface for weather forecast data access.
+ * Provides custom queries for date ranges, city-based lookups, and unique forecast keys.
+ * Supports retrieval of upcoming and historical forecasts.
+ */
 package org.example.backend.repository;
 
 import jakarta.transaction.Transactional;
