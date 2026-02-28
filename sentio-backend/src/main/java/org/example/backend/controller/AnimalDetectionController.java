@@ -1,5 +1,6 @@
 package org.example.backend.controller;
 
+import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -38,7 +39,6 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/animals")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 @Tag(name = "Animal Detection", description = "API for managing and analyzing animal detection data")
 public class AnimalDetectionController {
 
@@ -327,7 +327,7 @@ public class AnimalDetectionController {
         })
         @PostMapping("/detect")
         public ResponseEntity<AnimalDetectionDTO> recordDetection(
-                        @Parameter(description = "Animal detection data", required = true) @RequestBody AnimalDetectionDTO detectionDTO) {
+                        @Parameter(description = "Animal detection data", required = true) @Valid @RequestBody AnimalDetectionDTO detectionDTO) {
                 logger.info("Recording new animal detection - Type: {}, Species: {}",
                                 detectionDTO.getAnimalType(), detectionDTO.getSpecies());
                 AnimalDetection detection = mapper.toEntity(detectionDTO);

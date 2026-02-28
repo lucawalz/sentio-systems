@@ -32,8 +32,8 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Slf4j
 @Table(name = "historical_weather", indexes = {
-        @Index(name = "idx_historical_device_date", columnList = "device_id, weatherDate", unique = true),
-        @Index(name = "idx_historical_date", columnList = "weatherDate"),
+        @Index(name = "idx_historical_device_date", columnList = "device_id, weather_date", unique = true),
+        @Index(name = "idx_historical_date", columnList = "weather_date"),
         @Index(name = "idx_historical_device", columnList = "device_id")
 })
 public class HistoricalWeather {

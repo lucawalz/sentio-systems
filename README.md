@@ -51,6 +51,10 @@ Sentio Systems is designed for modular deployment using Docker Compose. Each com
 
 ---
 
-## Architecture Decisions
+## Documentation
 
 We document significant architectural decisions in this repository using **Architecture Decision Records (ADRs)**. You can find the history of decisions and their rationale in the [docs/adr/](docs/adr/README.md) directory.
+
+- [Architecture Decision Records (ADRs)](docs/adr/README.md)
+- [Git Workflow & Branching Strategy](docs/git-workflow.md)
+- [Architecture Documentation](docs/architecture/architecture.md)

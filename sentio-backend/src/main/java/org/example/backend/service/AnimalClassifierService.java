@@ -41,7 +41,7 @@ public class AnimalClassifierService implements IAnimalClassifierService {
     private final AnimalTypePolicy animalTypePolicy;
     private final ClassificationProcessorFactory classificationProcessorFactory;
     private final RedisQueueService redisQueueService;
-    private final ClassificationResultProcessor resultProcessor;
+    private final ClassificationResultService resultProcessor;
 
     /**
      * Asynchronously classifies animal species and updates the detection record.

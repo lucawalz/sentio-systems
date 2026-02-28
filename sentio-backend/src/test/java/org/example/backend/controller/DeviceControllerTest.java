@@ -240,7 +240,7 @@ class DeviceControllerTest {
     void pairDevice_withInvalidCode_returns400() throws Exception {
         // Arrange
         when(rateLimitService.allowPairingRequest(anyString())).thenReturn(true);
-        when(deviceService.exchangePairingCode("device-123", "WRONG-CODE"))
+        when(deviceService.exchangePairingCode("device-123", "WRNG-CODE"))
                 .thenThrow(new IllegalArgumentException("Invalid or expired pairing code"));
 
         // Act & Assert
@@ -249,13 +249,13 @@ class DeviceControllerTest {
                         .content("""
                                 {
                                     "deviceId": "device-123",
-                                    "pairingCode": "WRONG-CODE"
+                                    "pairingCode": "WRNG-CODE"
                                 }
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("Invalid or expired pairing code"));
 
-        verify(deviceService, times(1)).exchangePairingCode("device-123", "WRONG-CODE");
+        verify(deviceService, times(1)).exchangePairingCode("device-123", "WRNG-CODE");
     }
 
     @Test
