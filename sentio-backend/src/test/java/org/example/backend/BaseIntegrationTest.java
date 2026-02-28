@@ -33,6 +33,10 @@ public abstract class BaseIntegrationTest {
         registry.add("spring.datasource.username", postgres::getUsername);
         registry.add("spring.datasource.password", postgres::getPassword);
         registry.add("spring.datasource.hikari.maximum-pool-size", () -> "2");
+        // Keep schema stable across cached/reloaded test contexts.
+        // `create` may drop tables between contexts and cause intermittent
+        // "relation does not exist" failures in integration tests.
+        registry.add("spring.jpa.hibernate.ddl-auto", () -> "update");
 
         // Disable external services for test isolation
         registry.add("mqtt.enabled", () -> "false");

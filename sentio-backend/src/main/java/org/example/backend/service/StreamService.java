@@ -18,7 +18,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.time.Instant;
 
 import org.example.backend.event.StreamStopScheduledEvent;
-import org.example.backend.listener.StreamEventListener;
 import org.springframework.context.ApplicationEventPublisher;
 
 /**
@@ -36,7 +35,7 @@ public class StreamService {
     private final ViewerSessionService viewerSessionService;
     private final MessageChannel mqttOutboundChannel;
     private final ApplicationEventPublisher eventPublisher;
-    private final StreamEventListener streamEventListener;
+    private final StreamStopCoordinator streamStopCoordinator;
 
     @Value("${mediamtx.base-url:https://media.syslabs.dev}")
     private String mediamtxBaseUrl;
@@ -57,14 +56,14 @@ public class StreamService {
             ViewerSessionService viewerSessionService,
             @Qualifier("mqttOutboundChannel") MessageChannel mqttOutboundChannel,
             ApplicationEventPublisher eventPublisher,
-            StreamEventListener streamEventListener) {
+            StreamStopCoordinator streamStopCoordinator) {
         this.deviceRepository = deviceRepository;
         this.deviceService = deviceService;
         this.jwtDecoder = jwtDecoder;
         this.viewerSessionService = viewerSessionService;
         this.mqttOutboundChannel = mqttOutboundChannel;
         this.eventPublisher = eventPublisher;
-        this.streamEventListener = streamEventListener;
+        this.streamStopCoordinator = streamStopCoordinator;
     }
 
     /**
@@ -250,7 +249,7 @@ public class StreamService {
      */
     public boolean requestStreamStart(String deviceId, String sessionId) {
         // Cancel any pending stop - new viewer joined
-        streamEventListener.cancelPendingStop(deviceId);
+        streamStopCoordinator.cancelPendingStop(deviceId);
 
         boolean isFirstViewer = viewerSessionService.joinStream(deviceId, sessionId);
 

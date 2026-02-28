@@ -7,7 +7,7 @@ import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.backend.event.ClassificationResultEvent;
-import org.example.backend.service.ClassificationResultProcessor;
+import org.example.backend.service.ClassificationResultService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.redis.connection.Message;
@@ -27,7 +27,7 @@ import java.util.Map;
  * 
  * This aligns with the existing EDA pattern in the codebase:
  * - Uses ApplicationEventPublisher to publish events
- * - ClassificationResultProcessor listens via @EventListener
+ * - ClassificationResultService listens via @EventListener
  */
 @Component
 @RequiredArgsConstructor
@@ -40,7 +40,7 @@ public class ClassificationResultListener implements MessageListener {
     private final RedisConnectionFactory connectionFactory;
     private final ObjectMapper objectMapper;
     private final ApplicationEventPublisher eventPublisher;
-    private final ClassificationResultProcessor resultProcessor;
+    private final ClassificationResultService resultProcessor;
 
     private RedisMessageListenerContainer container;
 

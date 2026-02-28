@@ -373,7 +373,7 @@ class RedisQueueServiceTest extends BaseIntegrationTest {
         @DisplayName("should submit job asynchronously with result processor")
         void shouldSubmitJobAsyncWithProcessor() throws Exception {
             // Given
-            ClassificationResultProcessor processor = new ClassificationResultProcessor(null, null);
+            ClassificationResultService processor = new ClassificationResultService(null, null);
             Long detectionId = 123L;
 
             // When
@@ -399,7 +399,7 @@ class RedisQueueServiceTest extends BaseIntegrationTest {
         @DisplayName("should register multiple async jobs with different detection IDs")
         void shouldRegisterMultipleAsyncJobs() {
             // Given
-            ClassificationResultProcessor processor = new ClassificationResultProcessor(null, null);
+            ClassificationResultService processor = new ClassificationResultService(null, null);
 
             // When
             String jobId1 = redisQueueService.submitClassificationJobAsync(

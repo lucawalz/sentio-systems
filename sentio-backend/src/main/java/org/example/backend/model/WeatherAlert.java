@@ -30,8 +30,8 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Slf4j
 @Table(name = "weather_alerts", indexes = {
-        @Index(name = "idx_alert_unique", columnList = "alertId, device_id", unique = true),
-        @Index(name = "idx_alert_location", columnList = "warnCellId, city"),
+        @Index(name = "idx_alert_unique", columnList = "alert_id, device_id", unique = true),
+        @Index(name = "idx_alert_location", columnList = "warn_cell_id, city"),
         @Index(name = "idx_alert_effective", columnList = "effective"),
         @Index(name = "idx_alert_expires", columnList = "expires"),
         @Index(name = "idx_alert_device", columnList = "device_id"),

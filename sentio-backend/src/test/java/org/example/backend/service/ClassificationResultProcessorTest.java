@@ -23,8 +23,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("ClassificationResultProcessor Unit Tests")
-class ClassificationResultProcessorTest {
+@DisplayName("ClassificationResultService Unit Tests")
+class ClassificationResultServiceTest {
 
     @Mock
     private AnimalDetectionRepository animalDetectionRepository;
@@ -33,7 +33,7 @@ class ClassificationResultProcessorTest {
     private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
-    private ClassificationResultProcessor processor;
+    private ClassificationResultService processor;
 
     @Captor
     private ArgumentCaptor<AnimalDetection> detectionCaptor;
