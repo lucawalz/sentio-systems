@@ -1,0 +1,4 @@
+# glibc integer overflow in memalign — no fix available in Debian 13.3
+# Affects: libc-bin, libc6 in birder, speciesnet, preprocessing images
+# Revisit when Debian releases a patched glibc package
+CVE-2026-0861
