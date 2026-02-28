@@ -8,7 +8,6 @@ import lombok.Data;
 @Data
 public class DeviceRegistrationRequest {
 
-    @NotBlank(message = "Device name is required")
     @Size(max = 255, message = "Device name must be at most 255 characters")
     private String name;
 

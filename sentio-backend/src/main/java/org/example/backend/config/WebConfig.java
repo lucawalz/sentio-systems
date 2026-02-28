@@ -12,6 +12,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
  */
 @Configuration
 @RequiredArgsConstructor
+@ConditionalOnProperty(name = "rate-limit.enabled", havingValue = "true", matchIfMissing = true)
 public class WebConfig implements WebMvcConfigurer {
 
     private final RateLimitInterceptor rateLimitInterceptor;

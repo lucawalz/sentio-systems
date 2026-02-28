@@ -27,7 +27,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class ClassificationResultProcessor {
+public class ClassificationResultService {
 
     private static final String CLASSIFICATION_KEY = "classification";
     private static final String DETECTION_KEY = "detection";

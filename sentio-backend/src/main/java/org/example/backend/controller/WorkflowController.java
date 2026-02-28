@@ -1,8 +1,6 @@
 package org.example.backend.controller;
 
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -11,6 +9,8 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.backend.dto.AgentQuery;
+import org.example.backend.dto.AgentResponse;
 import org.example.backend.model.WorkflowResult;
 import org.example.backend.model.WorkflowType;
 import org.example.backend.service.N8nWorkflowTriggerService;
@@ -276,23 +276,4 @@ public class WorkflowController {
         /**
          * Request DTO for AI Agent queries
          */
-        @lombok.Data
-        @lombok.NoArgsConstructor
-        @lombok.AllArgsConstructor
-        public static class AgentQuery {
-                @NotBlank(message = "Query must not be blank")
-                @Size(max = 2000, message = "Query must be at most 2000 characters")
-                private String query;
-        }
-
-        /**
-         * Response DTO for AI Agent
-         */
-        @lombok.Data
-        @lombok.NoArgsConstructor
-        @lombok.AllArgsConstructor
-        public static class AgentResponse {
-                private String response;
-                private boolean success;
-        }
 }

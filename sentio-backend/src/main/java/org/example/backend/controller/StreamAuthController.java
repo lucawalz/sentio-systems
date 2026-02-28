@@ -1,11 +1,12 @@
 package org.example.backend.controller;
 
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.backend.dto.AuthWebhookRequest;
+import org.example.backend.dto.PathWebhookRequest;
 import org.example.backend.service.DeviceService;
 import org.example.backend.service.StreamService;
 import org.springframework.http.ResponseEntity;
@@ -302,24 +303,4 @@ public class StreamAuthController {
         return null;
     }
 
-    @lombok.Data
-    public static class AuthWebhookRequest {
-        @NotBlank(message = "Path is required")
-        private String path;
-
-        @NotBlank(message = "Action is required")
-        private String action;
-
-        @NotBlank(message = "Query is required")
-        private String query;
-
-        private String protocol;
-        private String ip;
-    }
-
-    @lombok.Data
-    public static class PathWebhookRequest {
-        @NotBlank(message = "Path is required")
-        private String path;
-    }
 }

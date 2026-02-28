@@ -41,7 +41,7 @@ public class DeviceController {
     @PostMapping("/register")
     public ResponseEntity<DeviceRegistrationResponse> registerDevice(
             @Valid @RequestBody DeviceRegistrationRequest request) {
-        String name = request.getName();
+        String name = (request.getName() != null && !request.getName().isBlank()) ? request.getName() : "My Device";
         log.info("Request to register new device with name: {}", name);
 
         DeviceRegistrationResponse response = deviceService.registerDeviceWithCredentials(name);

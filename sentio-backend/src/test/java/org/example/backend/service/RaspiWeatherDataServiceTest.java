@@ -1,6 +1,6 @@
 package org.example.backend.service;
 
-import org.example.backend.controller.RaspiWeatherController.WeatherStats;
+import org.example.backend.dto.WeatherStats;
 import org.example.backend.model.RaspiWeatherData;
 import org.example.backend.repository.RaspiWeatherDataRepository;
 import org.junit.jupiter.api.BeforeEach;

@@ -1,4 +1,4 @@
-package org.example.backend.validation;
+package org.example.backend.dto;
 
 import jakarta.validation.Constraint;
 import jakarta.validation.Payload;

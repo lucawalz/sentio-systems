@@ -1,8 +1,7 @@
-package org.example.backend.validation;
+package org.example.backend.dto;
 
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
-import org.example.backend.dto.AuthDTOs;
 
 /**
  * Validator for password confirmation matching in ResetPasswordRequest.

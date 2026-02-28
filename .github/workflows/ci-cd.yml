@@ -121,27 +121,10 @@ jobs:
         with:
           scan-type: "fs"
           scan-ref: "."
-          format: "sarif"
-          output: "trivy-fs-results.sarif"
+          format: "table"
           severity: "CRITICAL,HIGH"
           ignore-unfixed: true
           exit-code: "1"
-      - name: Print Trivy filesystem results (CI log)
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          scan-type: "fs"
-          scan-ref: "."
-          format: "table"
-          severity: "CRITICAL,HIGH,MEDIUM"
-          ignore-unfixed: true
-        continue-on-error: true
-      - name: Upload Trivy results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        continue-on-error: true
-        with:
-          sarif_file: "trivy-fs-results.sarif"
-          category: "filesystem"
   backend-test:
     name: Backend - Test, Coverage & Build
     runs-on: ubuntu-latest
@@ -385,24 +368,9 @@ jobs:
         uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.REPO }}/sentio-backend:${{ needs.version.outputs.version }}
-          format: "sarif"
-          output: "trivy-backend.sarif"
-          severity: "CRITICAL,HIGH"
-          exit-code: "1"
-      - name: Print Trivy backend image results (CI log)
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.REPO }}/sentio-backend:${{ needs.version.outputs.version }}
           format: "table"
           severity: "CRITICAL,HIGH"
-        continue-on-error: true
-      - name: Upload Trivy results
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        continue-on-error: true
-        with:
-          sarif_file: "trivy-backend.sarif"
-          category: "backend-image"
+          exit-code: "1"
   frontend-test:
     name: Frontend - Test, Lint & Build
     runs-on: ubuntu-latest
@@ -517,17 +485,9 @@ jobs:
         uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.REPO }}/sentio-web:${{ needs.version.outputs.version }}
-          format: "sarif"
-          output: "trivy-frontend.sarif"
+          format: "table"
           severity: "CRITICAL,HIGH"
           exit-code: "1"
-      - name: Upload Trivy results
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        continue-on-error: true
-        with:
-          sarif_file: "trivy-frontend.sarif"
-          category: "frontend-image"
   ai-services-test:
     name: ${{ matrix.service }} - Test & Build
     runs-on: ubuntu-latest
@@ -657,17 +617,9 @@ jobs:
         uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.REPO }}/${{ matrix.image_name }}:${{ needs.version.outputs.version }}
-          format: "sarif"
-          output: "trivy-${{ matrix.service }}.sarif"
+          format: "table"
           severity: "CRITICAL,HIGH"
           exit-code: "1"
-      - name: Upload Trivy results
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        continue-on-error: true
-        with:
-          sarif_file: "trivy-${{ matrix.service }}.sarif"
-          category: "${{ matrix.service }}-image"
   create-release:
     name: Create GitHub Release
     runs-on: ubuntu-latest

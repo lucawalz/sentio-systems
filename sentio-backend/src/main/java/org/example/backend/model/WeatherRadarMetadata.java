@@ -18,7 +18,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Table(name = "weather_radar_metadata", indexes = {
         @Index(name = "idx_radar_timestamp", columnList = "timestamp"),
-        @Index(name = "idx_radar_created_at", columnList = "createdAt")
+        @Index(name = "idx_radar_created_at", columnList = "created_at")
 })
 public class WeatherRadarMetadata {
 

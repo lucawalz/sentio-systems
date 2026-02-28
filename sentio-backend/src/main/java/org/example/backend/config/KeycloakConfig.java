@@ -27,11 +27,15 @@ public class KeycloakConfig {
 
     @Bean
     public Keycloak keycloak() {
+        if (clientSecret == null || clientSecret.isBlank()) {
+            throw new IllegalStateException("clientSecret required for Keycloak admin client");
+        }
+
         log.info("Initializing Keycloak Admin Client...");
         log.info("Server URL: {}", serverUrl);
         log.info("Realm: {}", realm);
         log.info("Client ID: {}", clientId);
-        log.info("Client Secret: {}", (clientSecret != null ? "******" : "null"));
+        log.info("Client Secret: ******");
 
         return KeycloakBuilder.builder()
                 .serverUrl(serverUrl)
