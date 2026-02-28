@@ -229,7 +229,7 @@ jobs:
 
       - name: Upload Test Results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: backend-test-results-${{ needs.version.outputs.short_sha }}
           path: |
@@ -239,7 +239,7 @@ jobs:
 
       - name: Upload Coverage Report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: backend-coverage-${{ needs.version.outputs.short_sha }}
           path: sentio-backend/target/site/jacoco/
@@ -317,7 +317,7 @@ jobs:
         run: ./mvnw package -DskipTests -B
 
       - name: Upload JAR artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: backend-jar-${{ needs.version.outputs.short_sha }}
           path: sentio-backend/target/*.jar
@@ -421,7 +421,7 @@ jobs:
 
       - name: Upload test coverage
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: frontend-coverage-${{ needs.version.outputs.short_sha }}
           path: sentio-web/coverage/
@@ -433,7 +433,7 @@ jobs:
         timeout-minutes: 5
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: frontend-build-${{ needs.version.outputs.short_sha }}
           path: sentio-web/dist/
@@ -536,7 +536,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ai-${{ matrix.service }}-test-results
           path: sentio-ai/${{ matrix.service }}/test-results.xml
@@ -544,7 +544,7 @@ jobs:
 
       - name: Upload coverage report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ai-${{ matrix.service }}-coverage
           path: sentio-ai/${{ matrix.service }}/htmlcov/
