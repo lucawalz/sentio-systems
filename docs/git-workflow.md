@@ -35,7 +35,7 @@ Code can only enter `develop` or `main` under the following conditions:
 3.  **Traceability checklist:** The PR template must accurately map out which `REQ` tickets are being satisfied within the branch's scope. 
 
 **Merge vs Rebase Policy:**
-We employ a **Squash and Merge** topology when bringing feature branches into `develop`. This condenses messy, granular feature commits into a single, clean historical commit on the main line. 
+We employ a **Merge Commit** topology when bringing feature branches into `develop`. Individual feature commits are preserved in the history, providing full traceability from PR merge commit back to every atomic change made during development.
 
 ---
 
@@ -67,7 +67,7 @@ Dependent issues on GitHub must actively be cross-linked in the issue body or co
 ## 5. Tagging & Release Strategy
 
 Sentio relies heavily on **Semantic Versioning (SemVer)** for releases. 
-When code transitions from `develop` to `main`, the CI pipeline automatically tags the release and bumps the deployment version (e.g., `v1.2.0`). 
+When code transitions from `develop` to `main`, a versioned tag is created manually and pushed to the remote (e.g., `v1.2.0`). Tags must be pushed explicitly via `git push --tags`.
 
 *   `MAJOR`: Incompatible API or structural shifts.
 *   `MINOR`: Backwards-compatible functionality additions (e.g., fulfilling an entire grading milestone).
