@@ -21,7 +21,7 @@ services:
     image: postgres:17-alpine
     container_name: sentio-postgres
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_USER: ${POSTGRES_USER:-sentio}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
@@ -31,7 +31,7 @@ services:
     networks:
       - sentio-network
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}" ]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sentio}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -78,6 +78,12 @@ services:
         condition: service_completed_successfully
     networks:
       - sentio-network
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 && printf 'GET /realms/sentio HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && grep -q '\"realm\"' <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
     restart: unless-stopped
 
   # MQTT Broker with Auth Plugin
@@ -96,7 +102,11 @@ services:
       backend:
         condition: service_started
     healthcheck:
-      test: [ "CMD-SHELL", "mosquitto_sub -t '$$SYS/#' -C 1 -i healthcheck -W 3 || exit 0" ]
+      test:
+        [
+          "CMD-SHELL",
+          "mosquitto_sub -t '$$SYS/#' -C 1 -i healthcheck -W 3 || exit 0",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -112,8 +122,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
       keycloak:
-        condition: service_started
+        condition: service_healthy
     environment:
       # Database Configuration
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/sentio
@@ -127,6 +139,7 @@ services:
 
       # Server Configuration
       SERVER_PORT: 8080
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-demo}
 
       # Keycloak Configuration
       KEYCLOAK_ISSUER_URI: http://localhost:8080/realms/sentio
@@ -168,6 +181,9 @@ services:
       # Redis Configuration
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
+
+      # Queue Configuration (Redis-based AI classification with EDA)
+      QUEUE_ENABLED: ${QUEUE_ENABLED:-true}
 
       # Resend Email Configuration
       RESEND_API_KEY: ${RESEND_API_KEY:-}
@@ -213,6 +229,8 @@ services:
       BIRD_CLASSIFIER_URL: ${BIRD_CLASSIFIER_URL:-http://birder:8000/detect}
       SPECIES_CLASSIFIER_URL: ${SPECIES_CLASSIFIER_URL:-http://speciesnet:8081/detect}
       SAVE_IMAGES: ${SAVE_IMAGES:-false}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
     ports:
       - "${PREPROCESSING_PORT:-8082}:8082"
     networks:
@@ -235,6 +253,8 @@ services:
       MIN_BIRD_CONFIDENCE: ${MIN_CONFIDENCE:-0.001}
       MAX_PREDICTIONS: ${MAX_PREDICTIONS:-5}
       PRELOAD_MODELS: ${PRELOAD_MODELS:-true}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
     ports:
       - "${BIRDER_PORT:-8000}:8000"
     networks:
@@ -256,6 +276,8 @@ services:
       CLASSIFICATION_THRESHOLD: ${CLASSIFICATION_THRESHOLD:-0.01}
       MIN_ANIMAL_CONFIDENCE: ${MIN_CONFIDENCE:-0.001}
       MAX_PREDICTIONS: ${MAX_PREDICTIONS:-5}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
     ports:
       - "${SPECIESNET_PORT:-8081}:8081"
     networks:
@@ -277,7 +299,7 @@ services:
     depends_on:
       - backend
     healthcheck:
-      test: [ "CMD-SHELL", "pgrep -f mediamtx || exit 1" ]
+      test: ["CMD-SHELL", "pgrep -f mediamtx || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

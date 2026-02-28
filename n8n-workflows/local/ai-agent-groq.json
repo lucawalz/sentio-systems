@@ -45,7 +45,7 @@
                 400
             ],
             "parameters": {
-                "model": "openai/gpt-oss-20b",
+                "model": "meta-llama/llama-4-scout-17b-16e-instruct",
                 "options": {
                     "temperature": 0.7
                 }

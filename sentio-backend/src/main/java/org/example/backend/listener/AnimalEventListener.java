@@ -40,11 +40,6 @@ public class AnimalEventListener {
         } catch (Exception e) {
             log.error("Failed to broadcast animal detection via WebSocket: {}", e.getMessage());
         }
-
-        // Trigger n8n workflow for rare species or high confidence detections
-        if (event.isRareSpecies() || event.getConfidence() > 0.95f) {
-            triggerWorkflow(event);
-        }
     }
 
     private void triggerWorkflow(AnimalDetectedEvent event) {

@@ -21,6 +21,8 @@ RUN pip install --upgrade pip && \
 
 # Copy application code
 COPY preprocessing_service.py .
+COPY worker.py .
+COPY tests/ ./tests/
 
 # Create directory for enhanced images
 RUN mkdir -p /app/enhanced_images

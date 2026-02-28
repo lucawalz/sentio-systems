@@ -32,8 +32,8 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Slf4j
 @Table(name = "historical_weather", indexes = {
-        @Index(name = "idx_historical_device_date", columnList = "device_id, weatherDate", unique = true),
-        @Index(name = "idx_historical_date", columnList = "weatherDate"),
+        @Index(name = "idx_historical_device_date", columnList = "device_id, weather_date", unique = true),
+        @Index(name = "idx_historical_date", columnList = "weather_date"),
         @Index(name = "idx_historical_device", columnList = "device_id")
 })
 public class HistoricalWeather {
@@ -131,8 +131,12 @@ public class HistoricalWeather {
     @PrePersist
     protected void onCreate() {
         LocalDateTime now = LocalDateTime.now();
-        this.createdAt = now;
-        this.updatedAt = now;
+        if (this.createdAt == null) {
+            this.createdAt = now;
+        }
+        if (this.updatedAt == null) {
+            this.updatedAt = now;
+        }
         log.debug("HistoricalWeather entity created with timestamps: {}", now);
     }
 

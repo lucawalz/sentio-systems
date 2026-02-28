@@ -311,18 +311,20 @@ public class DeviceService {
                 .orElse(false);
     }
 
-    /**
-     * Get list of device IDs owned by current user.
-     */
     public List<String> getMyDeviceIds() {
         return getMyDevices().stream().map(Device::getId).toList();
     }
 
-    /**
-     * Check if the current user has any registered devices.
-     */
     public boolean hasAnyDevices() {
         return !getMyDevices().isEmpty();
+    }
+
+    /**
+     * Check if any devices are registered in the system (global check, no user context required).
+     * Used by scheduled tasks to decide whether to run weather updates.
+     */
+    public boolean existsAnyDevice() {
+        return deviceRepository.count() > 0;
     }
 
     /**

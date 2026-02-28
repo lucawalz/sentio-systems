@@ -1,5 +1,6 @@
 package org.example.backend.controller;
 
+import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -8,12 +9,15 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.backend.dto.AgentQuery;
+import org.example.backend.dto.AgentResponse;
 import org.example.backend.model.WorkflowResult;
 import org.example.backend.model.WorkflowType;
 import org.example.backend.service.N8nWorkflowTriggerService;
 import org.example.backend.service.WorkflowService;
 import org.example.backend.util.SecurityUtils;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -23,7 +27,7 @@ import java.util.List;
 @RequestMapping("/api/workflow")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = "*")
+@Validated
 @Tag(name = "Workflow", description = "n8n Workflow results management API")
 public class WorkflowController {
 
@@ -103,7 +107,7 @@ public class WorkflowController {
                         @ApiResponse(responseCode = "200", description = "Successfully created the result", content = @Content(mediaType = "application/json", schema = @Schema(implementation = WorkflowResult.class)))
         })
         @PostMapping
-        public ResponseEntity<WorkflowResult> createWorkflowResult(@RequestBody WorkflowResult result) {
+        public ResponseEntity<WorkflowResult> createWorkflowResult(@Valid @RequestBody WorkflowResult result) {
                 log.info("Creating new workflow result of type: {}", result.getWorkflowType());
                 if (result.getTimestamp() == null) {
                         result.setTimestamp(LocalDateTime.now());
@@ -129,8 +133,6 @@ public class WorkflowController {
                 workflowService.cleanupOldResults();
                 return ResponseEntity.ok("Cleanup completed successfully");
         }
-
-        // ========== User-scoped endpoints ==========
 
         /**
          * Gets the current weather summary for the authenticated user
@@ -194,7 +196,7 @@ public class WorkflowController {
                         @ApiResponse(responseCode = "200", description = "Successfully created the result", content = @Content(mediaType = "application/json", schema = @Schema(implementation = WorkflowResult.class)))
         })
         @PostMapping("/me")
-        public ResponseEntity<WorkflowResult> createUserWorkflowResult(@RequestBody WorkflowResult result) {
+        public ResponseEntity<WorkflowResult> createUserWorkflowResult(@Valid @RequestBody WorkflowResult result) {
                 String userId = SecurityUtils.getCurrentUserId();
                 log.info("Creating workflow result of type {} for user: {}", result.getWorkflowType(), userId);
                 if (result.getTimestamp() == null) {
@@ -203,8 +205,6 @@ public class WorkflowController {
                 WorkflowResult saved = workflowService.saveUserWorkflowResult(userId, result);
                 return ResponseEntity.ok(saved);
         }
-
-        // ========== Trigger endpoints ==========
 
         /**
          * Triggers generation of a weather summary for the authenticated user
@@ -260,7 +260,7 @@ public class WorkflowController {
                         @ApiResponse(responseCode = "500", description = "Failed to get agent response", content = @Content)
         })
         @PostMapping("/agent/ask")
-        public ResponseEntity<AgentResponse> askAgent(@RequestBody AgentQuery query) {
+        public ResponseEntity<AgentResponse> askAgent(@Valid @RequestBody AgentQuery query) {
                 String userId = SecurityUtils.getCurrentUserId();
                 log.info("User {} asking agent: {}", userId, query.getQuery());
 
@@ -276,21 +276,4 @@ public class WorkflowController {
         /**
          * Request DTO for AI Agent queries
          */
-        @lombok.Data
-        @lombok.NoArgsConstructor
-        @lombok.AllArgsConstructor
-        public static class AgentQuery {
-                private String query;
-        }
-
-        /**
-         * Response DTO for AI Agent
-         */
-        @lombok.Data
-        @lombok.NoArgsConstructor
-        @lombok.AllArgsConstructor
-        public static class AgentResponse {
-                private String response;
-                private boolean success;
-        }
 }

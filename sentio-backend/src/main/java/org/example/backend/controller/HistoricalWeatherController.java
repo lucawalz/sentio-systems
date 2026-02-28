@@ -12,7 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.example.backend.dto.HistoricalWeatherDTO;
 import org.example.backend.mapper.HistoricalWeatherMapper;
 import org.example.backend.model.HistoricalWeather;
-import org.example.backend.service.HistoricalWeatherService;
+import org.example.backend.service.IHistoricalWeatherService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -33,13 +33,12 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/historical")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 @Tag(name = "Historical Weather", description = "API for retrieving and managing historical weather data")
 public class HistoricalWeatherController {
 
         private static final Logger logger = LoggerFactory.getLogger(HistoricalWeatherController.class);
 
-        private final HistoricalWeatherService historicalWeatherService;
+        private final IHistoricalWeatherService historicalWeatherService;
         private final HistoricalWeatherMapper historicalWeatherMapper;
 
         /**

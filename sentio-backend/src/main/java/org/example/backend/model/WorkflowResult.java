@@ -116,7 +116,9 @@ public class WorkflowResult {
         if (workflowType == null) {
             workflowType = WorkflowType.WEATHER_SUMMARY;
         }
-        lastUpdated = LocalDateTime.now();
+        if (lastUpdated == null) {
+            lastUpdated = timestamp;
+        }
 
         log.debug("WorkflowResult entity created - Type: {}, Confidence: {}, Analysis length: {}",
                 workflowType, dataConfidence, analysisText != null ? analysisText.length() : 0);

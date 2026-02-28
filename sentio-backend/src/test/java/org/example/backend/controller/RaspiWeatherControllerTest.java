@@ -1,5 +1,6 @@
 package org.example.backend.controller;
 
+import org.example.backend.dto.WeatherStats;
 import org.example.backend.model.RaspiWeatherData;
 import org.example.backend.service.RaspiWeatherDataService;
 import org.junit.jupiter.api.AfterEach;
@@ -23,18 +24,20 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(
-        controllers = RaspiWeatherController.class,
-        excludeAutoConfiguration = {
-                SecurityAutoConfiguration.class,
-                OAuth2ResourceServerAutoConfiguration.class
-        }
-)
+@WebMvcTest(controllers = RaspiWeatherController.class, excludeAutoConfiguration = {
+        SecurityAutoConfiguration.class,
+        OAuth2ResourceServerAutoConfiguration.class
+})
 @Import(RaspiWeatherControllerTest.TestBeans.class)
+@org.springframework.test.context.TestPropertySource(properties = {
+        "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration"
+})
 class RaspiWeatherControllerTest {
 
-    @Autowired MockMvc mockMvc;
-    @Autowired RaspiWeatherDataService raspiWeatherDataService;
+    @Autowired
+    MockMvc mockMvc;
+    @Autowired
+    RaspiWeatherDataService raspiWeatherDataService;
 
     @TestConfiguration
     static class TestBeans {
@@ -103,8 +106,10 @@ class RaspiWeatherControllerTest {
 
     @Test
     void getAllWeather_returns200_andArray() throws Exception {
-        RaspiWeatherData a = new RaspiWeatherData(); a.setId(1L);
-        RaspiWeatherData b = new RaspiWeatherData(); b.setId(2L);
+        RaspiWeatherData a = new RaspiWeatherData();
+        a.setId(1L);
+        RaspiWeatherData b = new RaspiWeatherData();
+        b.setId(2L);
 
         when(raspiWeatherDataService.getAllWeatherData()).thenReturn(List.of(a, b));
 
@@ -130,8 +135,8 @@ class RaspiWeatherControllerTest {
                 });
 
         mockMvc.perform(post("/api/weather")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{}"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
                 .andExpect(status().isOk())
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.id").value(99));
@@ -150,8 +155,8 @@ class RaspiWeatherControllerTest {
         latest.setId(5L);
         latest.setTimestamp(LocalDateTime.of(2025, 12, 18, 10, 0));
 
-        RaspiWeatherController.WeatherStats stats =
-                new RaspiWeatherController.WeatherStats(123L, latest, 12.3, 45.6, 1013.2);
+        WeatherStats stats = new WeatherStats(123L, latest, 12.3, 45.6,
+                1013.2);
 
         when(raspiWeatherDataService.getWeatherStats()).thenReturn(stats);
 
