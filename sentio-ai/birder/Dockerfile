@@ -1,5 +1,5 @@
 # Dockerfile - Birder AI Service
-FROM python:3.11-slim
+FROM python:3.14-slim
 
 # Install SSL certificates
 RUN apt-get update && apt-get install -y --no-install-recommends \
