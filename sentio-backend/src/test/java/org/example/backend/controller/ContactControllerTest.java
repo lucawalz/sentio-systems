@@ -168,6 +168,9 @@ class ContactControllerTest {
                         .contentType("application/json")
                         .content("""
                                 {
+                                    "reference": "Test Reference",
+                                    "name": "Test",
+                                    "surname": "User",
                                     "mail": "test@example.com",
                                     "message": "This is a test message"
                                 }
@@ -188,6 +191,9 @@ class ContactControllerTest {
                         .contentType("application/json")
                         .content("""
                                 {
+                                    "reference": "Minimal Reference",
+                                    "name": "Min",
+                                    "surname": "User",
                                     "mail": "minimal@example.com",
                                     "message": "Minimal message"
                                 }

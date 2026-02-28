@@ -1,3 +1,5 @@
+![Sentio Embedded Banner](../docs/banners/embedded-banner.png)
+
 # Weather Station & Animal Detector Systems
 
 This repository contains two independent but complementary systems for Raspberry Pi: a **Weather Station System** and an **Animal Detector System**. Both systems collect environmental or visual data and publish events to an MQTT broker for integration with backend services or home automation.

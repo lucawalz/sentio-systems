@@ -1,6 +1,7 @@
 package org.example.backend.listener;
 
 import org.example.backend.event.StreamStopScheduledEvent;
+import org.example.backend.service.StreamStopCoordinator;
 import org.example.backend.service.ViewerSessionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -8,14 +9,11 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.integration.mqtt.support.MqttHeaders;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
-
-import java.time.Instant;
 
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -34,17 +32,15 @@ class StreamEventListenerTest {
     @Mock
     private MessageChannel mqttOutboundChannel;
 
-    @InjectMocks
+    private StreamStopCoordinator stopCoordinator;
     private StreamEventListener listener;
 
     private static final String DEVICE_ID = "test-device-123";
 
     @BeforeEach
     void setUp() {
-        // @InjectMocks (Mockito) does not process @Value annotations, so stopDelayMs
-        // stays at 0L by default. Set it to 500ms so the async "pending" state is
-        // observable in the timing-sensitive tests without making synchronous tests
-        // slow.
+        stopCoordinator = new StreamStopCoordinator();
+        listener = new StreamEventListener(viewerSessionService, mqttOutboundChannel, stopCoordinator);
         ReflectionTestUtils.setField(listener, "stopDelayMs", 500L);
     }
 
@@ -87,7 +83,7 @@ class StreamEventListenerTest {
             listener.onStreamStopScheduled(event);
 
             // Then
-            assertThat(listener.isStopPending(DEVICE_ID)).isFalse();
+            assertThat(stopCoordinator.isStopPending(DEVICE_ID)).isFalse();
         }
     }
 
@@ -108,7 +104,7 @@ class StreamEventListenerTest {
             // Then
             verify(viewerSessionService).getViewerCount(DEVICE_ID);
             verify(mqttOutboundChannel, never()).send(any());
-            assertThat(listener.isStopPending(DEVICE_ID)).isFalse();
+            assertThat(stopCoordinator.isStopPending(DEVICE_ID)).isFalse();
         }
 
         @Test
@@ -159,20 +155,20 @@ class StreamEventListenerTest {
             }
 
             // When
-            listener.cancelPendingStop(DEVICE_ID);
+            stopCoordinator.cancelPendingStop(DEVICE_ID);
 
             // Then
-            assertThat(listener.isStopPending(DEVICE_ID)).isFalse();
+            assertThat(stopCoordinator.isStopPending(DEVICE_ID)).isFalse();
         }
 
         @Test
         @DisplayName("Should handle cancelling non-existent stop")
         void shouldHandleCancellingNonExistentStop() {
             // When
-            listener.cancelPendingStop(DEVICE_ID);
+            stopCoordinator.cancelPendingStop(DEVICE_ID);
 
             // Then - Should not throw
-            assertThat(listener.isStopPending(DEVICE_ID)).isFalse();
+            assertThat(stopCoordinator.isStopPending(DEVICE_ID)).isFalse();
         }
 
         @Test
@@ -195,11 +191,11 @@ class StreamEventListenerTest {
             }
 
             // When
-            listener.cancelPendingStop(device1);
+            stopCoordinator.cancelPendingStop(device1);
 
             // Then
-            assertThat(listener.isStopPending(device1)).isFalse();
-            assertThat(listener.isStopPending(device2)).isTrue();
+            assertThat(stopCoordinator.isStopPending(device1)).isFalse();
+            assertThat(stopCoordinator.isStopPending(device2)).isTrue();
         }
     }
 
@@ -221,7 +217,7 @@ class StreamEventListenerTest {
             }
 
             // When
-            boolean isPending = listener.isStopPending(DEVICE_ID);
+            boolean isPending = stopCoordinator.isStopPending(DEVICE_ID);
 
             // Then
             assertThat(isPending).isTrue();
@@ -231,7 +227,7 @@ class StreamEventListenerTest {
         @DisplayName("Should return false when no stop is pending")
         void shouldReturnFalseWhenNoStopPending() {
             // When
-            boolean isPending = listener.isStopPending(DEVICE_ID);
+            boolean isPending = stopCoordinator.isStopPending(DEVICE_ID);
 
             // Then
             assertThat(isPending).isFalse();
@@ -251,8 +247,8 @@ class StreamEventListenerTest {
             }
 
             // When
-            listener.cancelPendingStop(DEVICE_ID);
-            boolean isPending = listener.isStopPending(DEVICE_ID);
+            stopCoordinator.cancelPendingStop(DEVICE_ID);
+            boolean isPending = stopCoordinator.isStopPending(DEVICE_ID);
 
             // Then
             assertThat(isPending).isFalse();
@@ -435,9 +431,9 @@ class StreamEventListenerTest {
             }
 
             // Then - All should be pending initially
-            assertThat(listener.isStopPending(device1)).isTrue();
-            assertThat(listener.isStopPending(device2)).isTrue();
-            assertThat(listener.isStopPending(device3)).isTrue();
+            assertThat(stopCoordinator.isStopPending(device1)).isTrue();
+            assertThat(stopCoordinator.isStopPending(device2)).isTrue();
+            assertThat(stopCoordinator.isStopPending(device3)).isTrue();
         }
 
         @Test
@@ -449,7 +445,7 @@ class StreamEventListenerTest {
             // When
             for (int i = 0; i < 10; i++) {
                 new Thread(() -> listener.onStreamStopScheduled(event)).start();
-                listener.cancelPendingStop(DEVICE_ID);
+                stopCoordinator.cancelPendingStop(DEVICE_ID);
             }
 
             try {
@@ -488,7 +484,7 @@ class StreamEventListenerTest {
             }
 
             // Then - Should handle gracefully, latest should win
-            assertThat(listener.isStopPending(DEVICE_ID)).isTrue();
+            assertThat(stopCoordinator.isStopPending(DEVICE_ID)).isTrue();
         }
     }
 

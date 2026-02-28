@@ -2,9 +2,9 @@ package org.example.backend.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.backend.dto.WeatherStats;
 import org.example.backend.model.RaspiWeatherData;
 import org.example.backend.repository.RaspiWeatherDataRepository;
-import org.example.backend.controller.RaspiWeatherController.WeatherStats;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;

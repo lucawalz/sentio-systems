@@ -32,7 +32,6 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/alerts")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 @Tag(name = "Weather Alerts", description = "API for retrieving and managing weather alerts from BrightSky")
 public class WeatherAlertController {
 
