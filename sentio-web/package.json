@@ -60,7 +60,7 @@
     "proj4": "^2.20.2",
     "react": "^19.2.3",
     "react-dom": "^19.2.0",
-    "react-hook-form": "^7.69.0",
+    "react-hook-form": "^7.71.2",
     "react-leaflet": "^5.0.0",
     "react-markdown": "^10.1.0",
     "react-router-dom": "^7.11.0",
