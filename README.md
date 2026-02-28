@@ -3,58 +3,120 @@
 # Sentio Systems Monorepo
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/SentioSystems/sentio-systems/actions)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Unified repository for the Sentio environmental monitoring platform.
+Wildlife and weather monitoring platform. Raspberry Pi devices collect sensor data and camera footage in the field, send it over MQTT to a Spring Boot backend, where Python ML models classify detected animals. Everything shows up on a React dashboard.
 
 ---
 
-
-## Architecture Overview
+## Architecture
 
 ![Architecture Diagram](docs/architecture/architecture-diagramm.png)
 
-[See the architecture documentation.](docs/architecture/architecture.md)
+[Full architecture documentation →](docs/architecture/architecture.md)
 
 ---
 
-## Quick Start
+## Setup
 
-Clone the repository and start all services with Docker Compose:
+### With Make (recommended)
 
 ```sh
 git clone https://github.com/SentioSystems/sentio-systems.git
 cd sentio-systems
-docker compose up --build
+make setup    # generates .env with random credentials
+make up       # starts all services
 ```
 
-See each component's README for local development and advanced usage.
+`make setup` copies `.env.example` to `.env` and generates secure random passwords for PostgreSQL, Keycloak, MQTT, and n8n. After that, `make up` brings everything up in Docker Compose.
+
+Check that it's all running:
+
+```sh
+make health
+```
+
+### Without Make
+
+If you don't have `make`, you can do the same steps manually:
+
+```sh
+git clone https://github.com/SentioSystems/sentio-systems.git
+cd sentio-systems
+
+# 1. Create your environment file
+cp .env.example .env
+
+# 2. Generate passwords and fill them in
+#    (setup-env.sh does this automatically, or edit .env by hand)
+./setup-env.sh
+
+# 3. Start the stack
+docker compose up -d --build
+```
+
+The `setup-env.sh` script generates random credentials using `openssl rand` and substitutes them into `.env`. If you'd rather set passwords manually, just edit `.env` and replace the `<generated>` placeholders.
+
+### Access points
+
+| Service | URL |
+|---------|-----|
+| Frontend | http://localhost:3000 |
+| Backend API | http://localhost:8083 |
+| Swagger UI | http://localhost:8083/swagger-ui.html |
+| Keycloak admin | http://localhost:8080 |
+
+Ports are configurable in `.env`. Run `make passwords` to see your generated credentials.
+
+### Demo mode
+
+The default `.env.example` sets `SPRING_PROFILES_ACTIVE=demo`, which seeds the database with sample data and creates a demo user:
+
+| | |
+|---|---|
+| **Username** | `demo` |
+| **Password** | `Demo@123!!` |
+
+To disable this, change the profile to `prod` (or remove `demo`) in your `.env`.
+
+### Useful Make targets
+
+| Command | What it does |
+|---------|-------------|
+| `make up` | Start all services |
+| `make down` | Stop all services |
+| `make build` | Build Docker images |
+| `make rebuild` | Build from scratch (no cache) |
+| `make logs` | Tail all logs |
+| `make logs s=backend` | Tail logs for one service |
+| `make health` | Health check everything |
+| `make test-all` | Run the full test suite |
+| `make clean` | Stop and remove volumes |
+| `make shell s=backend` | Shell into a container |
 
 ---
 
 ## Components
 
-- [sentio-backend](sentio-backend/README.md): Spring Boot REST API for data processing and IoT management
-- [sentio-ai](sentio-ai/README.md): ML models for species detection and weather prediction
-- [sentio-embedded](sentio-embedded/README.md): Embedded firmware for AI wildlife monitoring
-- [sentio-frontend-new](sentio-frontend-new/README.md): New web dashboard (React)
-- [n8n-workflows](n8n-workflows/README.md): Workflow automations
-- [init-scripts](init-scripts/README.md): Infrastructure initialization scripts
-- [docs](docs/README.md): Documentation, ADRs, and architecture
-- [sentio-web](sentio-web/README.md): (Deprecated) Old web dashboard
+| Directory | Description |
+|-----------|-------------|
+| [sentio-backend](sentio-backend/README.md) | Spring Boot REST API — auth, devices, weather, AI classification |
+| [sentio-ai](sentio-ai/README.md) | Python/FastAPI ML services (birder, speciesnet, preprocessing) |
+| [sentio-web](sentio-web/README.md) | React + Vite frontend (active) |
+| [sentio-embedded](sentio-embedded/README.md) | Raspberry Pi firmware — weather sensors and camera/detection |
+| [n8n-workflows](n8n-workflows/README.md) | n8n workflow automations |
+| [init-scripts](init-scripts/README.md) | DB init and Keycloak realm setup |
+| [docs](docs/README.md) | Architecture docs, ADRs, security audits |
 
----
-
-## Deployment Overview
-
-Sentio Systems is designed for modular deployment using Docker Compose. Each component can also be run and developed independently. See the [Makefile](Makefile) and each component's README for details.
+> `sentio-old` is the legacy frontend directory, kept for reference. The active frontend is `sentio-web`.
 
 ---
 
 ## Documentation
 
-We document significant architectural decisions in this repository using **Architecture Decision Records (ADRs)**. You can find the history of decisions and their rationale in the [docs/adr/](docs/adr/README.md) directory.
-
-- [Architecture Decision Records (ADRs)](docs/adr/README.md)
-- [Git Workflow & Branching Strategy](docs/git-workflow.md)
-- [Architecture Documentation](docs/architecture/architecture.md)
+- [Architecture](docs/architecture/architecture.md)
+- [Architecture Decision Records](docs/adr/README.md)
+- [Git Workflow & Branching](docs/git-workflow.md)
+- [Testing Strategy](docs/testing-strategy.md)
+- [MQTT Security](docs/mqtt-security.md)
+- [Keycloak Setup](docs/keycloak-setup.md)
