@@ -18,7 +18,7 @@ WORKDIR /app
 
 # Install dependencies
 COPY requirements.txt .
-RUN pip install --upgrade pip wheel>=0.46.2 jaraco.context>=6.1.0 && \
+RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt && \
     pip install --no-cache-dir speciesnet && \
     rm -rf /root/.cache/pip

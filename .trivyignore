@@ -2,3 +2,8 @@
 # Affects: libc-bin, libc6 in birder, speciesnet, preprocessing images
 # Revisit when Debian releases a patched glibc package
 CVE-2026-0861
+
+# pip build toolchain in python:3.11-slim base image — not runtime deps
+# pip resolver pulls old versions back in despite explicit upgrades
+CVE-2026-23949
+CVE-2026-24049
