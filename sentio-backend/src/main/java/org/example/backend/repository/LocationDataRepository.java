@@ -16,7 +16,7 @@ public interface LocationDataRepository extends JpaRepository<LocationData, Long
 
     Optional<LocationData> findByIpAddress(String ipAddress);
 
-    @Query("SELECT l FROM LocationData l WHERE l.ipAddress = :ipAddress ORDER BY l.updatedAt DESC")
+    @Query("SELECT l FROM LocationData l WHERE l.ipAddress = :ipAddress ORDER BY l.updatedAt DESC LIMIT 1")
     Optional<LocationData> findLatestByIpAddress(@Param("ipAddress") String ipAddress);
 
     @Query("SELECT l FROM LocationData l WHERE l.createdAt >= :startDate ORDER BY l.createdAt DESC")
@@ -35,5 +35,5 @@ public interface LocationDataRepository extends JpaRepository<LocationData, Long
 
     @Query("SELECT l FROM LocationData l WHERE l.latitude BETWEEN :latMin AND :latMax AND l.longitude BETWEEN :lonMin AND :lonMax")
     List<LocationData> findByCoordinateRange(@Param("latMin") Float latMin, @Param("latMax") Float latMax,
-                                             @Param("lonMin") Float lonMin, @Param("lonMax") Float lonMax);
+            @Param("lonMin") Float lonMin, @Param("lonMax") Float lonMax);
 }

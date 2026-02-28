@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Weather Station System - Main Application
-Collects data from BME280, VEML6030, and LTR390 sensors
+Collects data from BME688, VEML6030, and LTR390 sensors
 Publishes to MQTT broker for backend consumption
 """
 
@@ -14,8 +14,13 @@ from datetime import datetime
 import yaml
 from pathlib import Path
 
+import socket
 from weather_sensors import WeatherSensorManager
-from mqtt_handler import WeatherMQTTHandler
+from mqtt_publisher import WeatherMQTTPublisher
+
+# Import from shared module
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from shared import get_local_ip, GPSSensor
 
 # Configuration file path
 CONFIG_FILE = "config.yaml"
@@ -34,22 +39,17 @@ DEFAULT_CONFIG = {
         'interval': 300
     },
     'mqtt': {
-        'broker_host': '192.168.2.224',
+        'broker_host': 'localhost',
         'broker_port': 1883,
-        'username': 'luca',
-        'password': 'password',
-        'client_id': 'weather_sensor_pi',
-        'keepalive': 60,
+        'topic': 'weather/data',
+        # status_topic removed - handled by shared DeviceClient
+        'username': None,
+        'password': None,
         'qos': 1,
-        'retain': False,
-        'topics': {
-            'data': 'weather',
-            'status': 'weather/status',
-            'commands': 'weather/commands'
-        }
+        'keepalive': 60
     },
     'sensors': {
-        'bme280': {'enabled': True, 'max_errors': 5},
+        'bme688': {'enabled': True, 'max_errors': 5},
         'veml6030': {'enabled': True, 'gain': 0.125, 'max_errors': 5},
         'ltr390': {'enabled': True, 'gain': 1, 'resolution': 3, 'max_errors': 5}
     }
@@ -92,7 +92,6 @@ class WeatherStation:
         self._shutdown_event = threading.Event()
         self._lock = threading.Lock()
 
-
         # Statistics
         self.start_time = datetime.now()
         self.reading_count = 0
@@ -102,7 +101,8 @@ class WeatherStation:
         # Configuration and components
         self.config = self.load_config(config_path)
         self.sensor_manager = None
-        self.mqtt_handler = None
+        self.mqtt_publisher = None
+        self.gps_sensor = None
 
         # Add threads list for tracking
         self.threads = []
@@ -110,14 +110,9 @@ class WeatherStation:
         # Component status tracking
         self._component_status = {
             'sensors': False,
-            'mqtt': False
+            'mqtt': False,
+            'gps': False
         }
-
-        # Error tracking for restart logic
-        self._error_counts = {
-            'mqtt': 0
-        }
-        self._max_errors = 3
 
         if self.quiet_mode:
             print("Weather Station starting in quiet mode...")
@@ -125,6 +120,11 @@ class WeatherStation:
             print("System running in background...")
         else:
             print("Starting Weather Station System...")
+
+    @staticmethod
+    def get_local_ip():
+        """Get local IP address - uses shared module"""
+        return get_local_ip()
 
     def load_config(self, config_path: str) -> dict:
         """Load configuration from YAML file with fallback"""
@@ -145,7 +145,7 @@ class WeatherStation:
             return DEFAULT_CONFIG
 
     def initialize_components(self):
-        """Initialize sensor manager and MQTT handler"""
+        """Initialize sensor manager and MQTT publisher"""
         try:
             self.logger.info("Initializing Weather Station System...")
 
@@ -171,27 +171,50 @@ class WeatherStation:
                 self._component_status['sensors'] = False
                 return False
 
-            # Initialize MQTT handler
+            # Initialize MQTT publisher
             try:
-                self.logger.info("Initializing MQTT handler...")
-                mqtt_config = self.config.get('mqtt', {})
-                self.mqtt_handler = WeatherMQTTHandler(mqtt_config, quiet_mode=self.quiet_mode)
-                if not self.mqtt_handler.initialize_client():
-                    self.logger.error("Failed to initialize MQTT client")
-                    self._component_status['mqtt'] = False
-                    self.mqtt_handler = None
-                else:
-                    self._component_status['mqtt'] = True
-                    self.logger.info("MQTT handler initialized successfully")
+                self.logger.info("Initializing MQTT publisher...")
+                self.mqtt_publisher = WeatherMQTTPublisher(self.config)
+                self.mqtt_publisher.start()
+                self._component_status['mqtt'] = True
+                self.logger.info("MQTT publisher initialized successfully")
             except Exception as e:
-                self.logger.error(f"Failed to initialize MQTT handler: {e}")
+                self.logger.error(f"Failed to initialize MQTT publisher: {e}")
                 self._component_status['mqtt'] = False
-                self.mqtt_handler = None
+                self.mqtt_publisher = None
 
-            # Check if critical components are available
             if not self._component_status['sensors']:
                 self.logger.error("No sensors available - cannot continue")
                 return False
+
+            # Initialize GPS sensor (required)
+            try:
+                self.logger.info("Initializing GPS sensor...")
+                gps_config = self.config.get('gps', {})
+                self.gps_sensor = GPSSensor(gps_config)
+                if self.gps_sensor.connected:
+                    self.gps_sensor.start()
+                    self._component_status['gps'] = True
+                    self.logger.info("GPS sensor initialized and started")
+                    
+                    # Wait a few seconds for GPS to get first fix (warm start is fast)
+                    self.logger.info("Waiting for GPS fix...")
+                    for _ in range(5):  # Wait up to 5 seconds
+                        time.sleep(1)
+                        if self.gps_sensor.is_available():
+                            gps_data = self.gps_sensor.get_location()
+                            self.logger.info(f"GPS fix acquired: lat={gps_data.get('latitude')}, lon={gps_data.get('longitude')}")
+                            break
+                    else:
+                        self.logger.warning("GPS connected but no fix yet - will retry in background")
+                else:
+                    self._component_status['gps'] = False
+                    self.logger.warning("GPS sensor not connected - continuing without GPS")
+            except Exception as e:
+                self.logger.error(f"Failed to initialize GPS sensor: {e}")
+                self._component_status['gps'] = False
+                self.gps_sensor = None
+
 
             self.logger.info("All components initialized successfully")
             return True
@@ -201,18 +224,10 @@ class WeatherStation:
             return False
 
     def monitor_component_health(self):
-        """Monitor component health and restart if needed"""
+        """Monitor component health"""
         while self.running and not self._shutdown_event.is_set():
             try:
-                if self.mqtt_handler and not self.mqtt_handler.is_connected():
-                    if self._error_counts['mqtt'] < self._max_errors:
-                        self.logger.warning("MQTT handler appears to be disconnected")
-                        self.logger.info("Attempting to restart mqtt")
-                        self._restart_component('mqtt')
-                        self._error_counts['mqtt'] += 1
-                    else:
-                        self.logger.error("MQTT failed too many times, giving up")
-
+                # Check sensor health
                 if hasattr(self, 'sensor_manager') and self.sensor_manager:
                     sensor_stats = self.sensor_manager.get_sensor_status()
                     failed_sensors = [name for name, status in sensor_stats.items()
@@ -226,24 +241,6 @@ class WeatherStation:
                 self.logger.error(f"Error in health monitoring: {e}")
                 time.sleep(30)
 
-
-    def _restart_component(self, component_name):
-        """Restart a specific component"""
-        try:
-            if component_name == 'mqtt' and self.mqtt_handler:
-                self.logger.info("Attempting MQTT reconnection...")
-                reconnect_success = self.mqtt_handler.reconnect()
-                if reconnect_success:
-                    self.logger.info("MQTT reconnected successfully")
-                    self._component_status['mqtt'] = True
-                    self._error_counts['mqtt'] = 0
-                else:
-                    self.logger.error("MQTT reconnection failed")
-                    self._component_status['mqtt'] = False
-
-        except Exception as e:
-            self.logger.error(f"Failed to restart {component_name}: {e}")
-
     def collect_and_publish_data(self):
         """Collect sensor data and publish via MQTT"""
         try:
@@ -255,9 +252,9 @@ class WeatherStation:
             self.logger.debug(f"Collected sensor data: {json.dumps(sensor_data, indent=2)}")
 
             # Publish data
-            if self.mqtt_handler.is_connected():
+            if self.mqtt_publisher and self.mqtt_publisher.is_connected():
                 self.logger.debug("Publishing data to MQTT...")
-                success = self.mqtt_handler.publish_weather_data(sensor_data)
+                success = self.mqtt_publisher.publish_weather_data(sensor_data)
                 if success:
                     self.publish_count += 1
                     self.logger.info(f"Weather data published successfully (#{self.publish_count})")
@@ -270,13 +267,8 @@ class WeatherStation:
                     self.error_count += 1
                     self.logger.warning(f"Failed to publish weather data (error #{self.error_count})")
             else:
-                self.logger.warning("MQTT not connected, attempting reconnection...")
-                reconnect_success = self.mqtt_handler.reconnect()
-                if reconnect_success:
-                    self.logger.info("MQTT reconnected successfully")
-                else:
-                    self.error_count += 1
-                    self.logger.error(f"MQTT reconnection failed (error #{self.error_count})")
+                self.error_count += 1
+                self.logger.warning("MQTT not connected, data not published")
 
         except Exception as e:
             self.error_count += 1
@@ -289,7 +281,7 @@ class WeatherStation:
 
             # Get component statistics
             sensor_stats = self.sensor_manager.get_statistics() if self.sensor_manager else {}
-            mqtt_stats = self.mqtt_handler.get_statistics() if self.mqtt_handler else {}
+            mqtt_stats = self.mqtt_publisher.get_statistics() if self.mqtt_publisher else {}
 
             # Calculate rates
             uptime_seconds = uptime.total_seconds()
@@ -320,7 +312,7 @@ class WeatherStation:
                 f"Publishes: {self.publish_count} total, {publishes_per_minute:.1f}/min\n"
                 f"Success Rate: {success_rate:.1f}%\n"
                 f"Errors: {self.error_count} total\n"
-                f"MQTT Status: {mqtt_stats.get('connected', 'Unknown')}\n"
+                f"MQTT Connected: {mqtt_stats.get('connected', False)}\n"
                 f"Broker: {mqtt_stats.get('broker_host', 'Unknown')}:{mqtt_stats.get('broker_port', 'Unknown')}\n"
                 f"Sensor Status: {sensor_stats.get('sensor_count', 0)} active sensors\n"
                 f"Collection Interval: {self.config.get('collection', {}).get('interval', 5)}s\n"
@@ -331,7 +323,6 @@ class WeatherStation:
 
         except Exception as e:
             self.logger.error(f"Error printing statistics: {e}")
-
 
     def stats_monitoring_thread(self):
         """Thread for periodic statistics monitoring"""
@@ -353,6 +344,44 @@ class WeatherStation:
 
         self.logger.info("Statistics monitoring thread stopped")
 
+    def health_ping_thread(self):
+        """Thread for periodic health status pings with GPS data"""
+        ping_interval = 60  # Publish status every 60 seconds
+
+        self.logger.info("Health ping thread started")
+
+        while self.running and not self._shutdown_event.is_set():
+            try:
+                if self.mqtt_publisher and self.mqtt_publisher.is_connected():
+                    local_ip = self.get_local_ip()
+                    
+                    # Get GPS data if available
+                    gps_data = None
+                    if self.gps_sensor:
+                        if self.gps_sensor.is_available():
+                            gps_data = self.gps_sensor.get_location()
+                            self.logger.info(f"GPS fix available: lat={gps_data.get('latitude')}, lon={gps_data.get('longitude')}")
+                        else:
+                            self.logger.info(f"GPS connected but no fix yet (waiting for satellites)")
+                    else:
+                        self.logger.debug("GPS sensor not initialized")
+                    
+                    self.mqtt_publisher.publish_status(local_ip, "online", gps_data=gps_data)
+                    self.logger.debug(f"Health ping sent (IP: {local_ip}, GPS: {gps_data is not None})")
+                else:
+                    self.logger.debug("MQTT not connected, skipping health ping")
+
+                # Wait for next ping interval
+                if self._shutdown_event.wait(ping_interval):
+                    break
+
+            except Exception as e:
+                self.logger.error(f"Error in health ping: {e}")
+                if self._shutdown_event.wait(10):
+                    break
+
+        self.logger.info("Health ping thread stopped")
+
     def run_monitoring_loop(self):
         """Main monitoring loop with comprehensive logging"""
         collection_config = self.config.get('collection', {})
@@ -360,8 +389,10 @@ class WeatherStation:
 
         self.logger.info(f"Starting weather monitoring loop (interval: {interval}s)")
         self.logger.info("Press Ctrl+C to stop the weather station")
-        self.logger.info(
-            f"Data will be published to topic: {self.mqtt_handler.data_topic if self.mqtt_handler else 'N/A'}")
+
+        if self.mqtt_publisher:
+            data_topic = self.mqtt_publisher.get_statistics().get('data_topic', 'N/A')
+            self.logger.info(f"Data will be published to topic: {data_topic}")
 
         with self._lock:
             self.running = True
@@ -387,6 +418,15 @@ class WeatherStation:
         health_thread.start()
         self.threads.append(health_thread)
 
+        # Start health ping thread (publishes status every 30s like animal_detector)
+        ping_thread = threading.Thread(
+            target=self.health_ping_thread,
+            name="HealthPing"
+        )
+        ping_thread.daemon = True
+        ping_thread.start()
+        self.threads.append(ping_thread)
+
         try:
             while self.running and not self._shutdown_event.is_set():
                 loop_start = time.time()
@@ -398,7 +438,14 @@ class WeatherStation:
                 self.collect_and_publish_data()
 
                 status_frequency = 60 if self.quiet_mode else 12
-                if loop_count % status_frequency == 0:
+                if loop_count % status_frequency == 0 or loop_count == 1:
+                    if self.mqtt_publisher:
+                        local_ip = self.get_local_ip()
+                        gps_data = None
+                        if self.gps_sensor and self.gps_sensor.is_available():
+                            gps_data = self.gps_sensor.get_location()
+                        self.mqtt_publisher.publish_status(local_ip, "online", gps_data=gps_data)
+
                     success_rate = (self.publish_count / self.reading_count * 100) if self.reading_count > 0 else 0
                     self.logger.info(
                         f"Status: {loop_count} loops, {self.publish_count}/{self.reading_count} published ({success_rate:.1f}%)")
@@ -435,7 +482,7 @@ class WeatherStation:
 
         # Stop components in order
         components = [
-            ('MQTT Handler', self.mqtt_handler),
+            ('MQTT Publisher', self.mqtt_publisher),
             ('Sensor Manager', self.sensor_manager)
         ]
 

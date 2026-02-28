@@ -1,0 +1,47 @@
+# MediaMTX Configuration for Sentio Systems
+# https://github.com/bluenviron/mediamtx
+
+###############################################
+# Global settings
+
+logLevel: info
+logDestinations: [stdout]
+
+# Connection resilience - tolerate brief network interruptions
+readTimeout: 60s
+writeTimeout: 60s
+readBufferCount: 2048
+
+###############################################
+# RTMP server settings
+
+rtmp: true
+rtmpAddress: :1935
+rtmpEncryption: "no"
+
+###############################################
+# HLS server settings
+
+hls: true
+hlsAddress: :8888
+hlsEncryption: false
+hlsAlwaysRemux: true
+hlsVariant: mpegts # Regular HLS (more stable than LL-HLS)
+hlsSegmentCount: 3
+hlsSegmentDuration: 1s
+hlsPartDuration: 200ms
+hlsSegmentMaxSize: 50M
+hlsAllowOrigin: "*"
+
+###############################################
+# Authentication - use HTTP webhook for all auth
+
+# Use HTTP authentication method (calls authHTTPAddress for all auth requests)
+authMethod: http
+
+# HTTP webhook endpoint for authentication
+authHTTPAddress: http://backend:8080/api/stream/auth
+
+# Allow all paths - auth is enforced by the HTTP webhook above
+paths:
+  all:

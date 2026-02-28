@@ -1,3 +1,5 @@
+![Sentio Embedded Banner](../docs/banners/embedded-banner.png)
+
 # Weather Station & Animal Detector Systems
 
 This repository contains two independent but complementary systems for Raspberry Pi: a **Weather Station System** and an **Animal Detector System**. Both systems collect environmental or visual data and publish events to an MQTT broker for integration with backend services or home automation.
@@ -37,7 +39,7 @@ Uses a camera and Hailo AI accelerator to detect animals (and optionally people)
 ## Tech Stack
 
 - **Language:** Python 3.9+
-- **Weather Sensors:** BME280, VEML6030, LTR390 (I2C)
+- **Weather Sensors:** BME688 (Temp/Hum/Pres/Gas), VEML6030, LTR390 (I2C)
 - **Animal Detection:** Hailo-8, OpenCV, GStreamer, Hailo Python SDK
 - **MQTT:** paho-mqtt, Mosquitto broker
 - **Utilities:** schedule, python-dateutil, PyQt5 (optional)
@@ -51,7 +53,7 @@ Uses a camera and Hailo AI accelerator to detect animals (and optionally people)
 
 ### Weather Station
 
-- **Sensor Layer:** Reads data from BME280, VEML6030, and LTR390 sensors
+- **Sensor Layer:** Reads data from BME688, VEML6030, and LTR390 sensors
 - **Data Manager:** Aggregates and formats sensor data
 - **MQTT Handler:** Publishes data and status to MQTT broker, handles commands
 - **Service Layer:** Runs as a systemd service or manual script
@@ -74,7 +76,7 @@ Uses a camera and Hailo AI accelerator to detect animals (and optionally people)
 - Hailo-8 AI accelerator (for Animal Detector)
 - Python 3.9 or higher
 - Internet connection (for installation)
-- Sensors: BME280, VEML6030, LTR390 (Weather Station)
+- Sensors: BME688, VEML6030, LTR390, GPS (Weather Station)
 - Camera (PiCam or USB) for Animal Detector
 - Mosquitto MQTT broker (installed by script or separately)
 
@@ -92,6 +94,7 @@ chmod +x install.sh
 ```
 
 This script will:
+
 - Check for Raspberry Pi hardware
 - Update system packages and install dependencies
 - Enable I2C/SPI interfaces
@@ -105,11 +108,13 @@ This script will:
 1. **Install Hailo SDK and dependencies** (see Hailo documentation).
 2. **Clone this repository** (if not already done).
 3. **Install Python dependencies:**
+
    ```sh
    python3 -m venv animal_env
    source animal_env/bin/activate
    pip install -r requirements.txt
    ```
+
 4. **Edit `config.yaml`** to match your camera and MQTT settings.
 
 ---
@@ -119,14 +124,19 @@ This script will:
 ### Weather Station
 
 Activate the virtual environment:
+
 ```sh
 source weather_env/bin/activate
 ```
+
 Run the main application:
+
 ```sh
 python main.py
 ```
+
 Or start in quiet/background mode:
+
 ```sh
 ./start_weather_station.sh
 ```
@@ -134,14 +144,19 @@ Or start in quiet/background mode:
 ### Animal Detector
 
 Activate the virtual environment:
+
 ```sh
 source animal_env/bin/activate
 ```
+
 Run the animal detector:
+
 ```sh
 python animal_detector.py --config config.yaml
 ```
+
 To test MQTT event reception:
+
 ```sh
 python image_receiver.py
 ```
@@ -269,6 +284,7 @@ License information will be added by the project maintainer.
 ---
 
 **See also:**  
+
 - [Weather Station System section](#weather-station-system)  
 - [Animal Detector System section](#animal-detector-system)  
 

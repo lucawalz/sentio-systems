@@ -1,84 +1,86 @@
 package org.example.backend.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.example.backend.dto.AnimalDetectionDTO;
 import org.example.backend.model.AnimalDetection;
-import org.example.backend.repository.AnimalDetectionRepository;
-import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.core.io.FileSystemResource;
-import org.springframework.http.*;
+import org.example.backend.service.classification.AnimalClassificationClient;
+import org.example.backend.service.classification.AnimalClassificationResponseProcessor;
+import org.example.backend.service.classification.AnimalTypePolicy;
+import org.example.backend.service.classification.ClassificationProcessorFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
-import org.springframework.web.client.RestTemplate;
 
 import java.io.File;
 import java.nio.file.Path;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 /**
- * Service for unified animal detection and AI classification.
- * Handles classification for multiple animal types including birds, mammals, and others.
- * Routes images through preprocessing service before classification.
+ * Service responsible for coordinating animal image classification workflow.
+ * Delegates transport and response-mapping concerns to dedicated components.
+ * <p>
+ * This orchestrator supports queue-based asynchronous classification with HTTP
+ * fallback and keeps external behavior stable for MQTT ingestion handlers.
+ * </p>
+ *
+ * @author Sentio Team
+ * @version 1.0
+ * @since 1.0
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class AnimalClassifierService {
+public class AnimalClassifierService implements IAnimalClassifierService {
 
-    private static final String PREPROCESSING_SERVICE_URL = "http://localhost:8082/preprocess-and-classify";
-    private static final int MAX_ALTERNATE_SPECIES = 4;
-    private static final String DETECTION_KEY = "detection";
-    private static final String CLASSIFICATION_KEY = "classification";
-    private static final String TOP_SPECIES_KEY = "top_species";
-    private static final String TOP_CONFIDENCE_KEY = "top_confidence";
-    private static final String PREDICTIONS_KEY = "predictions";
-    private static final String SPECIES_KEY = "species";
-    private static final String CONFIDENCE_KEY = "confidence";
-    private static final String BIRD_DETECTED_KEY = "bird_detected";
-    private static final String UNKNOWN_SPECIES = "Unknown";
+    @Value("${queue.enabled:true}")
+    private boolean queueEnabled;
 
-    private final AnimalDetectionRepository animalDetectionRepository;
-    private final RestTemplate restTemplate;
     private final ImageStorageService imageStorageService;
-    private final ObjectMapper objectMapper;
+    private final AnimalClassificationClient animalClassificationClient;
+    private final AnimalClassificationResponseProcessor responseProcessor;
+    private final AnimalTypePolicy animalTypePolicy;
+    private final ClassificationProcessorFactory classificationProcessorFactory;
+    private final RedisQueueService redisQueueService;
+    private final ClassificationResultService resultProcessor;
 
     /**
      * Asynchronously classifies animal species and updates the detection record.
      * Images are sent through preprocessing service before classification.
+     *
+     * @param detection Detection entity to classify
      */
     @Async
     public void classifyAndUpdate(AnimalDetection detection) {
         log.debug("Starting AI classification process for detection ID: {} (Type: {})",
                 detection.getId(), detection.getAnimalType());
 
-        // Check if we have a classifier for this animal type
-        if (!hasClassifierForAnimalType(detection.getAnimalType())) {
-            log.info("No AI classifier available for animal type '{}' - detection ID: {}. Keeping original classification.",
+        if (!animalTypePolicy.hasClassifierForAnimalType(detection.getAnimalType())) {
+            log.info(
+                    "No AI classifier available for animal type '{}' - detection ID: {}. Keeping original classification.",
                     detection.getAnimalType(), detection.getId());
-            markAsProcessedWithoutAIClassification(detection);
+            responseProcessor.markAsProcessedWithoutAIClassification(detection);
             return;
         }
 
         try {
-            // Get and validate image file
             Optional<File> imageFile = getLocalImageFile(detection);
             if (imageFile.isEmpty()) {
                 return;
             }
 
-            // Call preprocessing service which will forward to appropriate classifier
-            Map<String, Object> responseBody = callPreprocessingService(imageFile.get(), detection.getAnimalType());
+            if (queueEnabled && redisQueueService.isAvailable()) {
+                log.debug("Using event-driven queue for classification");
+                submitToQueueAsync(detection, imageFile.get());
+                return;
+            }
+
+            log.debug("Using HTTP preprocessing service for classification");
+            var responseBody = animalClassificationClient.callPreprocessingService(imageFile.get(),
+                    detection.getAnimalType());
             if (responseBody != null) {
-                processClassificationResponse(detection, responseBody);
+                classificationProcessorFactory
+                        .getProcessor(detection.getAnimalType())
+                        .process(detection, responseBody);
             }
         } catch (Exception e) {
             log.error("Error during AI classification for detection ID {}: {}",
@@ -86,23 +88,32 @@ public class AnimalClassifierService {
         }
     }
 
-    /**
-     * Checks if we have an AI classifier for the given animal type
-     */
-    private boolean hasClassifierForAnimalType(String animalType) {
-        if (animalType == null) {
-            return false;
-        }
+    private void submitToQueueAsync(AnimalDetection detection, File imageFile) {
+        try {
+            byte[] imageBytes = java.nio.file.Files.readAllBytes(imageFile.toPath());
 
-        return switch (animalType.toLowerCase()) {
-            case "bird", "mammal", "human" -> true; //human still for testing
-            default -> false;
-        };
+            redisQueueService.submitClassificationJobAsync(
+                    imageBytes,
+                    imageFile.getName(),
+                    detection.getAnimalType(),
+                    detection.getId(),
+                    resultProcessor);
+
+            log.info("Submitted detection {} to queue for async classification", detection.getId());
+
+        } catch (Exception e) {
+            log.warn("Queue submission failed for detection {}: {}, falling back to HTTP",
+                    detection.getId(), e.getMessage());
+
+            var responseBody = animalClassificationClient.callPreprocessingService(imageFile, detection.getAnimalType());
+            if (responseBody != null) {
+                classificationProcessorFactory
+                        .getProcessor(detection.getAnimalType())
+                        .process(detection, responseBody);
+            }
+        }
     }
 
-    /**
-     * Retrieves and validates the local image file
-     */
     private Optional<File> getLocalImageFile(AnimalDetection detection) {
         Path localImagePath = imageStorageService.getLocalImagePath(detection.getImageUrl());
         File imageFileLocal = localImagePath.toFile();
@@ -116,297 +127,12 @@ public class AnimalClassifierService {
     }
 
     /**
-     * Calls the preprocessing service which handles image enhancement and forwarding to classifier
-     */
-    private Map<String, Object> callPreprocessingService(File imageFile, String animalType) {
-        try {
-            // Prepare request with image and animal type
-            MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
-            body.add("file", new FileSystemResource(imageFile));
-            body.add("animal_type", animalType);
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.MULTIPART_FORM_DATA);
-            HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
-
-            log.debug("Calling preprocessing service at: {} for animal type: {}",
-                    PREPROCESSING_SERVICE_URL, animalType);
-            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                    PREPROCESSING_SERVICE_URL,
-                    HttpMethod.POST,
-                    requestEntity,
-                    new ParameterizedTypeReference<>() {}
-            );
-
-            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                Map<String, Object> responseBody = response.getBody();
-
-                // Log preprocessing metadata if available
-                if (responseBody.containsKey("preprocessing_applied")) {
-                    log.info("Image preprocessing applied - Original: {} bytes, Enhanced: {} bytes",
-                            responseBody.get("original_size_bytes"),
-                            responseBody.get("enhanced_size_bytes"));
-                }
-
-                return responseBody;
-            } else {
-                log.warn("Preprocessing service returned unsuccessful response: HTTP {}", response.getStatusCode());
-                return null;
-            }
-        } catch (Exception e) {
-            log.error("Error calling preprocessing service: {}", e.getMessage(), e);
-            return null;
-        }
-    }
-
-    /**
-     * Marks detection as processed without AI classification for unsupported animal types
-     */
-    private void markAsProcessedWithoutAIClassification(AnimalDetection detection) {
-        // Keep the original species and confidence as-is
-        detection.setAiProcessed(false); // No AI processing occurred
-        detection.setProcessedAt(LocalDateTime.now());
-        animalDetectionRepository.save(detection);
-
-        log.info("Detection ID {} marked as processed without AI classification - keeping original classification: {} ({})",
-                detection.getId(), detection.getSpecies(), detection.getAnimalType());
-    }
-
-    /**
-     * Processes the classification response and updates the detection record.
-     */
-    private void processClassificationResponse(AnimalDetection detection, Map<String, Object> responseBody) {
-        try {
-            // Handle different response formats based on animal type
-            if ("bird".equalsIgnoreCase(detection.getAnimalType())) {
-                processBirdClassificationResponse(detection, responseBody);
-            } else {
-                // Generic processing for other animal types
-                processGenericClassificationResponse(detection, responseBody);
-            }
-        } catch (Exception e) {
-            log.error("Error processing classification response for detection ID {}: {}",
-                    detection.getId(), e.getMessage(), e);
-        }
-    }
-
-    /**
-     * Processes bird classification response (backward compatibility with existing API).
-     */
-    private void processBirdClassificationResponse(AnimalDetection detection, Map<String, Object> responseBody) {
-        try {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> detectionMap = (Map<String, Object>) responseBody.get(DETECTION_KEY);
-            @SuppressWarnings("unchecked")
-            Map<String, Object> classificationMap = (Map<String, Object>) responseBody.get(CLASSIFICATION_KEY);
-
-            if (detectionMap == null || classificationMap == null) {
-                log.error("Invalid API response structure for detection ID {}: missing required fields", detection.getId());
-                return;
-            }
-
-            Boolean animalDetected = (Boolean) detectionMap.get(BIRD_DETECTED_KEY);
-
-            if (Boolean.TRUE.equals(animalDetected)) {
-                updateBirdDetectionWithClassification(detection, classificationMap);
-                log.info("Successfully updated bird detection ID {} with AI classification", detection.getId());
-            } else {
-                handleNoAnimalDetected(detection);
-            }
-        } catch (ClassCastException | NullPointerException e) {
-            log.error("Error processing bird classification response for detection ID {}: Invalid data format - {}",
-                    detection.getId(), e.getMessage(), e);
-        } catch (Exception e) {
-            log.error("Error processing bird classification response for detection ID {}: {}",
-                    detection.getId(), e.getMessage(), e);
-        }
-    }
-
-    /**
-     * Processes generic animal classification response for non-bird animals.
-     */
-    private void processGenericClassificationResponse(AnimalDetection detection, Map<String, Object> responseBody) {
-        try {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> classificationMap = (Map<String, Object>) responseBody.get(CLASSIFICATION_KEY);
-
-            if (classificationMap != null) {
-                updateGenericClassificationResults(detection, classificationMap);
-                log.info("Successfully updated {} detection ID {} with AI classification",
-                        detection.getAnimalType(), detection.getId());
-            } else {
-                handleNoAnimalDetected(detection);
-            }
-        } catch (ClassCastException | NullPointerException e) {
-            log.error("Error processing generic classification response for detection ID {}: Invalid data format - {}",
-                    detection.getId(), e.getMessage(), e);
-        } catch (Exception e) {
-            log.error("Error processing generic classification response for detection ID {}: {}",
-                    detection.getId(), e.getMessage(), e);
-        }
-    }
-
-    /**
-     * Updates the detection record with classification results from the generic classifier.
-     * Extracts common names from the taxonomic format and cleans up results.
-     */
-    private void updateGenericClassificationResults(AnimalDetection detection, Map<String, Object> classificationMap)
-            throws JsonProcessingException {
-
-        storeOriginalValues(detection);
-
-        // Update primary species and confidence
-        String topSpecies = (String) classificationMap.get(TOP_SPECIES_KEY);
-        Double topConfidence = ((Number) classificationMap.get(TOP_CONFIDENCE_KEY)).doubleValue();
-
-        // Extract just the common name from the taxonomic format (last segment)
-        String displaySpecies = extractCommonName(topSpecies);
-
-        detection.setSpecies(displaySpecies);
-        detection.setConfidence(topConfidence.floatValue());
-
-        // Process alternate species
-        processAlternateSpecies(detection, classificationMap);
-
-        // Mark as AI processed
-        markAsAiProcessed(detection);
-
-        log.info("Successfully updated detection ID {} - Type: {}, Primary: {} ({:.2f})",
-                detection.getId(), detection.getAnimalType(), displaySpecies, topConfidence);
-    }
-
-    /**
-     * Process and store alternate species from classification results
-     */
-    @SuppressWarnings("unchecked")
-    private void processAlternateSpecies(AnimalDetection detection, Map<String, Object> classificationMap)
-            throws JsonProcessingException {
-
-        List<Map<String, Object>> predictionsList = (List<Map<String, Object>>) classificationMap.get(PREDICTIONS_KEY);
-        if (predictionsList == null || predictionsList.isEmpty()) {
-            return;
-        }
-
-        List<AnimalDetectionDTO.AlternateSpeciesDTO> alternateSpeciesList = new ArrayList<>();
-
-        // Skip the first prediction and take the next 4
-        for (int i = 1; i < Math.min(predictionsList.size(), MAX_ALTERNATE_SPECIES + 1); i++) {
-            Map<String, Object> pred = predictionsList.get(i);
-            String species = (String) pred.get(SPECIES_KEY);
-            Double confidence = ((Number) pred.get(CONFIDENCE_KEY)).doubleValue();
-
-            // Extract common name for each alternate species
-            String displayAlternate = extractCommonName(species);
-
-            alternateSpeciesList.add(new AnimalDetectionDTO.AlternateSpeciesDTO(
-                    displayAlternate, confidence.floatValue()));
-        }
-
-        // Convert to JSON string for storage
-        if (!alternateSpeciesList.isEmpty()) {
-            String alternateSpeciesJson = objectMapper.writeValueAsString(alternateSpeciesList);
-            detection.setAlternateSpecies(alternateSpeciesJson);
-        }
-    }
-
-    /**
-     * Stores original values if not already stored
-     */
-    private void storeOriginalValues(AnimalDetection detection) {
-        if (detection.getOriginalSpecies() == null) {
-            detection.setOriginalSpecies(detection.getSpecies());
-            detection.setOriginalConfidence(detection.getConfidence());
-        }
-    }
-
-    /**
-     * Marks the detection as processed by AI
-     */
-    private void markAsAiProcessed(AnimalDetection detection) {
-        detection.setAiProcessed(true);
-        detection.setAiClassifiedAt(LocalDateTime.now());
-        animalDetectionRepository.save(detection);
-    }
-
-    /**
-     * Extracts the common name from a taxonomic species string.
-     * Format example: "990ae9dd-7a59-4344-afcb-1b7b21368000;mammalia;primates;hominidae;homo;sapiens;human"
-     * Returns: "human"
-     */
-    private String extractCommonName(String taxonomicSpecies) {
-        if (taxonomicSpecies == null || taxonomicSpecies.isEmpty()) {
-            return UNKNOWN_SPECIES;
-        }
-
-        // Split by semicolon and get the last part (common name)
-        String[] parts = taxonomicSpecies.split(";");
-        if (parts.length > 0) {
-            String lastPart = parts[parts.length - 1].trim();
-            // Return the common name if it exists, otherwise the original string
-            return lastPart.isEmpty() ? taxonomicSpecies : lastPart;
-        }
-
-        return taxonomicSpecies;
-    }
-
-    /**
-     * Updates the detection record with bird classification results.
-     */
-    private void updateBirdDetectionWithClassification(AnimalDetection detection, Map<String, Object> classificationMap)
-            throws JsonProcessingException {
-
-        storeOriginalValues(detection);
-
-        // Update primary species and confidence
-        String topSpecies = (String) classificationMap.get(TOP_SPECIES_KEY);
-        Double topConfidence = ((Number) classificationMap.get(TOP_CONFIDENCE_KEY)).doubleValue();
-
-        detection.setSpecies(topSpecies);
-        detection.setConfidence(topConfidence.floatValue());
-
-        // Process alternate species
-        processAlternateSpecies(detection, classificationMap);
-
-        // Mark as AI processed
-        markAsAiProcessed(detection);
-
-        log.info("Successfully updated detection ID {} - Type: {}, Primary: {} ({:.2f})",
-                detection.getId(), detection.getAnimalType(), topSpecies, topConfidence);
-    }
-
-    /**
-     * Handles cases where no animal is detected by the classifier.
-     */
-    private void handleNoAnimalDetected(AnimalDetection detection) {
-        log.warn("AI classification found no {} in image for detection ID {}",
-                detection.getAnimalType(), detection.getId());
-
-        // Still mark as processed even if no animal found
-        detection.setAiProcessed(true);
-        detection.setAiClassifiedAt(LocalDateTime.now());
-        animalDetectionRepository.save(detection);
-    }
-
-    /**
      * Determines animal type from species name for initial classification.
-     * This method can be used when the initial detection doesn't specify animal type.
+     *
+     * @param species Initial species label
+     * @return Normalized animal type
      */
     public String determineAnimalType(String species) {
-        if (species == null) {
-            return "unknown";
-        }
-
-        String lowerSpecies = species.toLowerCase();
-
-        // Simple matching for YOLO classes
-        return switch (lowerSpecies) {
-            case "bird" -> "bird";
-            // Common mammals in YOLO
-            case "cat", "dog", "squirrel" -> "mammal";
-            // People --> this is just for testing
-            case "person" -> "human";
-            // Default to the original classification or unknown
-            default -> "unknown";
-        };
+        return animalTypePolicy.determineAnimalType(species);
     }
 }

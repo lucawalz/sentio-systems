@@ -8,3 +8,17 @@ ultralytics
 birder
 python-dotenv
 python-multipart
+
+# Redis queue support
+arq>=0.25
+redis>=4.0
+msgpack
+
+# Security pins
+jaraco.context>=6.1.0  # CVE-2026-23949
+wheel>=0.46.2          # CVE-2026-24049
+
+# Testing
+pytest
+httpx
+pytest-asyncio

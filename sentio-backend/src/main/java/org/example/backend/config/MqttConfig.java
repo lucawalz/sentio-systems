@@ -1,13 +1,16 @@
 package org.example.backend.config;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.example.backend.mqtt.AnimalDetectionHandler;
+import org.example.backend.mqtt.DeviceStatusHandler;
 import org.example.backend.mqtt.RaspiWeatherDataHandler;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 import org.springframework.integration.annotation.ServiceActivator;
 import org.springframework.integration.channel.DirectChannel;
 import org.springframework.integration.core.MessageProducer;
@@ -21,10 +24,13 @@ import org.springframework.messaging.MessageHandler;
 @Configuration
 @RequiredArgsConstructor
 @ConditionalOnProperty(name = "mqtt.enabled", havingValue = "true")
+@Slf4j
 public class MqttConfig {
 
     private final RaspiWeatherDataHandler raspiWeatherDataHandler;
     private final AnimalDetectionHandler animalDetectionHandler;
+    private final DeviceStatusHandler deviceStatusHandler;
+    private final Environment environment;
 
     @Value("${mqtt.broker}")
     private String mqttBroker;
@@ -48,18 +54,83 @@ public class MqttConfig {
     @Value("${mqtt.keepAliveInterval:60}")
     private int keepAliveInterval;
 
+    // TLS/SSL properties
+    @Value("${mqtt.tls.enabled:false}")
+    private boolean tlsEnabled;
+
+    @Value("${mqtt.tls.ca-cert-path:}")
+    private String tlsCaCertPath;
+
+    @Value("${mqtt.tls.client-cert-path:}")
+    private String tlsClientCertPath;
+
+    @Value("${mqtt.tls.client-key-path:}")
+    private String tlsClientKeyPath;
+
+    @Value("${mqtt.tls.client-key-password:}")
+    private String tlsClientKeyPassword;
+
+    @Value("${mqtt.tls.verify-hostname:true}")
+    private boolean tlsVerifyHostname;
+
     @Bean
     public MqttPahoClientFactory mqttClientFactory() {
         DefaultMqttPahoClientFactory factory = new DefaultMqttPahoClientFactory();
         MqttConnectOptions options = new MqttConnectOptions();
 
+        boolean productionProfileActive = java.util.Arrays.stream(environment.getActiveProfiles())
+                .map(String::toLowerCase)
+                .anyMatch(profile -> profile.equals("prod") || profile.equals("production"));
+
+        if (productionProfileActive && !tlsEnabled) {
+            throw new IllegalStateException("MQTT TLS must be enabled in production profiles");
+        }
+
+        if (tlsEnabled && mqttBroker.startsWith("tcp://")) {
+            throw new IllegalStateException("MQTT broker URL must use ssl:// or mqtts:// when TLS is enabled");
+        }
+
         // Server URIs
-        options.setServerURIs(new String[]{mqttBroker});
+        options.setServerURIs(new String[] { mqttBroker });
 
         // Authentication
         if (!mqttUsername.isEmpty() && !mqttPassword.isEmpty()) {
             options.setUserName(mqttUsername);
             options.setPassword(mqttPassword.toCharArray());
+        }
+
+        // TLS/SSL Configuration
+        if (tlsEnabled) {
+            try {
+                java.util.Properties sslProperties = new java.util.Properties();
+                
+                // CA certificate for server verification
+                if (!tlsCaCertPath.isEmpty()) {
+                    sslProperties.setProperty("com.ibm.ssl.trustStore", tlsCaCertPath);
+                    if (!tlsClientKeyPassword.isEmpty()) {
+                        sslProperties.setProperty("com.ibm.ssl.trustStorePassword", tlsClientKeyPassword);
+                    }
+                }
+                
+                // Client certificate for mutual TLS authentication
+                if (!tlsClientCertPath.isEmpty()) {
+                    sslProperties.setProperty("com.ibm.ssl.keyStore", tlsClientCertPath);
+                    if (!tlsClientKeyPassword.isEmpty()) {
+                        sslProperties.setProperty("com.ibm.ssl.keyStorePassword", tlsClientKeyPassword);
+                    }
+                }
+                
+                options.setSSLProperties(sslProperties);
+                options.setSSLHostnameVerifier(tlsVerifyHostname 
+                    ? null  // null = default hostname verifier (strict)
+                    : (hostname, session) -> true);  // accept all (development only!)
+
+                log.info("MQTT TLS/SSL enabled (hostname verification: {})", tlsVerifyHostname);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to configure MQTT TLS/SSL", e);
+            }
+        } else {
+            log.warn("MQTT TLS/SSL is disabled. This is insecure for production.");
         }
 
         // Connection settings
@@ -82,10 +153,9 @@ public class MqttConfig {
 
     @Bean
     public MessageProducer inboundChannel() {
-        MqttPahoMessageDrivenChannelAdapter adapter =
-                new MqttPahoMessageDrivenChannelAdapter(mqttClientId,
-                        mqttClientFactory(),
-                        mqttTopics);
+        MqttPahoMessageDrivenChannelAdapter adapter = new MqttPahoMessageDrivenChannelAdapter(mqttClientId,
+                mqttClientFactory(),
+                mqttTopics);
         adapter.setCompletionTimeout(5000);
         adapter.setConverter(new DefaultPahoMessageConverter());
         adapter.setQos(1);
@@ -97,36 +167,52 @@ public class MqttConfig {
     @ServiceActivator(inputChannel = "mqttInputChannel")
     public MessageHandler handler() {
         return message -> {
-            String topic = message.getHeaders().get("mqtt_receivedTopic").toString();
+            Object topicHeader = message.getHeaders().get("mqtt_receivedTopic");
+            if (topicHeader == null) {
+                log.warn("Received MQTT message without topic header");
+                return;
+            }
+            String topic = topicHeader.toString();
             String payload = message.getPayload().toString();
 
-            System.out.println("=== MQTT MESSAGE RECEIVED ===");
-            System.out.println("Topic: " + topic);
-            System.out.println("Payload length: " + payload.length() + " characters");
-            System.out.println("Timestamp: " + System.currentTimeMillis());
-            System.out.println("=============================");
+            log.debug("MQTT message received (topic={}, payloadLength={})", topic, payload.length());
 
             try {
                 // Route messages based on topic
-                switch (topic) {
-                    case "weather":
-                        raspiWeatherDataHandler.processWeatherData(payload);
-                        break;
-                    case "animal_detection/events":  // New unified animal detection topic
-                        animalDetectionHandler.processAnimalDetection(payload);
-                        break;
-                    case "camera":
-                        // Handle other camera data if needed
-                        System.out.println("Camera data received: " + payload.substring(0, Math.min(100, payload.length())) + "...");
-                        break;
-                    default:
-                        System.out.println("Unknown topic: " + topic);
-                        break;
+                if (topic.equals("weather/data")) {
+                    raspiWeatherDataHandler.processWeatherData(payload);
+                } else if (topic.equals("animals/data")) {
+                    animalDetectionHandler.processAnimalDetection(payload);
+                } else if (topic.startsWith("device/") && topic.endsWith("/status")) {
+                    // Unified device status: device/{deviceId}/status
+                    deviceStatusHandler.processStatusUpdate(payload);
+                    log.debug("Processed device status MQTT message");
+                } else if (topic.equals("camera")) {
+                    log.debug("Processed camera MQTT message");
+                } else {
+                    log.debug("Unhandled MQTT topic: {}", topic);
                 }
             } catch (Exception e) {
-                System.err.println("Error processing MQTT message from topic " + topic + ": " + e.getMessage());
-                e.printStackTrace();
+                log.error("Error processing MQTT message from topic {}", topic, e);
             }
         };
+    }
+
+    // --- Outbound channel for publishing to devices ---
+
+    @Bean
+    public MessageChannel mqttOutboundChannel() {
+        return new DirectChannel();
+    }
+
+    @Bean
+    @ServiceActivator(inputChannel = "mqttOutboundChannel")
+    public MessageHandler mqttOutboundHandler() {
+        org.springframework.integration.mqtt.outbound.MqttPahoMessageHandler handler = new org.springframework.integration.mqtt.outbound.MqttPahoMessageHandler(
+                mqttClientId + "-outbound", mqttClientFactory());
+        handler.setAsync(true);
+        handler.setDefaultQos(1);
+        // Topic is set per-message via header
+        return handler;
     }
 }

@@ -10,10 +10,13 @@ import java.time.LocalDateTime;
 
 /**
  * JPA entity representing weather alert data from BrightSky API.
- * Stores weather warnings and alerts for specific locations with full multilingual support.
+ * Stores weather warnings and alerts for specific locations with full
+ * multilingual support.
  * <p>
- * This entity includes alert metadata (severity, urgency, certainty), timing information,
- * and location details. It implements automatic timestamping for creation and update tracking,
+ * This entity includes alert metadata (severity, urgency, certainty), timing
+ * information,
+ * and location details. It implements automatic timestamping for creation and
+ * update tracking,
  * with a unique constraint on alert_id to prevent duplicates.
  * </p>
  *
@@ -26,24 +29,29 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Slf4j
-@Table(name = "weather_alerts",
-        indexes = {
-                @Index(name = "idx_alert_unique", columnList = "alertId", unique = true),
-                @Index(name = "idx_alert_location", columnList = "warnCellId, city"),
-                @Index(name = "idx_alert_effective", columnList = "effective"),
-                @Index(name = "idx_alert_expires", columnList = "expires")
-        })
+@Table(name = "weather_alerts", indexes = {
+        @Index(name = "idx_alert_unique", columnList = "alert_id, device_id", unique = true),
+        @Index(name = "idx_alert_location", columnList = "warn_cell_id, city"),
+        @Index(name = "idx_alert_effective", columnList = "effective"),
+        @Index(name = "idx_alert_expires", columnList = "expires"),
+        @Index(name = "idx_alert_device", columnList = "device_id"),
+        @Index(name = "idx_alert_device_active", columnList = "device_id, expires")
+})
 public class WeatherAlert {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** Device ID that this alert belongs to (for user data isolation) */
+    @Column(name = "device_id", length = 100)
+    private String deviceId;
+
     /** Bright Sky-internal ID for this alert */
     private Integer brightSkyId;
 
     /** Unique CAP message identifier */
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     private String alertId;
 
     /** Alert status (actual, test) */
@@ -153,8 +161,12 @@ public class WeatherAlert {
     @PrePersist
     protected void onCreate() {
         LocalDateTime now = LocalDateTime.now();
-        this.createdAt = now;
-        this.updatedAt = now;
+        if (this.createdAt == null) {
+            this.createdAt = now;
+        }
+        if (this.updatedAt == null) {
+            this.updatedAt = now;
+        }
         log.debug("WeatherAlert entity created with timestamps: {}", now);
     }
 
@@ -170,6 +182,7 @@ public class WeatherAlert {
 
     /**
      * Checks if the alert is currently active based on effective and expiry times.
+     * 
      * @return true if alert is currently active, false otherwise
      */
     public boolean isActive() {
@@ -180,6 +193,7 @@ public class WeatherAlert {
 
     /**
      * Gets the appropriate headline based on language preference.
+     * 
      * @param preferGerman true for German, false for English
      * @return localized headline
      */
@@ -189,6 +203,7 @@ public class WeatherAlert {
 
     /**
      * Gets the appropriate description based on language preference.
+     * 
      * @param preferGerman true for German, false for English
      * @return localized description
      */

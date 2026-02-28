@@ -8,11 +8,6 @@ import os
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
-
 # Configure logging
 log_level = os.getenv('LOG_LEVEL', 'INFO')
 logging.basicConfig(level=getattr(logging, log_level))
@@ -21,10 +16,10 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="Animal Detection Preprocessing Service")
 
 # Configuration from environment variables
-SERVICE_HOST = os.getenv('SERVICE_HOST', '0.0.0.0')
-SERVICE_PORT = int(os.getenv('SERVICE_PORT', '8082'))
-BIRD_CLASSIFIER_URL = os.getenv('BIRD_CLASSIFIER_URL', 'http://localhost:8000/detect')
-SPECIES_CLASSIFIER_URL = os.getenv('SPECIES_CLASSIFIER_URL', 'http://localhost:8081/detect')
+HOST = os.getenv('HOST', '0.0.0.0')
+PORT = int(os.getenv('PORT', '8082'))
+BIRD_CLASSIFIER_URL = os.getenv('BIRD_CLASSIFIER_URL', 'http://birder:8000/detect')
+SPECIES_CLASSIFIER_URL = os.getenv('SPECIES_CLASSIFIER_URL', 'http://speciesnet:8081/detect')
 
 # Image saving configuration
 SAVE_IMAGES = os.getenv('SAVE_IMAGES', 'true').lower() == 'true'
@@ -78,7 +73,6 @@ class ImagePreprocessor:
 
             logger.info(f"Original image shape: {img.shape}")
 
-            # Assess image quality to determine if enhancement is needed
             needs_enhancement = ImagePreprocessor._assess_image_quality(img)
 
             if not needs_enhancement['any']:
@@ -281,7 +275,6 @@ async def forward_to_classifier(
     Returns:
         Classification response from the downstream service
     """
-    # Determine target URL based on animal type
     if animal_type.lower() == "bird":
         target_url = BIRD_CLASSIFIER_URL
         logger.info(f"Routing to bird classifier: {target_url}")
@@ -299,7 +292,7 @@ async def forward_to_classifier(
         }
 
         # Forward to classifier with timeout
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=120.0) as client:
             logger.info(f"Forwarding preprocessed image to {target_url}")
             response = await client.post(target_url, files=files)
             response.raise_for_status()
@@ -320,12 +313,6 @@ async def forward_to_classifier(
             status_code=500,
             detail=f"Internal error during classification: {str(e)}"
         )
-
-
-@app.get("/health")
-async def health_check():
-    """Health check endpoint."""
-    return {"status": "healthy", "service": "preprocessing-service"}
 
 
 @app.post("/preprocess-and-classify")
@@ -414,7 +401,51 @@ async def preprocess_only(file: UploadFile = File(...)):
         )
 
 
+@app.get("/queue/stats")
+async def queue_stats():
+    """Get Redis queue statistics across all AI services."""
+    try:
+        import redis.asyncio as aioredis
+        r = aioredis.Redis(
+            host=os.getenv("REDIS_HOST", "redis"),
+            port=int(os.getenv("REDIS_PORT", "6379"))
+        )
+        
+        # Get queue info
+        queue_len = await r.llen("arq:queue")
+        info = await r.info("clients")
+        
+        await r.close()
+        
+        return {
+            "queue_name": "arq:queue",
+            "pending_jobs": queue_len,
+            "redis_clients": info.get("connected_clients", 0),
+            "redis_host": os.getenv("REDIS_HOST", "redis"),
+            "classifiers": {
+                "bird": BIRD_CLASSIFIER_URL,
+                "species": SPECIES_CLASSIFIER_URL
+            }
+        }
+    except Exception as e:
+        logger.warning(f"Could not get queue stats: {e}")
+        return {"error": str(e)}
+
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint."""
+    return {
+        "status": "healthy",
+        "redis_host": os.getenv("REDIS_HOST", "redis"),
+        "classifiers": {
+            "bird": BIRD_CLASSIFIER_URL,
+            "species": SPECIES_CLASSIFIER_URL
+        }
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host=SERVICE_HOST, port=SERVICE_PORT, log_level=log_level.lower())
+    uvicorn.run(app, host=HOST, port=PORT, log_level=log_level.lower())

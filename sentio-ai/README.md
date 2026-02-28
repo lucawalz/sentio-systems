@@ -1,3 +1,5 @@
+![Sentio AI Banner](../docs/banners/ai-banner.png)
+
 # Sentio AI Backend
 
 Backend AI services for the Sentio platform, including bird species classification using the **Birder** model and other AI-powered services in the **SpeciesNet** project.
