@@ -23,10 +23,4 @@ public interface DeviceRepository extends JpaRepository<Device, String> {
     @Override
     @org.springframework.lang.NonNull
     Optional<Device> findById(@org.springframework.lang.NonNull String id);
-
-
-/**
- * Repository interface for device entity data access.
- * Provides queries for finding devices by owner, primary device, and ID.
- * Supports user-based device management and lookup.
- */
+}
