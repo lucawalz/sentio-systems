@@ -1,6 +1,27 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+![Sentio Backend Banner](../docs/banners/backend-banner.png)
+
 # Sentio Backend
 
+[![Java](https://img.shields.io/badge/java-21-blue)](https://adoptopenjdk.net/)
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/SentioSystems/sentio-systems/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../LICENSE)
+
 Backend application for the Sentio platform, built with Spring Boot, Jakarta EE, and PostgreSQL.
+
+---
 
 ## Table of Contents
 
@@ -11,20 +32,26 @@ Backend application for the Sentio platform, built with Spring Boot, Jakarta EE,
 - [Installation](#installation)
 - [Development](#development)
 - [API Documentation](#api-documentation)
+- [API Examples](#api-examples)
 - [Docker](#docker)
 - [Project Structure](#project-structure)
 - [Data Integration](#data-integration)
 - [Code Style & Best Practices](#code-style--best-practices)
 - [Testing](#testing)
 - [CI/CD](#cicd)
+- [Database Schema](#database-schema)
 - [Environment Configuration](#environment-configuration)
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
 - [License](#license)
 
+---
+
 ## Overview
 
 This repository contains the backend services for the Sentio platform, providing APIs for weather data, bird detection, location information, and AI-powered insights.
+
+---
 
 ## Tech Stack
 
@@ -38,6 +65,8 @@ This repository contains the backend services for the Sentio platform, providing
 - **Build Tool**: Maven
 - **Containerization**: Docker
 
+---
+
 ## Architecture
 
 The application follows a layered architecture pattern:
@@ -50,11 +79,14 @@ The application follows a layered architecture pattern:
 - **Mapper Layer**: Conversion between entities and DTOs
 - **MQTT Layer**: IoT device communication
 
+
+---
+
 ## SOLID Refactoring
 
 ### Goal
 
-The goal of this refactoring was to decouple controlles and services by introducing service interfaces. By applying the Dependency Inversion Principle, the backend became easier to test and extend while preserving existing API behaviour.
+The goal of this refactoring was to decouple controllers and services by introducing service interfaces. By applying the Dependency Inversion Principle, the backend became easier to test and extend while preserving existing API behaviour.
 
 ### What Changed
 
@@ -112,6 +144,8 @@ API endpoints, payloads and public behaviour remained stable.
 - Maven 3.8+ (or use the included Maven wrapper)
 - PostgreSQL 14+
 - MQTT Broker (Eclipse Mosquitto recommended)
+
+---
 - Docker (for containerized deployment)
 
 ## Installation
@@ -139,6 +173,10 @@ cd sentio-backend
 
 The application will be available at `http://localhost:8080`.
 
+
+
+
+
 ## API Documentation
 
 The API documentation is available at `http://localhost:8080/swagger-ui.html` when running in development mode.
@@ -152,16 +190,48 @@ The API documentation is available at `http://localhost:8080/swagger-ui.html` wh
 - `/api/location` - Location information
 - `/api/ai/summary` - AI-generated summaries
 
+---
+
+## API Examples
+
+**Get weather forecast:**
+```sh
+curl -X GET "http://localhost:8080/api/weather/forecast?lat=52.5&lon=13.4"
+```
+
+**Get bird detections:**
+```sh
+curl -X GET "http://localhost:8080/api/birds/detections?from=2024-01-01&to=2024-01-31"
+```
+
+**Get AI summary:**
+```sh
+curl -X GET "http://localhost:8080/api/ai/summary"
+```
+
+---
+
+
+
+
+
 ## Docker
 
 ### Building the Docker Image
 
-```shell script
+```sh
 docker build -t sentio-backend:latest .
 ```
+
 ### Running the Docker Container
 
-TODO: Add master docker compose file. in sentio-infrastructure repo 
+```sh
+docker run -p 8080:8080 sentio-backend:latest
+```
+
+Or use the root `docker-compose.yaml` to start all services together.
+
+---
 
 ## Project Structure
 
@@ -238,20 +308,9 @@ The project (includes) various tests:
 ./mvnw test -Dtest=SentioApplicationTests
 ```
 
-
-
-
 ## CI/CD
 
-TODO: Add CI/CD documentation once pipeline is established.
-
-## Environment Configuration
-
-The application is configured via `application.properties`. Key configurations include:
-
-You're right, exposing real IP addresses and passwords in configuration files isn't a good practice. Let me revise the README to make the configuration examples more generic and provide advice on securing sensitive information.
-
-Here's an updated and more generic version for the configuration section:
+CI/CD is managed via GitHub Actions. All pushes and pull requests are automatically built and tested. See the [Actions tab](https://github.com/SentioSystems/sentio-systems/actions) for status.
 
 ## Environment Configuration
 
@@ -269,7 +328,6 @@ spring.jpa.hibernate.ddl-auto=update
 spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect
 ```
 
-
 ### MQTT Configuration
 ```properties
 # Enable/disable MQTT connectivity
@@ -285,7 +343,6 @@ mqtt.username=<username>
 mqtt.password=<password>
 ```
 
-
 ### External API Configuration
 ```properties
 # Weather data APIs
@@ -295,6 +352,8 @@ brightsky.api.base-url=https://api.brightsky.dev
 # IP geolocation
 ip-location.api.url=http://ip-api.com/json/
 ```
+
+---
 
 ## Troubleshooting
 
@@ -322,9 +381,13 @@ logging.level.org.example.backend=DEBUG
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
+
+
+
+
 ## License
 
-TODO: Add license information.
+This project is licensed under the MIT License. See the [LICENSE](../LICENSE) file for details.
 
 ---
 
