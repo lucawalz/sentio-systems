@@ -9,7 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.5.0] - 2026-02-22
+### Added
+- Security audit and threat model documentation (REQ-021)
+- API rate limiting with Bucket4j and Redis (REQ-021)
+- MQTT TLS/SSL enforcement and security documentation (REQ-021)
+
+### Changed
+- Enforced RBAC role mapping and production MQTT TLS guardrails (REQ-021)
+- Hardened backend request-body validation for device registration and animal detection endpoints (REQ-021)
+- Added Trivy HIGH/CRITICAL security gates to CI pipeline (REQ-021)
+
+## [0.5.0] - 2026-02-27
 
 ### Added
 - Architecture Decision Records (ADRs) for Keycloak authentication, external weather APIs, RTMPS streaming, n8n automation, and OpenAPI (REQ-005-adr)
@@ -29,7 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.4.0] - 2026-01-27
+## [0.4.0] - 2026-01-28
 
 ### Added
 - Redis-based asynchronous AI classification queue with dedicated queues per service (REQ-035)
@@ -119,8 +129,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/lucawalz/sentio-systems/compare/HEAD...HEAD
-[0.5.0]: https://github.com/lucawalz/sentio-systems/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/lucawalz/sentio-systems/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/lucawalz/sentio-systems/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/lucawalz/sentio-systems/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/lucawalz/sentio-systems/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/lucawalz/sentio-systems/compare/v0.1.0...v0.2.0
