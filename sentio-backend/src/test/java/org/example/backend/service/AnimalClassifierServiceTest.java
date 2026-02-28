@@ -92,7 +92,9 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
         // URL is dynamically set in setUp()
         registry.add("preprocessing.service.enabled", () -> "true");
         registry.add("queue.enabled", () -> "false");
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "create");
+        // Use non-destructive schema management to avoid table drops when
+        // nested test contexts are initialized during the same test run.
+        registry.add("spring.jpa.hibernate.ddl-auto", () -> "update");
     }
 
     @Autowired
@@ -113,7 +115,7 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
     private RedisQueueService redisQueueService;
 
     @MockitoBean
-    private ClassificationResultProcessor resultProcessor;
+    private ClassificationResultService resultProcessor;
 
     @Autowired
     private AnimalClassificationClient animalClassificationClient;
@@ -125,7 +127,7 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
 
     @BeforeEach
     void setUp(WireMockRuntimeInfo wmRuntimeInfo) throws IOException {
-        animalDetectionRepository.deleteAll();
+        cleanupAnimalDetectionsSafely();
         reset();
 
         // Create a temporary test image file
@@ -159,7 +161,21 @@ class AnimalClassifierServiceTest extends BaseIntegrationTest {
             Files.delete(tempImageFile);
         }
         // Clean up test data for @Commit tests
-        animalDetectionRepository.deleteAll();
+        cleanupAnimalDetectionsSafely();
+    }
+
+    private void cleanupAnimalDetectionsSafely() {
+        try {
+            Object tableName = entityManager
+                    .createNativeQuery("SELECT to_regclass('public.animal_detections')")
+                    .getSingleResult();
+
+            if (tableName != null) {
+                animalDetectionRepository.deleteAll();
+            }
+        } catch (Exception ignored) {
+            // Table may not be initialized yet for a fresh context. Ignore cleanup in that case.
+        }
     }
 
     private AnimalDetection createDetection(String animalType, String species, float confidence) {

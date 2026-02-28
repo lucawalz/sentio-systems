@@ -3,7 +3,7 @@ package org.example.backend.listener;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.backend.event.ClassificationResultEvent;
-import org.example.backend.service.ClassificationResultProcessor;
+import org.example.backend.service.ClassificationResultService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -36,7 +36,7 @@ class ClassificationResultListenerTest {
         private ApplicationEventPublisher eventPublisher;
 
         @Mock
-        private ClassificationResultProcessor resultProcessor;
+        private ClassificationResultService resultProcessor;
 
         @InjectMocks
         private ClassificationResultListener listener;

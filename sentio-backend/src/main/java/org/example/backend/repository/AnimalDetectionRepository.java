@@ -1,4 +1,9 @@
 
+/**
+ * Repository interface for animal detection data access.
+ * Provides custom queries for retrieving, filtering, and aggregating animal detection records.
+ * Query methods support analytics, device-based filtering, and confidence thresholds.
+ */
 package org.example.backend.repository;
 
 import org.example.backend.model.AnimalDetection;
