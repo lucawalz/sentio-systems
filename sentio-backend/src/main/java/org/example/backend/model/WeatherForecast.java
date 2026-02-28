@@ -36,7 +36,7 @@ import java.time.LocalDateTime;
 @Table(name = "weather_forecasts", indexes = {
         // Include device_id in unique constraint so each device can have its own
         // forecasts
-        @Index(name = "idx_forecast_unique", columnList = "forecastDateTime, device_id", unique = true),
+        @Index(name = "idx_forecast_unique", columnList = "forecast_date_time, device_id", unique = true),
         @Index(name = "idx_forecast_device", columnList = "device_id"),
         @Index(name = "idx_forecast_device_date", columnList = "device_id, forecast_date")
 })

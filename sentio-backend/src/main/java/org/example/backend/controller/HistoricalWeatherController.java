@@ -33,7 +33,6 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/historical")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 @Tag(name = "Historical Weather", description = "API for retrieving and managing historical weather data")
 public class HistoricalWeatherController {
 

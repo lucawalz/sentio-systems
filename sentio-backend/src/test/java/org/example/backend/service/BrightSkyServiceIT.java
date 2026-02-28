@@ -17,6 +17,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import jakarta.persistence.EntityManager;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -148,6 +149,8 @@ class BrightSkyServiceIT extends BaseIntegrationTest {
     static void configureProperties(DynamicPropertyRegistry registry) {
         registry.add("brightsky.api.base-url", () -> "http://localhost:8090");
         registry.add("brightsky.alerts.enabled", () -> "true");
+        // Prevent destructive schema recreation between nested test contexts.
+        registry.add("spring.jpa.hibernate.ddl-auto", () -> "update");
     }
 
     @Autowired
@@ -165,6 +168,9 @@ class BrightSkyServiceIT extends BaseIntegrationTest {
     @Autowired
     private DeviceRepository deviceRepository;
 
+    @Autowired
+    private EntityManager entityManager;
+
     @MockBean
     private DeviceLocationService deviceLocationService;
 
@@ -173,9 +179,27 @@ class BrightSkyServiceIT extends BaseIntegrationTest {
 
     @BeforeEach
     void cleanUp() {
-        alertRepository.deleteAll();
-        radarMetadataRepository.deleteAll();
-        deviceRepository.deleteAll();
+        if (tableExists("public.weather_alerts")) {
+            alertRepository.deleteAll();
+        }
+        if (tableExists("public.weather_radar_metadata")) {
+            radarMetadataRepository.deleteAll();
+        }
+        if (tableExists("public.devices")) {
+            deviceRepository.deleteAll();
+        }
+    }
+
+    private boolean tableExists(String qualifiedTableName) {
+        try {
+            Object tableName = entityManager
+                    .createNativeQuery("SELECT to_regclass(:tableName)")
+                    .setParameter("tableName", qualifiedTableName)
+                    .getSingleResult();
+            return tableName != null;
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 
     private WeatherAlert createAlert(String severity, LocalDateTime expires) {

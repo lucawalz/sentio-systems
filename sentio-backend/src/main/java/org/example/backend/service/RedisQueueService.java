@@ -66,7 +66,7 @@ public class RedisQueueService {
     /**
      * Submit a classification job asynchronously (EDA style).
      * Result will be received via Redis Pub/Sub and processed by
-     * ClassificationResultProcessor via @EventListener.
+     * ClassificationResultService via @EventListener.
      * 
      * @param imageBytes      Raw image bytes
      * @param filename        Original filename
@@ -80,7 +80,7 @@ public class RedisQueueService {
             String filename,
             String animalType,
             Long detectionId,
-            ClassificationResultProcessor resultProcessor) {
+            ClassificationResultService resultProcessor) {
 
         String jobId = submitClassificationJob(imageBytes, filename, animalType);
 

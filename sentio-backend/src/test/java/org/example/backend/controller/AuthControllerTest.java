@@ -82,7 +82,7 @@ class AuthControllerTest {
                 mockMvc.perform(post("/api/auth/register")
                                 .contentType("application/json")
                                 .content("""
-                                                {"username":"lilly","password":"pw","email":"lilly@test.de"}
+                                                {"username":"lilly","password":"Password1!","email":"lilly@test.de","firstName":"Lilly","lastName":"Test"}
                                                 """))
                                 .andExpect(status().isCreated());
 
@@ -98,7 +98,7 @@ class AuthControllerTest {
                 tokens.setRefreshToken("refresh-456");
                 tokens.setExpiresIn(3600L);
 
-                when(authService.login(eq("lilly"), eq("pw"))).thenReturn(tokens);
+                when(authService.login(eq("lilly"), eq("Password1!"))).thenReturn(tokens);
 
                 ResponseCookie access = ResponseCookie.from("access_token", "access-123")
                                 .httpOnly(true).path("/").build();
@@ -111,13 +111,13 @@ class AuthControllerTest {
                 mockMvc.perform(post("/api/auth/login")
                                 .contentType("application/json")
                                 .content("""
-                                                {"username":"lilly","password":"pw"}
+                                                {"username":"lilly","password":"Password1!"}
                                                 """))
                                 .andExpect(status().isOk())
                                 .andExpect(header().stringValues(HttpHeaders.SET_COOKIE, access.toString(),
                                                 refresh.toString()));
 
-                verify(authService).login("lilly", "pw");
+                verify(authService).login("lilly", "Password1!");
                 verify(cookieAuthService).createAccessTokenCookie("access-123", 3600L);
                 verify(cookieAuthService).createRefreshTokenCookie("refresh-456");
                 verifyNoMoreInteractions(authService, cookieAuthService);
@@ -334,29 +334,25 @@ class AuthControllerTest {
                 when(passwordResetService.validateToken(eq("invalid-token"))).thenReturn(null);
                 mockMvc.perform(post("/api/auth/reset-password")
                                 .contentType("application/json")
-                                .content("{\"token\":\"invalid-token\",\"password\":\"newPass123\",\"confirmPassword\":\"newPass123\"}"))
+                                .content("{\"token\":\"invalid-token\",\"password\":\"NewPass1!\",\"confirmPassword\":\"NewPass1!\"}"))
                                 .andExpect(status().isBadRequest())
                                 .andExpect(jsonPath("$.success").value(false));
         }
 
         @Test
         void resetPassword_shortPassword_returns400() throws Exception {
-                when(passwordResetService.validateToken(eq("valid-token"))).thenReturn("user@example.com");
                 mockMvc.perform(post("/api/auth/reset-password")
                                 .contentType("application/json")
                                 .content("{\"token\":\"valid-token\",\"password\":\"short\",\"confirmPassword\":\"short\"}"))
-                                .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$.success").value(false));
+                                .andExpect(status().isBadRequest());
         }
 
         @Test
         void resetPassword_mismatchedPasswords_returns400() throws Exception {
-                when(passwordResetService.validateToken(eq("valid-token"))).thenReturn("user@example.com");
                 mockMvc.perform(post("/api/auth/reset-password")
                                 .contentType("application/json")
-                                .content("{\"token\":\"valid-token\",\"password\":\"newPass123\",\"confirmPassword\":\"newPass456\"}"))
-                                .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$.success").value(false));
+                                .content("{\"token\":\"valid-token\",\"password\":\"NewPass1!\",\"confirmPassword\":\"NewPass2!\"}"))
+                                .andExpect(status().isBadRequest());
         }
 
         @Test
@@ -364,10 +360,10 @@ class AuthControllerTest {
                 when(passwordResetService.validateToken(eq("valid-token"))).thenReturn("user@example.com");
                 mockMvc.perform(post("/api/auth/reset-password")
                                 .contentType("application/json")
-                                .content("{\"token\":\"valid-token\",\"password\":\"newPass123\",\"confirmPassword\":\"newPass123\"}"))
+                                .content("{\"token\":\"valid-token\",\"password\":\"NewPass1!\",\"confirmPassword\":\"NewPass1!\"}"))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.success").value(true));
-                verify(authService).updatePassword("user@example.com", "newPass123");
+                verify(authService).updatePassword("user@example.com", "NewPass1!");
                 verify(passwordResetService).invalidateToken("valid-token");
         }
 
@@ -375,10 +371,10 @@ class AuthControllerTest {
         void resetPassword_serviceThrows_returns500() throws Exception {
                 when(passwordResetService.validateToken(eq("valid-token"))).thenReturn("user@example.com");
                 doThrow(new RuntimeException("DB error")).when(authService).updatePassword(eq("user@example.com"),
-                                eq("newPass123"));
+                                eq("NewPass1!"));
                 mockMvc.perform(post("/api/auth/reset-password")
                                 .contentType("application/json")
-                                .content("{\"token\":\"valid-token\",\"password\":\"newPass123\",\"confirmPassword\":\"newPass123\"}"))
+                                .content("{\"token\":\"valid-token\",\"password\":\"NewPass1!\",\"confirmPassword\":\"NewPass1!\"}"))
                                 .andExpect(status().isInternalServerError())
                                 .andExpect(jsonPath("$.success").value(false));
         }

@@ -1,7 +1,6 @@
 package org.example.backend.service;
 
 import org.example.backend.event.StreamStopScheduledEvent;
-import org.example.backend.listener.StreamEventListener;
 import org.example.backend.model.Device;
 import org.example.backend.repository.DeviceRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -55,7 +54,7 @@ class StreamServiceTest {
     private ApplicationEventPublisher eventPublisher;
 
     @Mock
-    private StreamEventListener streamEventListener;
+    private StreamStopCoordinator streamStopCoordinator;
 
     private StreamService streamService;
 
@@ -74,7 +73,7 @@ class StreamServiceTest {
                 viewerSessionService,
                 mqttOutboundChannel,
                 eventPublisher,
-                streamEventListener
+                streamStopCoordinator
         );
         ReflectionTestUtils.setField(streamService, "mediamtxBaseUrl", "https://media.syslabs.dev");
     }
@@ -458,7 +457,7 @@ class StreamServiceTest {
 
             // Then
             assertThat(result).isTrue();
-            verify(streamEventListener).cancelPendingStop(TEST_DEVICE_ID);
+            verify(streamStopCoordinator).cancelPendingStop(TEST_DEVICE_ID);
             verify(viewerSessionService).joinStream(TEST_DEVICE_ID, sessionId);
 
             ArgumentCaptor<Message> messageCaptor = ArgumentCaptor.forClass(Message.class);

@@ -10,6 +10,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.core.env.Environment;
 import org.springframework.integration.mqtt.core.MqttPahoClientFactory;
 import org.springframework.integration.mqtt.inbound.MqttPahoMessageDrivenChannelAdapter;
 import org.springframework.integration.mqtt.outbound.MqttPahoMessageHandler;
@@ -34,12 +35,15 @@ class MqttConfigTest {
     private AnimalDetectionHandler animalDetectionHandler;
     @Mock
     private DeviceStatusHandler deviceStatusHandler;
+    @Mock
+    private Environment environment;
 
     @InjectMocks
     private MqttConfig mqttConfig;
 
     @BeforeEach
     void setUp() {
+        lenient().when(environment.getActiveProfiles()).thenReturn(new String[]{});
         ReflectionTestUtils.setField(mqttConfig, "mqttBroker", "tcp://localhost:1883");
         ReflectionTestUtils.setField(mqttConfig, "mqttClientId", "test-client");
         ReflectionTestUtils.setField(mqttConfig, "mqttTopics", new String[] { "weather/data", "animals/data" });

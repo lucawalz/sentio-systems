@@ -1,5 +1,6 @@
 package org.example.backend.controller;
 
+import org.example.backend.dto.WeatherStats;
 import org.example.backend.model.RaspiWeatherData;
 import org.example.backend.service.RaspiWeatherDataService;
 import org.junit.jupiter.api.AfterEach;
@@ -154,7 +155,7 @@ class RaspiWeatherControllerTest {
         latest.setId(5L);
         latest.setTimestamp(LocalDateTime.of(2025, 12, 18, 10, 0));
 
-        RaspiWeatherController.WeatherStats stats = new RaspiWeatherController.WeatherStats(123L, latest, 12.3, 45.6,
+        WeatherStats stats = new WeatherStats(123L, latest, 12.3, 45.6,
                 1013.2);
 
         when(raspiWeatherDataService.getWeatherStats()).thenReturn(stats);
