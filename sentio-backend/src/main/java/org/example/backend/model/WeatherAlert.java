@@ -30,8 +30,8 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Slf4j
 @Table(name = "weather_alerts", indexes = {
-        @Index(name = "idx_alert_unique", columnList = "alertId", unique = true),
-        @Index(name = "idx_alert_location", columnList = "warnCellId, city"),
+        @Index(name = "idx_alert_unique", columnList = "alert_id, device_id", unique = true),
+        @Index(name = "idx_alert_location", columnList = "warn_cell_id, city"),
         @Index(name = "idx_alert_effective", columnList = "effective"),
         @Index(name = "idx_alert_expires", columnList = "expires"),
         @Index(name = "idx_alert_device", columnList = "device_id"),
@@ -51,7 +51,7 @@ public class WeatherAlert {
     private Integer brightSkyId;
 
     /** Unique CAP message identifier */
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     private String alertId;
 
     /** Alert status (actual, test) */
@@ -161,8 +161,12 @@ public class WeatherAlert {
     @PrePersist
     protected void onCreate() {
         LocalDateTime now = LocalDateTime.now();
-        this.createdAt = now;
-        this.updatedAt = now;
+        if (this.createdAt == null) {
+            this.createdAt = now;
+        }
+        if (this.updatedAt == null) {
+            this.updatedAt = now;
+        }
         log.debug("WeatherAlert entity created with timestamps: {}", now);
     }
 

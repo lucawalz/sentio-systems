@@ -149,13 +149,15 @@ Closes #87
 
 3. **Update documentation** if you've changed APIs or added features
 
-4. **Fill out the PR template** completely
+4. **Update `CHANGELOG.md`** under the `[Unreleased]` section with a summary of your changes using the appropriate category (`Added`, `Changed`, `Fixed`, `Removed`, `Security`, `Deprecated`)
 
-5. **Request review** from at least one team member
+5. **Fill out the PR template** completely
 
-6. **Address feedback** promptly and professionally
+6. **Request review** from at least one team member
 
-7. **Squash commits** if requested before merging
+7. **Address feedback** promptly and professionally
+
+8. **Squash commits** if requested before merging
 
 ### PR Checklist
 
@@ -163,6 +165,7 @@ Closes #87
 - [ ] Self-review completed
 - [ ] Comments added for complex logic
 - [ ] Documentation updated
+- [ ] `CHANGELOG.md` updated under `[Unreleased]`
 - [ ] Tests added/updated and passing
 - [ ] No new warnings introduced
 - [ ] Dependent changes merged

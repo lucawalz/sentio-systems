@@ -17,6 +17,9 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.time.Instant;
 
+import org.example.backend.event.StreamStopScheduledEvent;
+import org.springframework.context.ApplicationEventPublisher;
+
 /**
  * Service for video stream authentication.
  * Validates device tokens for RTMP publish and Keycloak tokens for HLS
@@ -31,6 +34,8 @@ public class StreamService {
     private final JwtDecoder jwtDecoder;
     private final ViewerSessionService viewerSessionService;
     private final MessageChannel mqttOutboundChannel;
+    private final ApplicationEventPublisher eventPublisher;
+    private final StreamStopCoordinator streamStopCoordinator;
 
     @Value("${mediamtx.base-url:https://media.syslabs.dev}")
     private String mediamtxBaseUrl;
@@ -49,12 +54,16 @@ public class StreamService {
             DeviceService deviceService,
             JwtDecoder jwtDecoder,
             ViewerSessionService viewerSessionService,
-            @Qualifier("mqttOutboundChannel") MessageChannel mqttOutboundChannel) {
+            @Qualifier("mqttOutboundChannel") MessageChannel mqttOutboundChannel,
+            ApplicationEventPublisher eventPublisher,
+            StreamStopCoordinator streamStopCoordinator) {
         this.deviceRepository = deviceRepository;
         this.deviceService = deviceService;
         this.jwtDecoder = jwtDecoder;
         this.viewerSessionService = viewerSessionService;
         this.mqttOutboundChannel = mqttOutboundChannel;
+        this.eventPublisher = eventPublisher;
+        this.streamStopCoordinator = streamStopCoordinator;
     }
 
     /**
@@ -124,8 +133,6 @@ public class StreamService {
         }
 
         try {
-            // Validate token using Spring Security's configured JwtDecoder
-            // This automatically validates against Keycloak's public key
             Jwt jwt = jwtDecoder.decode(keycloakToken);
 
             String userId = jwt.getSubject();
@@ -164,8 +171,6 @@ public class StreamService {
      * @return HLS URL (token will be appended by frontend)
      */
     public String getStreamUrl(String deviceId) {
-        // URL format: https://media.syslabs.dev/live/{deviceId}/index.m3u8
-        // Token will be appended by frontend: ?token={keycloak_access_token}
         return String.format("%s/live/%s/index.m3u8", mediamtxBaseUrl, deviceId);
     }
 
@@ -243,6 +248,9 @@ public class StreamService {
      * @return true if viewer was registered successfully
      */
     public boolean requestStreamStart(String deviceId, String sessionId) {
+        // Cancel any pending stop - new viewer joined
+        streamStopCoordinator.cancelPendingStop(deviceId);
+
         boolean isFirstViewer = viewerSessionService.joinStream(deviceId, sessionId);
 
         if (isFirstViewer) {
@@ -266,8 +274,8 @@ public class StreamService {
         boolean wasLastViewer = viewerSessionService.leaveStream(deviceId, sessionId);
 
         if (wasLastViewer) {
-            log.info("Last viewer left - sending stop command to device {}", deviceId);
-            return sendStreamCommand(deviceId, "stop");
+            log.info("Last viewer left - publishing StreamStopScheduledEvent for device {}", deviceId);
+            eventPublisher.publishEvent(new StreamStopScheduledEvent(this, deviceId));
         }
 
         log.debug("Viewer left for device {} - other viewers still watching", deviceId);

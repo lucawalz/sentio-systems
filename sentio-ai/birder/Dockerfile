@@ -16,7 +16,10 @@ RUN pip install --upgrade pip && \
 
 # Copy application files
 COPY birder_ai.py .
+COPY worker.py .
+COPY queue_bridge.py .
 COPY entrypoint.sh .
+COPY tests/ ./tests/
 RUN chmod +x entrypoint.sh
 
 # Create models directory for volume mount

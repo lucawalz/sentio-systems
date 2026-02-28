@@ -5,16 +5,18 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
-import java.time.Duration;
+import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Service for managing viewer sessions with Redis-based reference counting.
+ * Service for managing viewer sessions using Redis Sorted Sets.
  * 
- * Uses Redis to track active viewers per device stream with TTL-based
- * auto-cleanup.
- * This ensures proper handling of multi-user scenarios and unexpected
- * disconnections.
+ * Uses a sorted set per device where:
+ * - Score = expiration timestamp (Unix epoch seconds)
+ * - Member = session ID
+ * 
+ * This design ensures the viewer count is always accurate by atomically
+ * removing expired sessions before counting. No separate counter needed.
  */
 @Service
 @Slf4j
@@ -23,9 +25,8 @@ public class ViewerSessionService {
 
     private final StringRedisTemplate redisTemplate;
 
-    private static final Duration SESSION_TTL = Duration.ofSeconds(30);
-    private static final String SESSION_KEY_PREFIX = "stream:session:";
-    private static final String COUNT_KEY_PREFIX = "stream:count:";
+    private static final long SESSION_TTL_SECONDS = 120;
+    private static final String VIEWERS_KEY_PREFIX = "stream:viewers:";
 
     /**
      * Generate a new unique session ID for a viewer.
@@ -42,24 +43,20 @@ public class ViewerSessionService {
      * @return true if this is the first viewer (stream should start)
      */
     public boolean joinStream(String deviceId, String sessionId) {
-        String sessionKey = SESSION_KEY_PREFIX + deviceId + ":" + sessionId;
-        String countKey = COUNT_KEY_PREFIX + deviceId;
+        String viewersKey = VIEWERS_KEY_PREFIX + deviceId;
+        long expiryTime = Instant.now().getEpochSecond() + SESSION_TTL_SECONDS;
 
-        // Check if this session already exists (duplicate join)
-        Boolean exists = redisTemplate.hasKey(sessionKey);
-        if (Boolean.TRUE.equals(exists)) {
-            log.debug("Session {} already exists for device {}, extending TTL", sessionId, deviceId);
-            redisTemplate.expire(sessionKey, SESSION_TTL);
-            return false;
-        }
+        // Remove expired sessions before adding new one
+        cleanupExpiredSessions(deviceId);
 
-        // Create session with TTL
-        redisTemplate.opsForValue().set(sessionKey, "active", SESSION_TTL);
-
-        // Increment viewer count atomically
-        Long count = redisTemplate.opsForValue().increment(countKey);
-        log.info("Viewer joined stream for device {}: {} viewer(s) now (session: {})",
-                deviceId, count, sessionId);
+        // Add session to sorted set (or update expiry if already exists)
+        Boolean added = redisTemplate.opsForZSet().add(viewersKey, sessionId, expiryTime);
+        
+        // Get current count after cleanup
+        Long count = redisTemplate.opsForZSet().zCard(viewersKey);
+        
+        log.info("Viewer joined stream for device {}: {} viewer(s) now (session: {}, new: {})",
+                deviceId, count, sessionId, added);
 
         return count != null && count == 1; // First viewer
     }
@@ -72,32 +69,18 @@ public class ViewerSessionService {
      * @return true if this was the last viewer (stream should stop)
      */
     public boolean leaveStream(String deviceId, String sessionId) {
-        String sessionKey = SESSION_KEY_PREFIX + deviceId + ":" + sessionId;
-        String countKey = COUNT_KEY_PREFIX + deviceId;
+        String viewersKey = VIEWERS_KEY_PREFIX + deviceId;
 
-        // Check if session exists
-        Boolean exists = redisTemplate.hasKey(sessionKey);
-        if (!Boolean.TRUE.equals(exists)) {
-            log.debug("Session {} not found for device {} (already expired or never existed)",
-                    sessionId, deviceId);
-            return false;
-        }
+        Long removed = redisTemplate.opsForZSet().remove(viewersKey, sessionId);
+        cleanupExpiredSessions(deviceId);
+        Long count = redisTemplate.opsForZSet().zCard(viewersKey);
+        long viewerCount = count != null ? count : 0;
 
-        // Delete session
-        redisTemplate.delete(sessionKey);
+        log.info("Viewer left stream for device {}: {} viewer(s) remaining (session: {}, removed: {})",
+                deviceId, viewerCount, sessionId, removed);
 
-        // Decrement viewer count atomically (don't go below 0)
-        Long count = redisTemplate.opsForValue().decrement(countKey);
-        if (count == null || count < 0) {
-            count = 0L;
-            redisTemplate.delete(countKey);
-        }
-
-        log.info("Viewer left stream for device {}: {} viewer(s) remaining (session: {})",
-                deviceId, count, sessionId);
-
-        if (count == 0) {
-            redisTemplate.delete(countKey);
+        if (viewerCount == 0) {
+            redisTemplate.delete(viewersKey);
             return true; // Last viewer left
         }
 
@@ -112,29 +95,35 @@ public class ViewerSessionService {
      * @return true if session was extended, false if session not found
      */
     public boolean heartbeat(String deviceId, String sessionId) {
-        String sessionKey = SESSION_KEY_PREFIX + deviceId + ":" + sessionId;
+        String viewersKey = VIEWERS_KEY_PREFIX + deviceId;
+        long expiryTime = Instant.now().getEpochSecond() + SESSION_TTL_SECONDS;
 
-        Boolean exists = redisTemplate.hasKey(sessionKey);
-        if (!Boolean.TRUE.equals(exists)) {
+        // Update the session's expiry time (score) in sorted set
+        Double oldScore = redisTemplate.opsForZSet().score(viewersKey, sessionId);
+        
+        if (oldScore == null) {
             log.debug("Heartbeat for unknown session {} on device {}", sessionId, deviceId);
             return false;
         }
 
-        redisTemplate.expire(sessionKey, SESSION_TTL);
-        log.debug("Heartbeat extended session {} for device {}", sessionId, deviceId);
+        // Update expiry timestamp
+        redisTemplate.opsForZSet().add(viewersKey, sessionId, expiryTime);
+        log.debug("Heartbeat extended session {} for device {} (new expiry: {})", 
+                sessionId, deviceId, expiryTime);
         return true;
     }
 
     /**
-     * Get current viewer count for a device.
+     * Get current viewer count for a device (automatically removes expired sessions).
      * 
      * @param deviceId The device ID
      * @return Number of active viewers
      */
     public long getViewerCount(String deviceId) {
-        String countKey = COUNT_KEY_PREFIX + deviceId;
-        String count = redisTemplate.opsForValue().get(countKey);
-        return count != null ? Long.parseLong(count) : 0;
+        cleanupExpiredSessions(deviceId);
+        String viewersKey = VIEWERS_KEY_PREFIX + deviceId;
+        Long count = redisTemplate.opsForZSet().zCard(viewersKey);
+        return count != null ? count : 0;
     }
 
     /**
@@ -145,7 +134,33 @@ public class ViewerSessionService {
      * @return true if session is active
      */
     public boolean isSessionActive(String deviceId, String sessionId) {
-        String sessionKey = SESSION_KEY_PREFIX + deviceId + ":" + sessionId;
-        return Boolean.TRUE.equals(redisTemplate.hasKey(sessionKey));
+        String viewersKey = VIEWERS_KEY_PREFIX + deviceId;
+        Double score = redisTemplate.opsForZSet().score(viewersKey, sessionId);
+        
+        if (score == null) {
+            return false;
+        }
+        
+        // Check if session has expired
+        long now = Instant.now().getEpochSecond();
+        return score > now;
+    }
+
+    /**
+     * Remove expired sessions from the sorted set for a device.
+     * This is called automatically by other methods to keep data clean.
+     * 
+     * @param deviceId The device ID
+     */
+    private void cleanupExpiredSessions(String deviceId) {
+        String viewersKey = VIEWERS_KEY_PREFIX + deviceId;
+        long now = Instant.now().getEpochSecond();
+        
+        // Remove all sessions with score (expiry time) less than current time
+        Long removed = redisTemplate.opsForZSet().removeRangeByScore(viewersKey, 0, now);
+        
+        if (removed != null && removed > 0) {
+            log.debug("Cleaned up {} expired session(s) for device {}", removed, deviceId);
+        }
     }
 }

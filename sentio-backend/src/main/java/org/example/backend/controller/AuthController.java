@@ -1,6 +1,7 @@
 package org.example.backend.controller;
 
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.example.backend.dto.AuthDTOs;
 import org.example.backend.service.AuthService;
@@ -24,7 +25,7 @@ public class AuthController {
     private final EmailVerificationService emailVerificationService;
 
     @PostMapping("/register")
-    public ResponseEntity<AuthDTOs.RegisterResponse> register(@RequestBody AuthDTOs.RegisterRequest request) {
+    public ResponseEntity<AuthDTOs.RegisterResponse> register(@Valid @RequestBody AuthDTOs.RegisterRequest request) {
         authService.register(request);
         // Send custom verification email
         emailVerificationService.createVerificationToken(request.getEmail());
@@ -33,7 +34,7 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<Void> login(@RequestBody AuthDTOs.LoginRequest request, HttpServletResponse response) {
+    public ResponseEntity<Void> login(@Valid @RequestBody AuthDTOs.LoginRequest request, HttpServletResponse response) {
         AuthDTOs.TokenResponse tokens = authService.login(request.getUsername(), request.getPassword());
 
         response.addHeader(HttpHeaders.SET_COOKIE,
@@ -116,10 +117,8 @@ public class AuthController {
         return ResponseEntity.noContent().build();
     }
 
-    // ==================== PASSWORD RESET ====================
-
     @PostMapping("/forgot-password")
-    public ResponseEntity<Void> forgotPassword(@RequestBody AuthDTOs.ForgotPasswordRequest request) {
+    public ResponseEntity<Void> forgotPassword(@Valid @RequestBody AuthDTOs.ForgotPasswordRequest request) {
         if (authService.userExistsByEmail(request.email())) {
             passwordResetService.createResetToken(request.email());
         }
@@ -137,21 +136,11 @@ public class AuthController {
     }
 
     @PostMapping("/reset-password")
-    public ResponseEntity<AuthDTOs.MessageResponse> resetPassword(@RequestBody AuthDTOs.ResetPasswordRequest request) {
+    public ResponseEntity<AuthDTOs.MessageResponse> resetPassword(@Valid @RequestBody AuthDTOs.ResetPasswordRequest request) {
         String email = passwordResetService.validateToken(request.token());
         if (email == null) {
             return ResponseEntity.badRequest()
                     .body(new AuthDTOs.MessageResponse(false, "Invalid or expired token. Please request a new reset link."));
-        }
-
-        if (request.password() == null || request.password().length() < 8) {
-            return ResponseEntity.badRequest()
-                    .body(new AuthDTOs.MessageResponse(false, "Password must be at least 8 characters"));
-        }
-
-        if (!request.password().equals(request.confirmPassword())) {
-            return ResponseEntity.badRequest()
-                    .body(new AuthDTOs.MessageResponse(false, "Passwords do not match"));
         }
 
         try {
@@ -163,8 +152,6 @@ public class AuthController {
                     .body(new AuthDTOs.MessageResponse(false, "Failed to update password. Please try again."));
         }
     }
-
-    // ==================== EMAIL VERIFICATION ====================
 
     @GetMapping("/verify-email")
     public ResponseEntity<AuthDTOs.MessageResponse> verifyEmail(@RequestParam String token) {
@@ -185,7 +172,7 @@ public class AuthController {
     }
 
     @PostMapping("/resend-verification")
-    public ResponseEntity<Void> resendVerification(@RequestBody AuthDTOs.ResendVerificationRequest request) {
+    public ResponseEntity<Void> resendVerification(@Valid @RequestBody AuthDTOs.ResendVerificationRequest request) {
         if (authService.userExistsByEmail(request.email())) {
             emailVerificationService.createVerificationToken(request.email());
         }
