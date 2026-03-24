@@ -1,17 +1,17 @@
 name: Sentio CI/CD
 on:
-  push:
-    branches: [main, develop, "release/**"]
-    paths-ignore:
-      - "**.md"
-      - ".gitignore"
-      - "docs/**"
-  pull_request:
-    branches: [main, develop]
-    paths-ignore:
-      - "**.md"
-      - ".gitignore"
-      - "docs/**"
+#   push:
+#     branches: [main, develop, "release/**"]
+#     paths-ignore:
+#       - "**.md"
+#       - ".gitignore"
+#       - "docs/**"
+#   pull_request:
+#     branches: [main, develop]
+#     paths-ignore:
+#       - "**.md"
+#       - ".gitignore"
+#       - "docs/**"
   workflow_dispatch:
     inputs:
       environment:
