@@ -19,13 +19,9 @@ Wildlife and weather monitoring platform. Raspberry Pi devices collect sensor da
 
 ## Tech Stack
 
-![Java](https://img.shields.io/badge/Java-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white)
-![Spring Boot](https://img.shields.io/badge/Spring_Boot-F2F4F9?style=for-the-badge&logo=spring-boot)
-![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
-![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)
-![Redis](https://img.shields.io/badge/redis-%23DD0031.svg?style=for-the-badge&logo=redis&logoColor=white)
-![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)
+<div align="center">
+  <img src="https://skillicons.dev/icons?i=java,spring,react,python,postgres,redis,docker,raspberrypi" height="50" alt="Sentio Systems Tech Stack" />
+</div>
 
 ---
 
@@ -53,7 +49,7 @@ make health
 If you don't have `make`, you can do the same steps manually:
 
 ```sh
-git clone https://github.com/SentioSystems/sentio-systems.git
+git clone https://github.com/lucawalz/sentio-systems.git
 cd sentio-systems
 
 # 1. Create your environment file
@@ -120,7 +116,6 @@ To disable this, change the profile to `prod` (or remove `demo`) in your `.env`.
 | [init-scripts](init-scripts/README.md) | DB init and Keycloak realm setup |
 | [docs](docs/README.md) | Architecture docs, ADRs, security audits |
 
-> `sentio-old` is the legacy frontend directory, removed from the active tree but preserved in git history.
 
 ---
 
