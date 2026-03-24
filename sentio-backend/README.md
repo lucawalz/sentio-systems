@@ -111,28 +111,28 @@ API endpoints, payloads and public behaviour remained stable.
 ### Related Files
 
 - Service interfaces:
-  - [IAnimalClassifierService](src/main/java/org/example/backend/service/IAnimalClassifierService.java)
-  - [IWeatherForecastService](src/main/java/org/example/backend/service/IWeatherForecastService.java)
-  - [IHistoricalWeatherService](src/main/java/org/example/backend/service/IHistoricalWeatherService.java)
-  - [IBrightSkyService](src/main/java/org/example/backend/service/IBrightSkyService.java)
+  - [IAnimalClassifierService](src/main/java/dev/syslabs/sentio/service/IAnimalClassifierService.java)
+  - [IWeatherForecastService](src/main/java/dev/syslabs/sentio/service/IWeatherForecastService.java)
+  - [IHistoricalWeatherService](src/main/java/dev/syslabs/sentio/service/IHistoricalWeatherService.java)
+  - [IBrightSkyService](src/main/java/dev/syslabs/sentio/service/IBrightSkyService.java)
 
 - Interface-based controller dependencies:
-  - [WeatherForecastController](src/main/java/org/example/backend/controller/WeatherForecastController.java)
-  - [HistoricalWeatherController](src/main/java/org/example/backend/controller/HistoricalWeatherController.java)
-  - [WeatherAlertController](src/main/java/org/example/backend/controller/WeatherAlertController.java)
-  - [DeviceDataController](src/main/java/org/example/backend/controller/DeviceDataController.java)
+  - [WeatherForecastController](src/main/java/dev/syslabs/sentio/controller/WeatherForecastController.java)
+  - [HistoricalWeatherController](src/main/java/dev/syslabs/sentio/controller/HistoricalWeatherController.java)
+  - [WeatherAlertController](src/main/java/dev/syslabs/sentio/controller/WeatherAlertController.java)
+  - [DeviceDataController](src/main/java/dev/syslabs/sentio/controller/DeviceDataController.java)
 
 - Classification strategy + factory:
-  - [AnimalClassifierService](src/main/java/org/example/backend/service/AnimalClassifierService.java)
-  - [ClassificationProcessor](src/main/java/org/example/backend/service/classification/ClassificationProcessor.java)
-  - [BirdClassificationProcessor](src/main/java/org/example/backend/service/classification/BirdClassificationProcessor.java)
-  - [GenericClassificationProcessor](src/main/java/org/example/backend/service/classification/GenericClassificationProcessor.java)
-  - [ClassificationProcessorFactory](src/main/java/org/example/backend/service/classification/ClassificationProcessorFactory.java)
+  - [AnimalClassifierService](src/main/java/dev/syslabs/sentio/service/AnimalClassifierService.java)
+  - [ClassificationProcessor](src/main/java/dev/syslabs/sentio/service/classification/ClassificationProcessor.java)
+  - [BirdClassificationProcessor](src/main/java/dev/syslabs/sentio/service/classification/BirdClassificationProcessor.java)
+  - [GenericClassificationProcessor](src/main/java/dev/syslabs/sentio/service/classification/GenericClassificationProcessor.java)
+  - [ClassificationProcessorFactory](src/main/java/dev/syslabs/sentio/service/classification/ClassificationProcessorFactory.java)
 
 - Updated controller tests:
-  - [WeatherForecastControllerTest](src/test/java/org/example/backend/controller/WeatherForecastControllerTest.java)
-  - [HistoricalWeatherControllerTest](src/test/java/org/example/backend/controller/HistoricalWeatherControllerTest.java)
-  - [WeatherAlertControllerTest](src/test/java/org/example/backend/controller/WeatherAlertControllerTest.java)
+  - [WeatherForecastControllerTest](src/test/java/dev/syslabs/sentio/controller/WeatherForecastControllerTest.java)
+  - [HistoricalWeatherControllerTest](src/test/java/dev/syslabs/sentio/controller/HistoricalWeatherControllerTest.java)
+  - [WeatherAlertControllerTest](src/test/java/dev/syslabs/sentio/controller/WeatherAlertControllerTest.java)
 
 - ADR documentation:
   - [ADR Index](../docs/adr/%23%20Architecture%20Decision%20Records.md)
@@ -240,7 +240,7 @@ sentio-backend/
 ├── src/
 │   ├── main/
 │   │   ├── java/
-│   │   │   └── org/example/backend/
+│   │   │   └── dev/syslabs/sentio/
 │   │   │       ├── config/          # Application configuration
 │   │   │       ├── controller/      # REST API controllers
 │   │   │       ├── dto/             # Data Transfer Objects
@@ -256,7 +256,7 @@ sentio-backend/
 │   │       └── application.properties  # Application configuration
 │   └── test/
 │       └── java/
-│           └── org/example/backend/
+│           └── dev/syslabs/sentio/
 │               └── SentioApplicationTests.java  # Main test class
 ├── .gitattributes                  # Git attributes
 ├── .gitignore                      # Git ignore file
@@ -369,7 +369,7 @@ ip-location.api.url=http://ip-api.com/json/
 Enable debug logging by adding the following to `application.properties`:
 
 ```properties
-logging.level.org.example.backend=DEBUG
+logging.level.dev.syslabs.sentio=DEBUG
 ```
 
 

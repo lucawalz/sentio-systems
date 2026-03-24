@@ -9,23 +9,27 @@
 		<relativePath/>
 		<!-- lookup parent from repository -->
 	</parent>
-	<groupId>org.example</groupId>
-	<artifactId>backend</artifactId>
+	<groupId>dev.syslabs</groupId>
+	<artifactId>sentio-backend</artifactId>
 	<version>0.5.0</version>
-	<name>Sentio</name>
-	<description>Sentio</description>
-	<url/>
+	<name>Sentio Backend</name>
+	<description>Spring Boot REST API for the Sentio wildlife and weather monitoring platform</description>
+	<url>https://github.com/lucawalz/sentio-systems</url>
 	<licenses>
 		<license/>
 	</licenses>
 	<developers>
-		<developer/>
+		<developer>
+			<id>lucawalz</id>
+			<name>Luca Walz</name>
+			<url>https://github.com/lucawalz</url>
+		</developer>
 	</developers>
 	<scm>
-		<connection/>
-		<developerConnection/>
-		<tag/>
-		<url/>
+		<connection>scm:git:git://github.com/lucawalz/sentio-systems.git</connection>
+		<developerConnection>scm:git:ssh://github.com/lucawalz/sentio-systems.git</developerConnection>
+		<tag>HEAD</tag>
+		<url>https://github.com/lucawalz/sentio-systems</url>
 	</scm>
 	<properties>
 		<java.version>21</java.version>

@@ -1,0 +1,30 @@
+package dev.syslabs.sentio.config;
+
+import lombok.RequiredArgsConstructor;
+import dev.syslabs.sentio.interceptor.RateLimitInterceptor;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
+/**
+ * Web MVC configuration for registering interceptors.
+ */
+@Configuration
+@RequiredArgsConstructor
+@ConditionalOnProperty(name = "rate-limit.enabled", havingValue = "true", matchIfMissing = true)
+public class WebConfig implements WebMvcConfigurer {
+
+    private final RateLimitInterceptor rateLimitInterceptor;
+
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(rateLimitInterceptor)
+                .addPathPatterns("/api/**")
+                .excludePathPatterns(
+                        "/api/internal/**",  // Exclude internal endpoints
+                        "/swagger-ui/**",    // Exclude Swagger UI
+                        "/v3/api-docs/**"    // Exclude API docs
+                );
+    }
+}

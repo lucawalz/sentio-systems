@@ -8,7 +8,7 @@ The backend follows a layered architecture with clear separation of concerns bet
 
 ## Base Package
 
-All backend components are organized under: sentio-backend/src/main/java/org/example/backend
+All backend components are organized under: sentio-backend/src/main/java/dev/syslabs/sentio
 
 This root package ensures a clear namespace boundary for the backend module.
 

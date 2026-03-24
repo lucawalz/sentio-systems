@@ -1,8 +1,8 @@
-![Sentio Systems Banner](docs/banners/root-banner.png)
-
 # Sentio Systems Monorepo
 
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/SentioSystems/sentio-systems/actions)
+![Sentio Systems Banner](docs/banners/root-banner.png)
+
+[![Build Status](https://img.shields.io/github/actions/workflow/status/lucawalz/sentio-systems/ci-cd.yml?branch=main&label=build)](https://github.com/lucawalz/sentio-systems/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 Wildlife and weather monitoring platform. Raspberry Pi devices collect sensor data and camera footage in the field, send it over MQTT to a Spring Boot backend, where Python ML models classify detected animals. Everything shows up on a React dashboard.
@@ -17,12 +17,24 @@ Wildlife and weather monitoring platform. Raspberry Pi devices collect sensor da
 
 ---
 
+## Tech Stack
+
+![Java](https://img.shields.io/badge/Java-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/Spring_Boot-F2F4F9?style=for-the-badge&logo=spring-boot)
+![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
+![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)
+![Redis](https://img.shields.io/badge/redis-%23DD0031.svg?style=for-the-badge&logo=redis&logoColor=white)
+![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)
+
+---
+
 ## Setup
 
 ### With Make (recommended)
 
 ```sh
-git clone https://github.com/SentioSystems/sentio-systems.git
+git clone https://github.com/lucawalz/sentio-systems.git
 cd sentio-systems
 make setup    # generates .env with random credentials
 make up       # starts all services
@@ -60,11 +72,11 @@ The `setup-env.sh` script generates random credentials using `openssl rand` and 
 ### Access points
 
 | Service | URL |
-|---------|-----|
-| Frontend | http://localhost:3000 |
-| Backend API | http://localhost:8083 |
-| Swagger UI | http://localhost:8083/swagger-ui.html |
-| Keycloak admin | http://localhost:8080 |
+| --- | --- |
+| Frontend | <http://localhost:3000> |
+| Backend API | <http://localhost:8083> |
+| Swagger UI | <http://localhost:8083/swagger-ui.html> |
+| Keycloak admin | <http://localhost:8080> |
 
 Ports are configurable in `.env`. Run `make passwords` to see your generated credentials.
 
@@ -73,7 +85,7 @@ Ports are configurable in `.env`. Run `make passwords` to see your generated cre
 The default `.env.example` sets `SPRING_PROFILES_ACTIVE=demo`, which seeds the database with sample data and creates a demo user:
 
 | | |
-|---|---|
+| --- | --- |
 | **Username** | `demo` |
 | **Password** | `Demo@123!!` |
 
@@ -82,7 +94,7 @@ To disable this, change the profile to `prod` (or remove `demo`) in your `.env`.
 ### Useful Make targets
 
 | Command | What it does |
-|---------|-------------|
+| --- | --- |
 | `make up` | Start all services |
 | `make down` | Stop all services |
 | `make build` | Build Docker images |
@@ -99,7 +111,7 @@ To disable this, change the profile to `prod` (or remove `demo`) in your `.env`.
 ## Components
 
 | Directory | Description |
-|-----------|-------------|
+| --- | --- |
 | [sentio-backend](sentio-backend/README.md) | Spring Boot REST API — auth, devices, weather, AI classification |
 | [sentio-ai](sentio-ai/README.md) | Python/FastAPI ML services (birder, speciesnet, preprocessing) |
 | [sentio-web](sentio-web/README.md) | React + Vite frontend (active) |
@@ -108,7 +120,7 @@ To disable this, change the profile to `prod` (or remove `demo`) in your `.env`.
 | [init-scripts](init-scripts/README.md) | DB init and Keycloak realm setup |
 | [docs](docs/README.md) | Architecture docs, ADRs, security audits |
 
-> `sentio-old` is the legacy frontend directory, kept for reference. The active frontend is `sentio-web`.
+> `sentio-old` is the legacy frontend directory, removed from the active tree but preserved in git history.
 
 ---
 
