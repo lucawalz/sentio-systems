@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.0](https://github.com/lucawalz/sentio-systems/compare/v0.5.0...v1.0.0) (2026-03-24)
+
+
+### ⚠ BREAKING CHANGES
+
+* restructure workspace and prepare for public release
+
+### Bug Fixes
+
+* **security:** patch libexpat/zlib in web image, ignore unfixable onnx cves ([9cdd6a9](https://github.com/lucawalz/sentio-systems/commit/9cdd6a9ddfc60daafbb4a285c763817cddf3df4c))
+
+
+### Code Refactoring
+
+* restructure workspace and prepare for public release ([5ae7e46](https://github.com/lucawalz/sentio-systems/commit/5ae7e464c1f872c8141f3896c627bf346fc11d0d))
+
 ## [Unreleased]
 
 ### Added
