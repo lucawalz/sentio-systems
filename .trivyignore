@@ -7,3 +7,13 @@ CVE-2026-0861
 # pip resolver pulls old versions back in despite explicit upgrades
 CVE-2026-23949
 CVE-2026-24049
+
+# onnx: untrusted model repository warnings — no fix released yet
+# Affects: birder and speciesnet images (onnx 1.20.1)
+# Revisit when onnx releases a patched version
+CVE-2026-28500
+
+# libexpat1: integer overflow in Debian 13.4 — no patched package available
+# Affects: speciesnet and preprocessing images
+# Revisit when Debian releases libexpat1 >= patched version
+CVE-2026-25210

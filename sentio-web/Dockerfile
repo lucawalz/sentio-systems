@@ -22,8 +22,8 @@ RUN npm run build
 # Production stage
 FROM nginx:alpine
 
-# Upgrade libpng to fix CVE-2026-25646
-RUN apk upgrade --no-cache libpng
+# Upgrade packages to fix known CVEs
+RUN apk upgrade --no-cache libpng libexpat zlib
 
 # Copy built assets from build stage
 COPY --from=build /app/dist /usr/share/nginx/html

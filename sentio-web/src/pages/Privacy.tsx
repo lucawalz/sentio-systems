@@ -23,7 +23,7 @@ export default function Privacy() {
                             <h3 className="text-xl font-semibold text-black">1. Introduction</h3>
                             <p>
                                 This Privacy Policy explains how personal data is processed when using this
-                                application. The project is developed as a university project and is not intended
+                                application. This is an open-source portfolio project and is not intended
                                 for commercial use.
                             </p>
                             <p>
@@ -37,7 +37,7 @@ export default function Privacy() {
                             <p>The controller responsible for data processing is:</p>
                             <ul className="list-disc space-y-1 pl-5">
                                 <li>Project Name: Sentio Systems</li>
-                                <li>Contact Email: SentioSystems@outlook.de</li>
+                                <li>Contact: <a href="mailto:security@sentio-systems.com">security@sentio-systems.com</a></li>
                             </ul>
                         </section>
 
@@ -55,8 +55,7 @@ export default function Privacy() {
                                 <li>a database connected to the backend</li>
                             </ul>
                             <p>
-                                Frontend and backend currently run locally in a Docker-based environment and are
-                                not publicly hosted.
+                                Frontend and backend run in a Docker-based environment.
                             </p>
                         </section>
 
