@@ -1,0 +1,10 @@
+# Default repository owners
+*                   @lucawalz
+
+# Specific ownership guidelines
+/sentio-backend/    @lucawalz
+/sentio-embedded/   @lucawalz
+/sentio-ai/         @lucawalz
+/sentio-web/        @lucawalz
+/.github/           @lucawalz
+/docker-compose.yaml @lucawalz
