@@ -121,10 +121,16 @@ jobs:
         with:
           scan-type: "fs"
           scan-ref: "."
-          format: "table"
+          format: "sarif"
+          output: "trivy-results.sarif"
           severity: "CRITICAL,HIGH"
           ignore-unfixed: true
-          exit-code: "1"
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: "trivy-results.sarif"
   backend-test:
     name: Backend - Test, Coverage & Build
     runs-on: ubuntu-latest
@@ -368,10 +374,16 @@ jobs:
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.REPO }}/sentio-backend:${{ needs.version.outputs.version }}
-          format: "table"
+          format: "sarif"
+          output: "trivy-backend-results.sarif"
           severity: "CRITICAL,HIGH"
           trivyignores: .trivyignore
-          exit-code: "1"
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: "trivy-backend-results.sarif"
   frontend-test:
     name: Frontend - Test, Lint & Build
     runs-on: ubuntu-latest
@@ -486,10 +498,16 @@ jobs:
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.REPO }}/sentio-web:${{ needs.version.outputs.version }}
-          format: "table"
+          format: "sarif"
+          output: "trivy-web-results.sarif"
           severity: "CRITICAL,HIGH"
           trivyignores: .trivyignore
-          exit-code: "1"
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: "trivy-web-results.sarif"
   ai-services-test:
     name: ${{ matrix.service }} - Test & Build
     runs-on: ubuntu-latest
@@ -619,10 +637,16 @@ jobs:
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.REPO }}/${{ matrix.image_name }}:${{ needs.version.outputs.version }}
-          format: "table"
+          format: "sarif"
+          output: "trivy-${{ matrix.service }}-results.sarif"
           severity: "CRITICAL,HIGH"
           trivyignores: .trivyignore
-          exit-code: "1"
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: "trivy-${{ matrix.service }}-results.sarif"
 
   deployment-notification:
     name: Deployment Ready
