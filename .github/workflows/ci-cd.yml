@@ -351,7 +351,7 @@ jobs:
           retry_wait_seconds: 10
           command: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./sentio-backend
           platforms: linux/amd64
@@ -473,7 +473,7 @@ jobs:
           retry_wait_seconds: 10
           command: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./sentio-web
           platforms: linux/amd64
@@ -614,7 +614,7 @@ jobs:
           retry_wait_seconds: 10
           command: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./sentio-ai/${{ matrix.service }}
           platforms: linux/amd64
