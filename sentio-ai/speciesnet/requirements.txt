@@ -15,7 +15,7 @@ numpy
 torch
 
 # Redis queue support
-arq>=0.25
+arq>=0.28.0
 redis>=4.0
 msgpack
 
