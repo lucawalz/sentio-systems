@@ -14,7 +14,7 @@ msgpack
 
 # Security pins
 jaraco.context>=6.1.0  # CVE-2026-23949
-wheel>=0.46.2          # CVE-2026-24049
+wheel>=0.47.0          # CVE-2026-24049
 
 # Testing
 pytest
