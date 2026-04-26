@@ -16,7 +16,7 @@ torch
 
 # Redis queue support
 arq>=0.25
-redis>=4.0
+redis>=7.4.0
 msgpack
 
 # Security pins
