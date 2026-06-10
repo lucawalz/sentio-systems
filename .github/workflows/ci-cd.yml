@@ -109,6 +109,9 @@ jobs:
   code-quality:
     name: Code Quality & Security
     runs-on: ubuntu-latest
+    # PAUSED: code and vulnerability scanning disabled while the project is unmaintained.
+    # Remove this `if` to re-enable the Trivy scan and SARIF upload to the Security tab.
+    if: false
     permissions:
       contents: read
       security-events: write
@@ -128,7 +131,7 @@ jobs:
 
       - name: Upload Trivy scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
-        if: always()
+        if: false # PAUSED: code scanning upload disabled while unmaintained
         with:
           sarif_file: "trivy-results.sarif"
   backend-test:
@@ -371,6 +374,7 @@ jobs:
           provenance: true
           sbom: true
       - name: Run Trivy image scan
+        if: false # PAUSED: vulnerability scanning disabled while unmaintained
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.REPO }}/sentio-backend:${{ needs.version.outputs.version }}
@@ -381,7 +385,7 @@ jobs:
 
       - name: Upload Trivy scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
-        if: always()
+        if: false # PAUSED: code scanning upload disabled while unmaintained
         with:
           sarif_file: "trivy-backend-results.sarif"
   frontend-test:
@@ -495,6 +499,7 @@ jobs:
           provenance: true
           sbom: true
       - name: Run Trivy image scan
+        if: false # PAUSED: vulnerability scanning disabled while unmaintained
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.REPO }}/sentio-web:${{ needs.version.outputs.version }}
@@ -505,7 +510,7 @@ jobs:
 
       - name: Upload Trivy scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
-        if: always()
+        if: false # PAUSED: code scanning upload disabled while unmaintained
         with:
           sarif_file: "trivy-web-results.sarif"
   ai-services-test:
@@ -634,6 +639,7 @@ jobs:
           provenance: true
           sbom: true
       - name: Run Trivy image scan
+        if: false # PAUSED: vulnerability scanning disabled while unmaintained
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.REPO }}/${{ matrix.image_name }}:${{ needs.version.outputs.version }}
@@ -644,7 +650,7 @@ jobs:
 
       - name: Upload Trivy scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
-        if: always()
+        if: false # PAUSED: code scanning upload disabled while unmaintained
         with:
           sarif_file: "trivy-${{ matrix.service }}-results.sarif"
 

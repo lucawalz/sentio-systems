@@ -5,6 +5,9 @@
 [![Build Status](https://img.shields.io/github/actions/workflow/status/lucawalz/sentio-systems/ci-cd.yml?branch=main&label=build)](https://github.com/lucawalz/sentio-systems/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
+> [!NOTE]
+> **This project is not actively maintained.** It remains available as-is for reference, but issues and pull requests may not receive a timely response. Automated dependency updates (Dependabot) and CI security scanning are currently paused.
+
 Wildlife and weather monitoring platform. Raspberry Pi devices collect sensor data and camera footage in the field, send it over MQTT to a Spring Boot backend, where Python ML models classify detected animals. Everything shows up on a React dashboard.
 
 ---
