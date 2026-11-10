@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 > [!NOTE]
-> **This project is not actively maintained.** It remains available as-is for reference, but issues and pull requests may not receive a timely response. Automated dependency updates (Dependabot) and CI security scanning are currently paused.
+> **This project is paused.** A refactor is planned. It remains available as-is for reference, and Dependabot and CI security scanning are paused until then.
 
 Wildlife and weather monitoring platform. Raspberry Pi devices collect sensor data and camera footage in the field, send it over MQTT to a Spring Boot backend, where Python ML models classify detected animals. Everything shows up on a React dashboard.
 
@@ -119,6 +119,16 @@ To disable this, change the profile to `prod` (or remove `demo`) in your `.env`.
 | [init-scripts](init-scripts/README.md) | DB init and Keycloak realm setup |
 | [docs](docs/README.md) | Architecture docs, ADRs, security audits |
 
+
+---
+
+## Team
+
+- Luca Walz ([@lucawalz](https://github.com/lucawalz)), Team Lead and Lead Developer
+- Lilly Luna Polzer ([@lp120sentio](https://github.com/lp120sentio))
+- Philipp Ressin ([@addvac](https://github.com/addvac))
+- Raffael Bucureasa ([@rb099Ruffy](https://github.com/rb099Ruffy))
+- Ekin Baca ([@EkexDon](https://github.com/EkexDon))
 
 ---
 
