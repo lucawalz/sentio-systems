@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 > [!NOTE]
-> **This project is paused.** A refactor is planned. It remains available as-is for reference, and Dependabot and CI security scanning are paused until then.
+> **This project is paused while a refactor is planned.** It remains available as-is for reference; Dependabot and CI security scanning are off until then.
 
 Wildlife and weather monitoring platform. Raspberry Pi devices collect sensor data and camera footage in the field, send it over MQTT to a Spring Boot backend, where Python ML models classify detected animals. Everything shows up on a React dashboard.
 
