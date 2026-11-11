@@ -10,7 +10,7 @@ const members = [
         name: 'Luca Walz',
         role: 'Founder - CEO',
         avatar: lucaImg,
-        link: 'https://de.linkedin.com/in/luca-walz',
+        link: 'https://www.linkedin.com/in/lucawalz/',
     },
     {
         name: 'Lilly Luna Polzer',
