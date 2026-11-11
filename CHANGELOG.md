@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.1](https://github.com/lucawalz/sentio-systems/compare/v1.0.0...v1.0.1) (2026-11-11)
+
+
+### Bug Fixes
+
+* update team section linkedin url to new profile address ([864baf8](https://github.com/lucawalz/sentio-systems/commit/864baf84af77ee814e2a5df7efc54cccafd05459))
+
 ## [1.0.0](https://github.com/lucawalz/sentio-systems/compare/v0.5.0...v1.0.0) (2026-03-24)
 
 
